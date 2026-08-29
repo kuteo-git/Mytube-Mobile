@@ -57,17 +57,17 @@ class ArchitectureGuardTest {
     }
 
     /**
-     * `application` holds use cases. It talks to repositories through interfaces
-     * it declares itself, so it must not know which library fulfils them.
+     * Use cases talk to repositories through the interfaces `domain/repository`
+     * declares, so they must not know which library fulfils them.
      *
      * Serialization is allowed nowhere but `infrastructure`: the moment a use
      * case carries `@Serializable`, the shape of the wire has reached into the
      * shape of the logic, and changing one means changing the other.
      */
     @Test
-    fun applicationKnowsNothingAboutTransportOrScreens() {
+    fun useCasesKnowNothingAboutTransportOrScreens() {
         assertNoImports(
-            layer = "application",
+            layer = "domain/usecase",
             forbidden = listOf(
                 "io.ktor" to "HTTP",
                 "kotlinx.serialization" to "a wire format",
@@ -97,6 +97,21 @@ class ArchitectureGuardTest {
                 "io.ktor" to "HTTP",
             ),
         )
+    }
+
+    /**
+     * `data` is the only layer allowed to be nullable, and the only one allowed
+     * to know a wire format. Asserted from the other side: nothing else may
+     * carry `@Serializable`.
+     */
+    @Test
+    fun onlyTheDataLayerKnowsAWireFormat() {
+        for (layer in listOf("domain", "ui")) {
+            assertNoImports(
+                layer = layer,
+                forbidden = listOf("kotlinx.serialization" to "a wire format"),
+            )
+        }
     }
 
     private fun assertNoImports(layer: String, forbidden: List<Pair<String, String>>) {

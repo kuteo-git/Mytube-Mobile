@@ -1,0 +1,156 @@
+package com.mytube.app.ui
+
+import com.mytube.app.data.repository.ServerNotConfigured
+import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Video
+import com.mytube.app.domain.repository.FeedPage
+import com.mytube.app.domain.repository.VideoRepository
+import com.mytube.app.ui.home.HomeState
+import com.mytube.app.ui.home.HomeViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+
+/**
+ * The home feed's state holder, with no server anywhere near it.
+ *
+ * This is what the layering buys. The ViewModel takes `VideoRepository`, an
+ * interface `domain` declares, so a few lines of fake stand in for the gateway
+ * and every branch — including the ones that only happen when something goes
+ * wrong — can be reached in milliseconds.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class HomeViewModelTest {
+
+    private val dispatcher = StandardTestDispatcher()
+
+    @BeforeTest
+    fun setUp() {
+        // viewModelScope is Dispatchers.Main, which does not exist off-device.
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @AfterTest
+    fun tearDown() = Dispatchers.resetMain()
+
+    @Test
+    fun showsWhatCameBack() = runTest(dispatcher) {
+        val model = HomeViewModel(FakeVideos(pages = listOf(page("a", "b", next = ""))))
+        advance()
+
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf("a", "b"), state.videos.map { it.id })
+        assertEquals("", state.nextPageToken)
+    }
+
+    @Test
+    fun anUnconfiguredServerIsNotAnError() = runTest(dispatcher) {
+        // Nothing has gone wrong when the app has not been set up yet, and the
+        // screen's answer is a way to the settings rather than a retry that will
+        // fail identically. That is why it is its own state and not a message.
+        val model = HomeViewModel(FakeVideos(failWith = ServerNotConfigured()))
+        advance()
+
+        assertIs<HomeState.NeedsServer>(model.state.value)
+    }
+
+    @Test
+    fun aRealFailureSaysSo() = runTest(dispatcher) {
+        val model = HomeViewModel(FakeVideos(failWith = IllegalStateException("no route to host")))
+        advance()
+
+        assertEquals("no route to host", assertIs<HomeState.Failed>(model.state.value).message)
+    }
+
+    @Test
+    fun appendsTheNextPage() = runTest(dispatcher) {
+        val model = HomeViewModel(
+            FakeVideos(pages = listOf(page("a", next = "t1"), page("b", next = ""))),
+        )
+        advance()
+        model.loadMore()
+        advance()
+
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf("a", "b"), state.videos.map { it.id })
+    }
+
+    @Test
+    fun asksOnceEvenWhenTheListKeepsAsking() = runTest(dispatcher) {
+        // A list resting at the bottom of its scroll fires this on every frame.
+        // Without the guard a slow answer becomes a dozen identical requests and
+        // a dozen copies of the same page.
+        val repository = FakeVideos(pages = listOf(page("a", next = "t1"), page("b", next = "")))
+        val model = HomeViewModel(repository)
+        advance()
+
+        repeat(5) { model.loadMore() }
+        advance()
+
+        assertEquals(2, repository.calls)
+    }
+
+    @Test
+    fun aFailedSecondPageLeavesTheFirstOnScreen() = runTest(dispatcher) {
+        // Replacing a working list with an error because the *next* page failed
+        // takes away something the viewer already had.
+        val repository = FakeVideos(
+            pages = listOf(page("a", next = "t1")),
+            failFromCall = 2,
+        )
+        val model = HomeViewModel(repository)
+        advance()
+        model.loadMore()
+        advance()
+
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf("a"), state.videos.map { it.id })
+        assertEquals(false, state.loadingMore)
+    }
+
+    private fun kotlinx.coroutines.test.TestScope.advance() {
+        testScheduler.advanceUntilIdle()
+    }
+
+    private fun page(vararg ids: String, next: String) = FeedPage(
+        videos = ids.map { id ->
+            Video(
+                id = id,
+                title = id,
+                channel = Channel(id = "c", name = "c", handle = "@c", avatarPath = ""),
+                durationSeconds = 1,
+                viewCount = 0,
+                publishedAt = "",
+                thumbnailPath = "",
+            )
+        },
+        nextPageToken = next,
+    )
+
+    private class FakeVideos(
+        private val pages: List<FeedPage> = emptyList(),
+        private val failWith: Throwable? = null,
+        private val failFromCall: Int = Int.MAX_VALUE,
+    ) : VideoRepository {
+        var calls = 0
+            private set
+
+        override suspend fun feed(topic: String, pageToken: String): FeedPage {
+            calls++
+            failWith?.let { throw it }
+            if (calls >= failFromCall) throw IllegalStateException("upstream said no")
+            return pages.getOrElse(calls - 1) { pages.last() }
+        }
+
+        override suspend fun video(id: String) = throw NotImplementedError()
+        override suspend fun search(query: String) = throw NotImplementedError()
+    }
+}

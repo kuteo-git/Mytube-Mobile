@@ -46,13 +46,16 @@ direction rather than of folder count:
 ```
 composeApp/src/
   commonMain/kotlin/com/mytube/app/
-    domain/          entities, plain types. No Ktor, no serialization, no Compose
-    application/     use cases; declares repository interfaces, knows no HTTP
-    infrastructure/  implements them: Ktor, kotlinx.serialization, DTOs
-    ui/              Compose. Never calls HTTP
-  androidMain/       Media3/ExoPlayer, MediaSessionService, foreground service
-  iosMain/           AVPlayer, AVAudioSession
-  jvmTest/           the architecture guard — see below
+    domain/model/        entities. No Ktor, no serialization, no Compose
+    domain/repository/   the ports — interfaces, declared by the layer that needs them
+    domain/usecase/      use cases
+    data/remote/         Ktor data source; data/remote/dto holds the wire shapes
+    data/local/          settings storage, one expect/actual per platform
+    data/repository/     implementations of domain/repository
+    ui/<screen>/         Composable + ViewModel
+  androidMain/           Media3/ExoPlayer, MediaSessionService, foreground service
+  iosMain/               AVPlayer, AVAudioSession
+  jvmTest/               the architecture guard — see below
 ```
 
 - **`ArchitectureGuardTest` fails the build when an arrow points the wrong way.**
@@ -60,11 +63,24 @@ composeApp/src/
   learned this twice and grew `untranslated.guard.test.ts` and
   `player-seek.guard.test.ts` for the same reason. It is a source scan, and it is
   crude on purpose.
-- **No `@Serializable` outside `infrastructure`.** The moment a use case carries
+- **No `@Serializable` outside `data`.** The moment a use case carries
   a wire annotation, the wire's shape and the logic's shape are one shape, and
   neither can change alone.
 - **Domain types are not the server's JSON.** The gateway sends fields no screen
   here reads. Mapping at the edge means a renamed field breaks one file.
+- **Nothing in `domain` or a ViewModel is nullable. DTOs are.** The wire really
+  can omit a field; pretending otherwise turns a legal answer into a parse
+  failure. So absence is decided once, in the mapper, and named rather than
+  implied — `Video.hasPublishedDate`, `FeedPage.hasMore`, not `.isEmpty()`
+  scattered across screens. One exception is meaningful rather than absent: an
+  empty profile id stays empty all the way to the request, because the gateway
+  falls back to a default when `X-User-Id` is *missing*, and that fallback is
+  what makes a fresh install work.
+- **No DI framework.** Constructor injection by hand from one composition root,
+  the same as the Go services do in `main.go` and the web app does with module
+  singletons. Koin is a service locator whose missing registrations fail at
+  runtime, which is the opposite of this project's habit of turning rules into
+  compile errors.
 
 ### The three platform seams
 
@@ -93,6 +109,12 @@ deliberately older than what is published.
 | AGP | 8.11.1 | **AGP 9.x is incompatible with the KMP plugin outright** |
 | Gradle | 8.14 | AGP floor 8.13, Kotlin ceiling 8.14 |
 | Ktor | 3.5.2 | 3.2.0 fails to dex below minSdk 30 |
+| lifecycle | 2.10.0 | 2.11.0 demands AGP ≥ 9.1.0, same as Compose 1.12.0 |
+
+**The AGP 9.1 trap bites once per dependency.** Any androidx artifact of the
+newest generation declares it. Before adding one, take the version *below* the
+newest, or expect "requires Android Gradle plugin 9.1.0 or higher" and another
+downgrade.
 
 Two traps worth keeping:
 
@@ -225,8 +247,13 @@ Everything on the external volume; `source env.sh` before working.
 
 ## 10. Status
 
-- Project builds for **Android (APK), iOS device and iOS simulator**, and
-  `jvmTest` runs.
-- `ArchitectureGuardTest` is in place; `domain` has its first types.
-- **Nothing talks to the server yet.** The API client, the screens, the players
-  and the narration manifest endpoint are all still to be written.
+- Builds for **Android (APK), iOS device and iOS simulator**; **21 tests pass**.
+- The layers are in place end to end for the feed: `VideoRepository` and
+  `ServerRepository` ports, a Ktor data source, DTOs with mappers, and
+  `HomeViewModel`.
+- `ArchitectureGuardTest` is **proven to fail**: adding `import io.ktor` to a
+  `domain` file turns the build red. A guard nobody has watched fail is a guard
+  nobody should believe.
+- **Still to write**: `SettingsDataSource` for each platform, the composition
+  root, every screen, both players, and the narration manifest endpoint on the
+  server.
