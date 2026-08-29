@@ -610,3 +610,46 @@ documented contract and marked untested, which is not the same as working.
    matter are the charter's: play, lock the screen, and confirm the sound
    continues and the lock-screen controls work; take a call mid-video, hang up,
    and confirm it resumes.
+
+## Narration on the client (2026-08-29)
+
+The server does the reading, translating, synthesising and fitting; this app asks
+for a pass, polls it, and plays the clips over the video. Measured on the
+emulator against the running library: pressing the button started a pass the
+server logged, and the label read **"Đang chuẩn bị 121/160"** — resumed from
+what an earlier run had already written to disk rather than repeated.
+
+- **`narrate(clips)` is on `VideoPlayer`, not a second port.** Only the player
+  knows where the playhead is and only the player can turn the video down. A
+  separate `Narrator` port would need both, so the seam would exist to be
+  threaded through rather than to separate anything.
+  - An **empty list switches narration off**, deliberately the same call:
+    "narrate nothing" and "stop narrating" are one state, and two methods for it
+    would be two states that can disagree.
+  - The list is **replaced, not appended to**. The server's pass grows while it
+    runs, so this is called with a longer list every few seconds.
+- **The Android narrator polls rather than schedules.** A timer per clip has to
+  be cancelled and rebuilt on every seek, every pause and every list update. Four
+  checks a second against the playhead cannot drift, needs no special case for a
+  seek, and picks up a clip appended a moment ago on the next tick.
+- **Switching narration off does not stop the server's pass.** It is writing
+  translations and audio to disk that the next viewing will use; abandoning it
+  halfway means paying for the same lines twice.
+- **The clips are handed over on every poll, not at the end.** A pass takes
+  minutes and the first lines are ready in seconds.
+- **The button is first in the action row**, against the convention that puts
+  Like first. Its label grows to carry the pass's progress, and in fourth place
+  that label ran off the edge of the phone — "Đang chuẩn bị" with the numbers cut
+  off. A row that scrolls is not an excuse for hiding the one control the screen
+  is for.
+- **iOS returns `Unit` and says so.** The equivalent is a second `AVPlayer` in
+  the same audio session and it is straightforward — and there is no Xcode
+  project here, so nothing on that platform has ever played a sound. Writing it
+  untested and calling it done would put the app's whole reason for existing
+  behind an unmeasured claim.
+
+**The ducking has not been heard.** The emulator runs with `-no-audio`, so what
+is measured is the arithmetic (`levelsFor`, `clipAt`, with tests) and the fact
+that clips are fetched and started. Whether the voice sits right against the
+video is a question for a real phone, and it is the thing most likely to need a
+number changed.

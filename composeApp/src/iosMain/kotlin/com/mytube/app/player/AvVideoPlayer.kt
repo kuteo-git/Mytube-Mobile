@@ -1,5 +1,6 @@
 package com.mytube.app.player
 
+import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.VideoPlayer
@@ -105,6 +106,18 @@ class AvVideoPlayer : VideoPlayer {
         nowPlaying.describe(media, _state.value.durationSeconds)
         if (startAtSeconds > 0) seekTo(startAtSeconds)
     }
+
+    /**
+     * Not implemented, and saying so rather than pretending.
+     *
+     * The Android side plays clips through a second `ExoPlayer` driven by the
+     * video's playhead. The iOS equivalent is a second `AVPlayer` in the same
+     * audio session, which is straightforward — and it cannot be *run* here:
+     * there is no Xcode project in this repository, so nothing on this platform
+     * has ever played a sound. Writing it untested and calling it done would put
+     * the app's whole reason for existing behind an unmeasured claim.
+     */
+    override fun narrate(clips: List<NarrationClip>) = Unit
 
     override fun play() = av.play()
 

@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.NarrationStatus
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.PlaybackState
@@ -75,6 +76,7 @@ fun WatchScreen(
         onReact = viewModel::react,
         onToggleSaved = viewModel::toggleSaved,
         onToggleSubscribed = viewModel::toggleSubscribed,
+        onToggleNarration = viewModel::toggleNarration,
         onOpenVideo = onOpenVideo,
     )
 }
@@ -92,6 +94,7 @@ fun WatchContent(
     onReact: (Reaction) -> Unit,
     onToggleSaved: () -> Unit,
     onToggleSubscribed: () -> Unit,
+    onToggleNarration: () -> Unit,
     onOpenVideo: (String) -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -171,11 +174,26 @@ fun WatchContent(
             ) {
                 item(key = "details") {
                     Details(
-                        state.video,
-                        mediaBaseUrl,
-                        onReact,
-                        onToggleSaved,
-                        onToggleSubscribed,
+                        video = state.video,
+                        mediaBaseUrl = mediaBaseUrl,
+                        narrating = state.narrating,
+                        // The label carries the progress while a pass runs, so
+                        // the button says what is happening instead of sitting
+                        // lit over silence for the first few seconds.
+                        narrationLabel = when {
+                            state.narration.status == NarrationStatus.Failed ->
+                                strings.narrationFailed
+                            state.narrating && state.narration.isWorking ->
+                                strings.narrationPreparing(
+                                    state.narration.done,
+                                    state.narration.total,
+                                )
+                            else -> strings.narration
+                        },
+                        onReact = onReact,
+                        onToggleSaved = onToggleSaved,
+                        onToggleSubscribed = onToggleSubscribed,
+                        onToggleNarration = onToggleNarration,
                     )
                 }
 
@@ -228,9 +246,12 @@ private fun BackOnly(onBack: () -> Unit, label: String) {
 private fun Details(
     video: Video,
     mediaBaseUrl: String,
+    narrating: Boolean,
+    narrationLabel: String,
     onReact: (Reaction) -> Unit,
     onToggleSaved: () -> Unit,
     onToggleSubscribed: () -> Unit,
+    onToggleNarration: () -> Unit,
 ) {
     val strings = LocalStrings.current
 
@@ -282,7 +303,14 @@ private fun Details(
         }
 
         Spacer(Modifier.height(Space.md))
-        WatchActions(video, onReact, onToggleSaved)
+        WatchActions(
+            video = video,
+            narrating = narrating,
+            narrationLabel = narrationLabel,
+            onReact = onReact,
+            onToggleSaved = onToggleSaved,
+            onToggleNarration = onToggleNarration,
+        )
     }
 }
 
@@ -348,6 +376,7 @@ private fun preview(state: WatchState) {
             onReact = {},
             onToggleSaved = {},
             onToggleSubscribed = {},
+            onToggleNarration = {},
             onOpenVideo = {},
         )
     }

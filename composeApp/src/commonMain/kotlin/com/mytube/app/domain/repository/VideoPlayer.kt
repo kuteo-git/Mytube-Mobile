@@ -1,5 +1,6 @@
 package com.mytube.app.domain.repository
 
+import com.mytube.app.domain.model.NarrationClip
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -47,6 +48,26 @@ interface VideoPlayer {
     fun pause()
 
     fun seekTo(seconds: Double)
+
+    /**
+     * Speak these lines over the video, ducking it while a line runs.
+     *
+     * ## Why this is on the player and not a second port
+     *
+     * Only the player knows where the playhead is, and only the player can turn
+     * the video down. A separate `Narrator` would need both — so it would need
+     * the player, and the seam would exist to be threaded through rather than to
+     * separate anything.
+     *
+     * An empty list switches narration off, which is deliberately the same call:
+     * "narrate nothing" and "stop narrating" are one state, and two methods for
+     * it would be two states that can disagree.
+     *
+     * The list is replaced, not appended to. The server's pass grows while it
+     * runs, so this is called repeatedly with a longer list each time; anything
+     * already speaking keeps speaking.
+     */
+    fun narrate(clips: List<NarrationClip>)
 
     /**
      * Stop playing and let go of the media, ending the session.

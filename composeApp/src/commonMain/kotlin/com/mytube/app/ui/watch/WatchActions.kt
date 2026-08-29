@@ -47,8 +47,12 @@ import com.mytube.app.ui.theme.Tokens
 @Composable
 fun WatchActions(
     video: Video,
+    narrating: Boolean,
+    /** Either the feature's name or how far the server has got with it. */
+    narrationLabel: String,
     onReact: (Reaction) -> Unit,
     onToggleSaved: () -> Unit,
+    onToggleNarration: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -59,6 +63,21 @@ fun WatchActions(
             .padding(horizontal = Space.lg),
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
     ) {
+        // Narration sits in this row rather than behind a gear, because it is
+        // the reason somebody opened this app rather than the web one, and a
+        // feature reached through a menu is a feature most people never find.
+        //
+        // It is **first**, against the convention that puts Like first, because
+        // its label grows to carry the pass's progress — and in fourth place
+        // that label ran off the edge of the phone, leaving "Đang chuẩn bị" with
+        // the numbers cut off. A row that scrolls is not an excuse for hiding
+        // the one control the screen is for.
+        ActionPill(
+            icon = if (narrating) SpeakerFilledIcon else SpeakerIcon,
+            label = narrationLabel,
+            active = narrating,
+            onClick = onToggleNarration,
+        )
         ActionPill(
             // Filled when it is on. The background cannot carry this: the two
             // surface tokens are six units apart, which is a hover difference

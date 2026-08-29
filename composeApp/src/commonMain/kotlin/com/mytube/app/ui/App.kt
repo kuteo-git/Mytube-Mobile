@@ -241,6 +241,7 @@ fun App(container: AppContainer) {
                         mediaBaseUrl = baseUrl,
                         videos = container.videoRepository,
                         streams = container.streamRepository,
+                        narration = container.narrationRepository,
                         playerFactory = container.playerFactory,
                     )
                 }

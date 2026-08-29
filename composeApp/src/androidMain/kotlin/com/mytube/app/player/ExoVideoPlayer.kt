@@ -11,6 +11,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
+import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.VideoPlayer
@@ -53,7 +54,7 @@ import kotlinx.coroutines.launch
  * ladder rather than one rendition.
  */
 @UnstableApi
-class ExoVideoPlayer(context: Context) : VideoPlayer {
+class ExoVideoPlayer(private val context: Context) : VideoPlayer {
 
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -71,6 +72,17 @@ class ExoVideoPlayer(context: Context) : VideoPlayer {
 
     /** A load that arrived before the connection did. */
     private var pending: Pair<PlayingMedia, Double>? = null
+
+    /**
+     * The second voice, built once the controller exists.
+     *
+     * It needs the video's player to read the playhead from and to duck, and
+     * that is the controller — so it cannot exist before the connection does.
+     */
+    private var narrator: Narrator? = null
+
+    /** Clips that arrived before the narrator did, replayed on connection. */
+    private var pendingClips: List<NarrationClip> = emptyList()
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -102,7 +114,12 @@ class ExoVideoPlayer(context: Context) : VideoPlayer {
         val future = MediaController.Builder(context, token).buildAsync()
         future.addListener(
             {
-                controller = future.get().also { it.addListener(listener) }
+                val connected = future.get().also { it.addListener(listener) }
+                controller = connected
+                narrator = Narrator(context, connected).also {
+                    if (pendingClips.isNotEmpty()) it.setClips(pendingClips)
+                }
+                pendingClips = emptyList()
                 pending?.let { (media, at) -> start(media, at) }
                 pending = null
             },
@@ -122,6 +139,18 @@ class ExoVideoPlayer(context: Context) : VideoPlayer {
         start(media, startAtSeconds)
     }
 
+    override fun narrate(clips: List<NarrationClip>) {
+        val live = narrator
+        if (live == null) {
+            // Remembered for the same reason a load is: the connection lands a
+            // few hundred milliseconds later, and a viewer who switched
+            // narration on before then must not have to switch it on again.
+            pendingClips = clips
+            return
+        }
+        live.setClips(clips)
+    }
+
     override fun play() {
         controller?.play()
     }
@@ -139,6 +168,8 @@ class ExoVideoPlayer(context: Context) : VideoPlayer {
     }
 
     override fun stop() {
+        narrator?.release()
+        narrator = null
         // Both, in this order. `stop()` alone leaves the item loaded, so Media3
         // keeps the session — and its notification — alive over a player with
         // nothing to play; clearing the queue is what tells the service the
@@ -161,6 +192,8 @@ class ExoVideoPlayer(context: Context) : VideoPlayer {
      */
     override fun release() {
         stopTicking()
+        narrator?.release()
+        narrator = null
         controller?.removeListener(listener)
         controller?.release()
         controller = null

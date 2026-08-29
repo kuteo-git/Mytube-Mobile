@@ -1,6 +1,9 @@
 package com.mytube.app.data.remote.dto
 
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Narration
+import com.mytube.app.domain.model.NarrationClip
+import com.mytube.app.domain.model.NarrationStatus
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
@@ -180,4 +183,49 @@ fun ChannelVideoDto.toDomain(channel: Channel): Video = Video(
     publishedAt = publishedAt.orEmpty(),
     // Absolute, and `imageModel` is what notices. See its comment.
     thumbnailPath = thumbnailUrl,
+)
+
+@Serializable
+data class NarrationDto(
+    val status: String = "",
+    val done: Int = 0,
+    val total: Int = 0,
+    val error: String = "",
+    /** Named `cues` on the wire; they are clips by the time they arrive here. */
+    val cues: List<NarrationClipDto> = emptyList(),
+)
+
+@Serializable
+data class NarrationClipDto(
+    val startSeconds: Double = 0.0,
+    val durationSeconds: Double = 0.0,
+    val clipUrl: String = "",
+    val text: String = "",
+)
+
+/**
+ * The manifest, with clip addresses made absolute.
+ *
+ * The server sends a path under `/media`, because that is what it knows. A
+ * player needs somewhere to fetch it from, and only this side knows which
+ * machine the library is on.
+ */
+fun NarrationDto.toDomain(baseUrl: String): Narration = Narration(
+    status = NarrationStatus.fromWire(status),
+    done = done,
+    total = total,
+    error = error,
+    clips = cues
+        // A clip with no address is not playable and must not reach the
+        // scheduler, which would otherwise duck the video for a line that never
+        // speaks.
+        .filter { it.clipUrl.isNotEmpty() }
+        .map {
+            NarrationClip(
+                startSeconds = it.startSeconds,
+                durationSeconds = it.durationSeconds,
+                clipUrl = baseUrl.trimEnd('/') + it.clipUrl,
+                text = it.text,
+            )
+        },
 )

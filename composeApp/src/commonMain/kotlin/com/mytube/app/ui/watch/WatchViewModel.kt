@@ -3,15 +3,19 @@ package com.mytube.app.ui.watch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mytube.app.data.repository.ServerNotConfigured
+import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Stream
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
+import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
 import com.mytube.app.domain.repository.VideoRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +43,16 @@ const val PHONE_MAX_HEIGHT = 720
  * number that has moved by a quarter of a second.
  */
 private const val PROGRESS_EVERY_SECONDS = 10.0
+
+/**
+ * How often the narration pass is asked how it is getting on.
+ *
+ * Three seconds. The pass produces a line every second or so, and each answer
+ * carries every clip prepared so far — so a slower poll costs nothing but the
+ * moment a newly ready line becomes playable, and a faster one re-sends a list
+ * that has barely changed.
+ */
+private const val NARRATION_POLL_MILLIS = 3_000L
 
 sealed interface WatchState {
     data object Loading : WatchState
@@ -68,6 +82,15 @@ sealed interface WatchState {
          * something the viewer reads after pressing play.
          */
         val upNext: List<Video> = emptyList(),
+        /**
+         * The narration the server has prepared, and whether it is wanted.
+         *
+         * `narrating` is the viewer's switch and `narration` is what exists;
+         * they are separate because switching off must not throw away work the
+         * server has already paid for.
+         */
+        val narrating: Boolean = false,
+        val narration: Narration = Narration.Empty,
     ) : WatchState
 }
 
@@ -91,6 +114,7 @@ class WatchViewModel(
     private val mediaBaseUrl: String,
     private val videos: VideoRepository,
     private val streams: StreamRepository,
+    private val narration: NarrationRepository,
     playerFactory: VideoPlayerFactory,
 ) : ViewModel() {
 
@@ -101,6 +125,9 @@ class WatchViewModel(
 
     /** The position last sent to the server, so the next report can be spaced. */
     private var lastReported = 0.0
+
+    /** The poll watching the server's narration pass, cancelled when it ends. */
+    private var narrationPoll: Job? = null
 
     init {
         viewModelScope.launch {
@@ -126,6 +153,51 @@ class WatchViewModel(
     }
 
     fun seekTo(seconds: Double) = player.seekTo(seconds)
+
+    /**
+     * Turn the Vietnamese voice on or off.
+     *
+     * Switching on asks the server to start a pass and then polls it. Switching
+     * off stops the voice and stops polling, and deliberately does **not** ask
+     * the server to stop: the pass is writing translations and audio to disk
+     * that the next viewing will use, and abandoning it halfway through means
+     * paying for the same lines twice.
+     */
+    fun toggleNarration() {
+        val current = _state.value as? WatchState.Playing ?: return
+        val next = !current.narrating
+        _state.value = current.copy(narrating = next)
+
+        if (!next) {
+            narrationPoll?.cancel()
+            narrationPoll = null
+            player.narrate(emptyList())
+            return
+        }
+
+        narrationPoll?.cancel()
+        narrationPoll = viewModelScope.launch {
+            runCatching { narration.start(current.video.id) }
+                .onFailure { return@launch }
+            while (true) {
+                val state = runCatching { narration.state(current.video.id) }.getOrNull()
+                if (state != null) {
+                    _state.update { now ->
+                        if (now is WatchState.Playing) now.copy(narration = state) else now
+                    }
+                    // Handed over on every poll, not once at the end. The pass
+                    // takes minutes and the first lines are ready in seconds;
+                    // waiting for the whole video is minutes of silence over a
+                    // video that could already be speaking.
+                    if (_state.value.let { it is WatchState.Playing && it.narrating }) {
+                        player.narrate(state.clips)
+                    }
+                    if (!state.isWorking) return@launch
+                }
+                delay(NARRATION_POLL_MILLIS)
+            }
+        }
+    }
 
     /**
      * Move by a number of seconds, clamped to the video.
@@ -214,6 +286,8 @@ class WatchViewModel(
      * second report is refused because the playhead has not moved.
      */
     fun close() {
+        narrationPoll?.cancel()
+        narrationPoll = null
         // The last position, before the connection goes. Without this, closing
         // the screen loses up to ten seconds of progress — and closing it is
         // precisely when somebody stops watching, so it is the report that

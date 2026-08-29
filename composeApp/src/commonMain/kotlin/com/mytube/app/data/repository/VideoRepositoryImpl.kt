@@ -7,7 +7,9 @@ import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
+import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.repository.ChannelPage
+import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.ServerRepository
 import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.domain.repository.VideoRepository
@@ -31,6 +33,23 @@ import com.mytube.app.domain.repository.VideoRepository
  * answer under the player's own cache key, so hovering a card and then opening
  * it meant the real request was never issued at all.
  */
+class NarrationRepositoryImpl(
+    private val gateway: GatewayDataSource,
+    private val server: ServerRepository,
+) : NarrationRepository {
+
+    override suspend fun start(videoId: String) =
+        gateway.startNarration(requireBase(), server.profileId(), videoId)
+
+    override suspend fun state(videoId: String): Narration {
+        val base = requireBase()
+        return gateway.narration(base, server.profileId(), videoId).toDomain(base)
+    }
+
+    private suspend fun requireBase(): String =
+        server.baseUrl().ifBlank { throw ServerNotConfigured() }
+}
+
 class VideoRepositoryImpl(
     private val gateway: GatewayDataSource,
     private val server: ServerRepository,

@@ -87,6 +87,12 @@ interface Strings {
     val noResultsDetail: String
     val searchPrompt: String
 
+    // --- narration ---------------------------------------------------------
+    val narration: String
+    /** "Preparing 27/242" — the count is filled in by the caller. */
+    fun narrationPreparing(done: Int, total: Int): String
+    val narrationFailed: String
+
     // --- navigation --------------------------------------------------------
     val navHome: String
     val navSubscriptions: String
@@ -200,6 +206,10 @@ object EnglishStrings : Strings {
     override val noResultsDetail = "Try fewer words, or the name of the channel."
     override val searchPrompt = "Titles and channels in this library."
 
+    override val narration = "Vietnamese voice"
+    override fun narrationPreparing(done: Int, total: Int) = "Preparing $done/$total"
+    override val narrationFailed = "The voice could not be prepared"
+
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
     override val navHistory = "History"
@@ -288,6 +298,10 @@ object VietnameseStrings : Strings {
     override val noResults = "Không có gì khớp"
     override val noResultsDetail = "Thử ít chữ hơn, hoặc gõ tên kênh."
     override val searchPrompt = "Tìm theo tên video và tên kênh trong thư viện."
+
+    override val narration = "Thuyết minh"
+    override fun narrationPreparing(done: Int, total: Int) = "Đang chuẩn bị $done/$total"
+    override val narrationFailed = "Không chuẩn bị được giọng đọc"
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"

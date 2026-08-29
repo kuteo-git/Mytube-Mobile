@@ -4,6 +4,7 @@ import com.mytube.app.data.remote.dto.ChannelDetailDto
 import com.mytube.app.data.remote.dto.ChannelVideosDto
 import com.mytube.app.data.remote.dto.ChannelsDto
 import com.mytube.app.data.remote.dto.FeedDto
+import com.mytube.app.data.remote.dto.NarrationDto
 import com.mytube.app.data.remote.dto.StreamDto
 import com.mytube.app.data.remote.dto.TopicsDto
 import com.mytube.app.data.remote.dto.VideoDto
@@ -135,6 +136,24 @@ class GatewayDataSource(private val client: HttpClient) {
         if (sortToken.isNotBlank()) parameter("sort", sortToken)
         if (pageToken.isNotBlank()) parameter("pageToken", pageToken)
     }.orThrow().body()
+
+    /**
+     * Ask the server to translate and speak this video.
+     *
+     * Answers 202 and returns at once — a full pass takes minutes, and a request
+     * held open that long dies to a phone locking its screen, taking the pass
+     * with it. Progress is read from [narration].
+     */
+    suspend fun startNarration(baseUrl: String, userId: String, videoId: String) {
+        client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/narration") {
+            identify(userId)
+        }.orThrow()
+    }
+
+    suspend fun narration(baseUrl: String, userId: String, videoId: String): NarrationDto =
+        client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/narration") {
+            identify(userId)
+        }.orThrow().body()
 
     /**
      * Where the viewer has got to.

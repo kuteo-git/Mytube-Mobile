@@ -143,6 +143,28 @@ internal val CloseIcon: ImageVector by lazy {
     }
 }
 
+/** A speaker with sound coming out of it: the Vietnamese voice. */
+internal val SpeakerIcon: ImageVector by lazy {
+    stroke("Speaker") {
+        moveTo(4f, 9f); lineTo(7f, 9f); lineTo(11.5f, 5f); lineTo(11.5f, 19f)
+        lineTo(7f, 15f); lineTo(4f, 15f); close()
+        moveTo(15f, 9.5f); curveTo(16.3f, 10.8f, 16.3f, 13.2f, 15f, 14.5f)
+        moveTo(17.8f, 6.7f); curveTo(20.7f, 9.6f, 20.7f, 14.4f, 17.8f, 17.3f)
+    }
+}
+
+internal val SpeakerFilledIcon: ImageVector by lazy {
+    filled("SpeakerFilled") {
+        moveTo(4f, 9f); lineTo(7f, 9f); lineTo(11.5f, 5f); lineTo(11.5f, 19f)
+        lineTo(7f, 15f); lineTo(4f, 15f); close()
+        moveTo(14.2f, 8.6f); lineTo(15.8f, 10.2f)
+        curveTo(16.6f, 11.2f, 16.6f, 12.8f, 15.8f, 13.8f)
+        lineTo(14.2f, 15.4f)
+        curveTo(15.9f, 13.6f, 15.9f, 10.4f, 14.2f, 8.6f)
+        close()
+    }
+}
+
 /** A bookmark: Save, which keeps the file against the eviction sweep. */
 internal val SaveFilledIcon: ImageVector by lazy {
     filled("SaveFilled") {
