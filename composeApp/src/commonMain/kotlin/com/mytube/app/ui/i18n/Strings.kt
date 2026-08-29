@@ -53,10 +53,31 @@ interface Strings {
     val setTheAddress: String
     val couldNotReach: String
     val tryAgain: String
+    val moreOptions: String
+
+    // --- navigation --------------------------------------------------------
+    val navHome: String
+    val navSubscriptions: String
+    val navHistory: String
+    val navSettings: String
+    val search: String
 
     // --- units -------------------------------------------------------------
     /** "views", after a count. */
     val views: String
+
+    /**
+     * Relative time, as two shapes rather than one shape with a substituted
+     * word.
+     *
+     * English marks the past *before* the unit — "3 days ago" — and Vietnamese
+     * *after* the phrase — "3 ngày trước". A single template with a translated
+     * word produces the thing that makes a translation read as a machine's. The
+     * web app records the same conclusion, and the plural is why: it appended an
+     * "s" and printed "3 ngàys trước" in a language with no plural.
+     */
+    fun relative(value: Int, unit: TimeUnit): String
+    val justNow: String
 
     /**
      * The scale suffixes, thousand / million / billion.
@@ -69,6 +90,16 @@ interface Strings {
     val thousandSuffix: String
     val millionSuffix: String
     val billionSuffix: String
+}
+
+/** The units a relative time is expressed in, largest first. */
+enum class TimeUnit(val seconds: Long) {
+    Year(31_536_000),
+    Month(2_592_000),
+    Week(604_800),
+    Day(86_400),
+    Hour(3_600),
+    Minute(60),
 }
 
 object EnglishStrings : Strings {
@@ -87,8 +118,29 @@ object EnglishStrings : Strings {
     override val setTheAddress = "Set the address"
     override val couldNotReach = "Could not reach the library"
     override val tryAgain = "Try again"
+    override val moreOptions = "More"
+
+    override val navHome = "Home"
+    override val navSubscriptions = "Subscriptions"
+    override val navHistory = "History"
+    override val navSettings = "Settings"
+    override val search = "Search"
 
     override val views = "views"
+
+    override fun relative(value: Int, unit: TimeUnit): String {
+        val word = when (unit) {
+            TimeUnit.Year -> "year"
+            TimeUnit.Month -> "month"
+            TimeUnit.Week -> "week"
+            TimeUnit.Day -> "day"
+            TimeUnit.Hour -> "hour"
+            TimeUnit.Minute -> "minute"
+        }
+        return "$value $word${if (value > 1) "s" else ""} ago"
+    }
+
+    override val justNow = "just now"
     override val thousandSuffix = "K"
     override val millionSuffix = "M"
     override val billionSuffix = "B"
@@ -110,8 +162,30 @@ object VietnameseStrings : Strings {
     override val setTheAddress = "Nhập địa chỉ"
     override val couldNotReach = "Không kết nối được tới thư viện"
     override val tryAgain = "Thử lại"
+    override val moreOptions = "Thêm"
+
+    override val navHome = "Trang chủ"
+    override val navSubscriptions = "Kênh đăng ký"
+    override val navHistory = "Đã xem"
+    override val navSettings = "Cài đặt"
+    override val search = "Tìm kiếm"
 
     override val views = "lượt xem"
+
+    override fun relative(value: Int, unit: TimeUnit): String {
+        // No plural form of any of them, and the marker goes last.
+        val word = when (unit) {
+            TimeUnit.Year -> "năm"
+            TimeUnit.Month -> "tháng"
+            TimeUnit.Week -> "tuần"
+            TimeUnit.Day -> "ngày"
+            TimeUnit.Hour -> "giờ"
+            TimeUnit.Minute -> "phút"
+        }
+        return "$value $word trước"
+    }
+
+    override val justNow = "vừa xong"
 
     // N / Tr / T — nghìn, triệu, tỷ. Taken from the web app's own table rather
     // than invented, so both clients abbreviate a view count the same way.

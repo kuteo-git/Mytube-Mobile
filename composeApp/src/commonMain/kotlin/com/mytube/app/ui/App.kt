@@ -10,6 +10,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mytube.app.AppContainer
 import com.mytube.app.ui.home.HomeScreen
 import com.mytube.app.ui.home.HomeViewModel
+import com.mytube.app.ui.shell.AppShell
+import com.mytube.app.ui.shell.Tab
 import com.mytube.app.ui.settings.ServerSetupScreen
 import com.mytube.app.ui.settings.ServerSetupViewModel
 import androidx.compose.runtime.CompositionLocalProvider
@@ -72,16 +74,27 @@ fun App(container: AppContainer) {
                     onDone = { route = Route.Home },
                 )
 
-                is Route.Home -> HomeScreen(
-                    // Keyed on the address: changing it has to build a new
-                    // HomeViewModel, because the old one is holding a feed fetched
-                    // from somewhere else.
-                    viewModel = viewModel(key = "home-$baseUrl") {
-                        HomeViewModel(container.videoRepository)
-                    },
-                    mediaBaseUrl = baseUrl,
-                    onOpenSettings = { route = Route.Setup },
-                )
+                is Route.Home -> AppShell(
+                    current = Tab.Home,
+                    // The other three tabs are screens that do not exist yet.
+                    // They are drawn because the bar is the app's shape and a
+                    // bar with one item is not it — and pressing them does
+                    // nothing rather than pretending, which is the honest state
+                    // until the screens arrive.
+                    onSelect = { if (it == Tab.Settings) route = Route.Setup },
+                ) {
+                    HomeScreen(
+                        // Keyed on the address: changing it builds a new
+                        // HomeViewModel, because the old one holds a feed
+                        // fetched from somewhere else.
+                        viewModel = viewModel(key = "home-$baseUrl") {
+                            HomeViewModel(container.videoRepository)
+                        },
+                        mediaBaseUrl = baseUrl,
+                        onOpenSettings = { route = Route.Setup },
+                        onOpenVideo = { },
+                    )
+                }
             }
         }
     }

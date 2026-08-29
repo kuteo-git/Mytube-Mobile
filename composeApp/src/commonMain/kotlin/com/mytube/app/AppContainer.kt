@@ -3,8 +3,11 @@ package com.mytube.app
 import com.mytube.app.data.local.SettingsDataSource
 import com.mytube.app.data.remote.GatewayDataSource
 import com.mytube.app.data.repository.ServerRepositoryImpl
+import com.mytube.app.data.repository.StreamRepositoryImpl
 import com.mytube.app.data.repository.VideoRepositoryImpl
 import com.mytube.app.domain.repository.ServerRepository
+import com.mytube.app.domain.repository.StreamRepository
+import com.mytube.app.domain.repository.VideoPlayerFactory
 import com.mytube.app.domain.repository.VideoRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
@@ -34,7 +37,18 @@ import kotlinx.serialization.json.Json
  * code — Android needs a `Context`, iOS needs nothing at all. Passing it in
  * keeps every other decision on this side of the boundary.
  */
-class AppContainer(settings: SettingsDataSource) {
+class AppContainer(
+    settings: SettingsDataSource,
+    /**
+     * Builds a player for the platform this is running on.
+     *
+     * Handed in for the same reason as the settings store: it is the one thing
+     * here that common code cannot construct. Android needs a Context, iOS needs
+     * an audio session — and the composition root stays the only place either is
+     * mentioned.
+     */
+    val playerFactory: VideoPlayerFactory,
+) {
 
     /**
      * One client for the whole app, and Coil is given the same one.
@@ -69,4 +83,6 @@ class AppContainer(settings: SettingsDataSource) {
     val serverRepository: ServerRepository = ServerRepositoryImpl(settings, gateway)
 
     val videoRepository: VideoRepository = VideoRepositoryImpl(gateway, serverRepository)
+
+    val streamRepository: StreamRepository = StreamRepositoryImpl(gateway, serverRepository)
 }

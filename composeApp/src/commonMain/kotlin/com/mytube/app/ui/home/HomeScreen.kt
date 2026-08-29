@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -45,6 +47,9 @@ import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.Strings
+import com.mytube.app.ui.i18n.TimeUnit
+import kotlin.time.Clock
+import kotlin.time.Instant
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -62,6 +67,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     mediaBaseUrl: String,
     onOpenSettings: () -> Unit,
+    onOpenVideo: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -69,6 +75,7 @@ fun HomeScreen(
         state = state,
         mediaBaseUrl = mediaBaseUrl,
         onOpenSettings = onOpenSettings,
+        onOpenVideo = onOpenVideo,
         onRetry = viewModel::refresh,
         onLoadMore = viewModel::loadMore,
     )
@@ -85,6 +92,7 @@ fun HomeContent(
     state: HomeState,
     mediaBaseUrl: String,
     onOpenSettings: () -> Unit,
+    onOpenVideo: (String) -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
 ) {
@@ -112,7 +120,7 @@ fun HomeContent(
                 }
             }
 
-            is HomeState.Ready -> Feed(current, mediaBaseUrl, strings, onLoadMore)
+            is HomeState.Ready -> Feed(current, mediaBaseUrl, strings, onOpenVideo, onLoadMore)
         }
     }
 }
@@ -122,6 +130,7 @@ private fun Feed(
     state: HomeState.Ready,
     mediaBaseUrl: String,
     strings: Strings,
+    onOpenVideo: (String) -> Unit,
     onLoadMore: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -144,80 +153,24 @@ private fun Feed(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        // The list scrolls under the status bar and the gesture bar, which is
-        // what edge-to-edge is for — but its *content* must not start under
-        // them. Without this the first thumbnail sits behind the clock, which is
-        // exactly what the first run on a device showed.
-        contentPadding = WindowInsets.systemBars.asPaddingValues(),
+        // The list scrolls *under* both bars — that is what makes them feel
+        // like glass over content rather than walls — but its content must
+        // start below the top bar and end above the tab bar. Insets alone are
+        // not enough: those describe the system's bars, not this app's.
+        contentPadding = PaddingValues(
+            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + Size.topBar,
+            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+                Size.topBar,
+        ),
     ) {
         items(state.videos, key = { it.id }) { video ->
-            VideoCard(video, mediaBaseUrl, strings)
+            VideoCard(video, mediaBaseUrl, strings, onClick = { onOpenVideo(video.id) })
         }
         if (state.loadingMore) {
             item {
                 Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun VideoCard(video: Video, mediaBaseUrl: String, strings: Strings) {
-    Column(modifier = Modifier.fillMaxWidth().clickable { }.padding(bottom = 16.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Tokens.surface)) {
-            AsyncImage(
-                model = "$mediaBaseUrl/media/${video.thumbnailPath}",
-                contentDescription = video.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
-            )
-            if (video.durationSeconds > 0) {
-                Text(
-                    text = formatDuration(video.durationSeconds),
-                    color = Tokens.text,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        // The background is the whole point of the badge, and it
-                        // was missing: white text alone is unreadable over a
-                        // bright thumbnail, which is most of them. Caught by
-                        // rendering the screen rather than by reading the code.
-                        .background(Color.Black.copy(alpha = 0.8f))
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                )
-            }
-        }
-
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
-            AsyncImage(
-                model = "$mediaBaseUrl/media/${video.channel.avatarPath}",
-                contentDescription = video.channel.name,
-                contentScale = ContentScale.Crop,
-                // A circle of surface colour while it loads, so the title does
-                // not shift sideways when the avatar arrives.
-                modifier = Modifier.size(36.dp).clip(CircleShape).background(Tokens.surface),
-            )
-            Spacer(Modifier.size(12.dp))
-            Column {
-                Text(
-                    text = video.title,
-                    color = Tokens.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "${video.channel.name} · ${formatViews(video.viewCount, strings)}",
-                    color = Tokens.text2,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
         }
     }
@@ -310,6 +263,7 @@ private fun HomeReadyPreview() = MytubeTheme {
         ),
         mediaBaseUrl = "",
         onOpenSettings = {},
+        onOpenVideo = {},
         onRetry = {},
         onLoadMore = {},
     )
@@ -318,17 +272,39 @@ private fun HomeReadyPreview() = MytubeTheme {
 @Preview
 @Composable
 private fun HomeNeedsServerPreview() = MytubeTheme {
-    HomeContent(HomeState.NeedsServer, "", {}, {}, {})
+    HomeContent(HomeState.NeedsServer, "", {}, {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeFailedPreview() = MytubeTheme {
-    HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {})
+    HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeLoadingPreview() = MytubeTheme {
-    HomeContent(HomeState.Loading, "", {}, {}, {})
+    HomeContent(HomeState.Loading, "", {}, {}, {}, {})
+}
+
+/**
+ * `1 day ago` / `1 ngày trước`, from an ISO timestamp.
+ *
+ * The two languages put the past marker in different places, so [Strings]
+ * supplies the whole phrase rather than a word to slot into one template. See
+ * the note on `Strings.relative`.
+ *
+ * Returns empty for a date in the future or one that cannot be read — a card
+ * then shows the views alone rather than "in -1 days".
+ */
+fun formatRelative(iso: String, strings: Strings, now: Instant = Clock.System.now()): String {
+    val published = runCatching { Instant.parse(iso) }.getOrNull() ?: return ""
+    val seconds = (now - published).inWholeSeconds
+    if (seconds < 0) return ""
+    for (unit in TimeUnit.entries) {
+        if (seconds >= unit.seconds) {
+            return strings.relative((seconds / unit.seconds).toInt(), unit)
+        }
+    }
+    return strings.justNow
 }

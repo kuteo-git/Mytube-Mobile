@@ -1,6 +1,7 @@
 package com.mytube.app.data.remote
 
 import com.mytube.app.data.remote.dto.FeedDto
+import com.mytube.app.data.remote.dto.StreamDto
 import com.mytube.app.data.remote.dto.VideoDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -55,6 +56,20 @@ class GatewayDataSource(private val client: HttpClient) {
             identify(userId)
             parameter("q", query)
         }.orThrow().body<FeedDto>().videos
+
+    /**
+     * How this video can be played right now.
+     *
+     * No `prefetch=1`: that flag means the viewer only hovered a card, and it
+     * deliberately fetches no captions and queues no transfer. Pressing play is
+     * a different question and must ask it properly — the web app spent a
+     * release on exactly this confusion, with a hover's answer cached under the
+     * player's own key so the real request was never issued.
+     */
+    suspend fun stream(baseUrl: String, userId: String, videoId: String): StreamDto =
+        client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/stream") {
+            identify(userId)
+        }.orThrow().body()
 
     /**
      * Whether something that behaves like the gateway answers here.

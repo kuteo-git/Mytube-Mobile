@@ -1,7 +1,9 @@
 package com.mytube.app
 
 import android.content.Context
+import androidx.media3.common.util.UnstableApi
 import com.mytube.app.data.local.AndroidSettingsDataSource
+import com.mytube.app.player.ExoVideoPlayerFactory
 
 /**
  * The process-wide container, built on first use.
@@ -15,10 +17,14 @@ import com.mytube.app.data.local.AndroidSettingsDataSource
  * caller is an Activity and Android may create two of them in quick succession
  * during a configuration change.
  */
+@UnstableApi
 object MytubeApp {
     private var instance: AppContainer? = null
 
     fun container(context: Context): AppContainer = synchronized(this) {
-        instance ?: AppContainer(AndroidSettingsDataSource(context)).also { instance = it }
+        instance ?: AppContainer(
+            settings = AndroidSettingsDataSource(context),
+            playerFactory = ExoVideoPlayerFactory(context),
+        ).also { instance = it }
     }
 }

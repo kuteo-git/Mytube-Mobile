@@ -61,16 +61,16 @@ class Screenshots {
 
         // --- home -----------------------------------------------------------
         renderer.render("home-feed", EnglishStrings) {
-            HomeContent(HomeState.Ready(feed(), "t1"), mediaBase, {}, {}, {})
+            HomeContent(HomeState.Ready(feed(), "t1"), mediaBase, {}, {}, {}, {})
         }
         renderer.render("home-feed-vi", VietnameseStrings) {
-            HomeContent(HomeState.Ready(feed(), "t1"), mediaBase, {}, {}, {})
+            HomeContent(HomeState.Ready(feed(), "t1"), mediaBase, {}, {}, {}, {})
         }
         renderer.render("home-no-server", EnglishStrings) {
-            HomeContent(HomeState.NeedsServer, "", {}, {}, {})
+            HomeContent(HomeState.NeedsServer, "", {}, {}, {}, {})
         }
         renderer.render("home-failed-vi", VietnameseStrings) {
-            HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {})
+            HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {})
         }
     }
 
