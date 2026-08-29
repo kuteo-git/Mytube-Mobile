@@ -54,6 +54,11 @@ interface Strings {
     val couldNotReach: String
     val tryAgain: String
     val moreOptions: String
+    val continueWatching: String
+    val chipAll: String
+    val chipLive: String
+    /** Shown when a topic or Live has nothing in it. */
+    val nothingHere: String
 
     // --- navigation --------------------------------------------------------
     val navHome: String
@@ -119,6 +124,10 @@ object EnglishStrings : Strings {
     override val couldNotReach = "Could not reach the library"
     override val tryAgain = "Try again"
     override val moreOptions = "More"
+    override val continueWatching = "Continue watching"
+    override val chipAll = "All"
+    override val chipLive = "Live"
+    override val nothingHere = "Nothing here"
 
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
@@ -163,6 +172,12 @@ object VietnameseStrings : Strings {
     override val couldNotReach = "Không kết nối được tới thư viện"
     override val tryAgain = "Thử lại"
     override val moreOptions = "Thêm"
+    override val continueWatching = "Xem tiếp"
+    override val chipAll = "Tất cả"
+    // Kept in English: it is what every player and every television calls a
+    // broadcast, and "trực tiếp" is longer than the chip it sits in.
+    override val chipLive = "Live"
+    override val nothingHere = "Chưa có gì ở đây"
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"

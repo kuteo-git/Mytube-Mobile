@@ -2,6 +2,7 @@ package com.mytube.app.data.remote
 
 import com.mytube.app.data.remote.dto.FeedDto
 import com.mytube.app.data.remote.dto.StreamDto
+import com.mytube.app.data.remote.dto.TopicsDto
 import com.mytube.app.data.remote.dto.VideoDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -56,6 +57,18 @@ class GatewayDataSource(private val client: HttpClient) {
             identify(userId)
             parameter("q", query)
         }.orThrow().body<FeedDto>().videos
+
+    suspend fun topics(baseUrl: String, userId: String): TopicsDto =
+        client.get("${baseUrl.trimEnd('/')}/api/topics") { identify(userId) }.orThrow().body()
+
+    suspend fun live(baseUrl: String, userId: String): FeedDto =
+        client.get("${baseUrl.trimEnd('/')}/api/live") { identify(userId) }.orThrow().body()
+
+    suspend fun history(baseUrl: String, userId: String, limit: Int): FeedDto =
+        client.get("${baseUrl.trimEnd('/')}/api/history") {
+            identify(userId)
+            parameter("limit", limit)
+        }.orThrow().body()
 
     /**
      * How this video can be played right now.

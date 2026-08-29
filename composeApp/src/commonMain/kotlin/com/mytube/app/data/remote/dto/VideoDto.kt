@@ -1,6 +1,7 @@
 package com.mytube.app.data.remote.dto
 
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -66,6 +67,14 @@ data class UserStateDto(
  * Everything inward of `toDomain` is non-null, so absence is decided once,
  * in the mapper, rather than re-checked at every screen that reads it.
  */
+@Serializable
+data class TopicDto(val name: String = "", val videoCount: Int = 0)
+
+@Serializable
+data class TopicsDto(val topics: List<TopicDto> = emptyList())
+
+fun TopicDto.toDomain(): Topic = Topic(name = name, videoCount = videoCount)
+
 @Serializable
 data class FeedDto(
     val videos: List<VideoDto> = emptyList(),

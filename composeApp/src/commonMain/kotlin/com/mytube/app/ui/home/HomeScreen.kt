@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,17 +45,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import androidx.compose.runtime.CompositionLocalProvider
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.Strings
-import com.mytube.app.ui.i18n.TimeUnit
-import kotlin.time.Clock
-import kotlin.time.Instant
+import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
 import org.jetbrains.compose.ui.tooling.preview.Preview
-import kotlin.math.roundToLong
 
 /**
  * The feed.
@@ -76,6 +77,7 @@ fun HomeScreen(
         mediaBaseUrl = mediaBaseUrl,
         onOpenSettings = onOpenSettings,
         onOpenVideo = onOpenVideo,
+        onSelectChip = viewModel::select,
         onRetry = viewModel::refresh,
         onLoadMore = viewModel::loadMore,
     )
@@ -93,6 +95,7 @@ fun HomeContent(
     mediaBaseUrl: String,
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
+    onSelectChip: (Chip) -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
 ) {
@@ -120,17 +123,23 @@ fun HomeContent(
                 }
             }
 
-            is HomeState.Ready -> Feed(current, mediaBaseUrl, strings, onOpenVideo, onLoadMore)
+            is HomeState.Ready -> Feed(
+                current, mediaBaseUrl, strings,
+                onSelectChip, onOpenVideo, onRetry, onLoadMore,
+            )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Feed(
     state: HomeState.Ready,
     mediaBaseUrl: String,
     strings: Strings,
+    onSelectChip: (Chip) -> Unit,
     onOpenVideo: (String) -> Unit,
+    onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -150,26 +159,67 @@ private fun Feed(
         snapshotFlow { atEnd }.collect { if (it) onLoadMore() }
     }
 
-    LazyColumn(
-        state = listState,
+    // Material3's own pull-to-refresh rather than the web app's hand-tuned
+    // curve. That curve exists because a browser has no gesture of its own and
+    // the constants were fitted to feel native; here the native one is available
+    // and matching the rest of the phone is the whole point.
+    PullToRefreshBox(
+        isRefreshing = state.refreshing,
+        onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
-        // The list scrolls *under* both bars — that is what makes them feel
-        // like glass over content rather than walls — but its content must
-        // start below the top bar and end above the tab bar. Insets alone are
-        // not enough: those describe the system's bars, not this app's.
-        contentPadding = PaddingValues(
-            top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + Size.topBar,
-            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
-                Size.topBar,
-        ),
+        // The indicator has to clear the top bar, which floats over this list.
+        indicator = {},
     ) {
-        items(state.videos, key = { it.id }) { video ->
-            VideoCard(video, mediaBaseUrl, strings, onClick = { onOpenVideo(video.id) })
-        }
-        if (state.loadingMore) {
-            item {
-                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            // The list scrolls *under* both bars — that is what makes them feel
+            // like glass over content rather than walls — but its content must
+            // start below the top bar and end above the tab bar. Insets alone are
+            // not enough: those describe the system's bars, not this app's.
+            contentPadding = PaddingValues(
+                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
+                    Size.topBar,
+                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+                    Size.topBar,
+            ),
+        ) {
+            item(key = "chips") {
+                ChipRow(
+                    chips = state.chips,
+                    selected = state.selected,
+                    onSelect = onSelectChip,
+                    modifier = Modifier.padding(vertical = Space.md),
+                )
+            }
+
+            // The rail scrolls away with the feed rather than sticking. It is a
+            // shelf to glance at on the way past, not a fixture.
+            item(key = "continue") {
+                ContinueWatchingRail(
+                    videos = state.continueWatching,
+                    mediaBaseUrl = mediaBaseUrl,
+                    onOpenVideo = onOpenVideo,
+                )
+            }
+
+            if (state.videos.isEmpty()) {
+                item(key = "empty") {
+                    Box(Modifier.fillMaxWidth().padding(Space.xl), Alignment.Center) {
+                        Text(strings.nothingHere, color = Tokens.text2)
+                    }
+                }
+            }
+
+            items(state.videos, key = { it.id }) { video ->
+                VideoCard(video, mediaBaseUrl, strings, onClick = { onOpenVideo(video.id) })
+            }
+
+            if (state.loadingMore) {
+                item(key = "more") {
+                    Box(Modifier.fillMaxWidth().padding(Space.lg), Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
                 }
             }
         }
@@ -181,51 +231,6 @@ private fun Centered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
 }
 
-/**
- * `12:34`, and `1:02:03` past an hour.
- *
- * No language parameter, and that is not an oversight: a duration is digits and
- * colons in both languages this app speaks. The moment one of them wants
- * something else, it takes a parameter like the others.
- */
-fun formatDuration(totalSeconds: Int): String {
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    val mm = if (hours > 0) minutes.toString().padStart(2, '0') else minutes.toString()
-    return if (hours > 0) "$hours:$mm:${seconds.toString().padStart(2, '0')}"
-    else "$mm:${seconds.toString().padStart(2, '0')}"
-}
-
-/**
- * `4.1M` in English, `4.1Tr` in Vietnamese.
- *
- * The suffix comes from [Strings] rather than a table in here, because that is
- * precisely where the web app's version went wrong — its formatters carried
- * English grammar into a language with no plural and printed "3 ngàys trước".
- * The unit belongs to the language, so the language supplies it.
- *
- * The rounding rule is the web app's, so both clients abbreviate the same
- * number the same way: one decimal below a hundred, none at or above it.
- */
-fun formatCount(n: Long, strings: Strings): String = when {
-    n >= 1_000_000_000 -> trim(n / 1_000_000_000.0) + strings.billionSuffix
-    n >= 1_000_000 -> trim(n / 1_000_000.0) + strings.millionSuffix
-    n >= 1_000 -> trim(n / 1_000.0) + strings.thousandSuffix
-    else -> n.toString()
-}
-
-/** `157K views` / `157N lượt xem`. */
-fun formatViews(n: Long, strings: Strings): String =
-    "${formatCount(n, strings)} ${strings.views}"
-
-private fun trim(value: Double): String {
-    if (value >= 100) return value.roundToLong().toString()
-    val oneDecimal = (value * 10).roundToLong() / 10.0
-    val whole = oneDecimal.toLong()
-    return if (oneDecimal == whole.toDouble()) whole.toString() else oneDecimal.toString()
-}
-
 // --- previews ---------------------------------------------------------------
 //
 // Every state, not just the one that works. The empty and failed cases are the
@@ -233,78 +238,72 @@ private fun trim(value: Double): String {
 // laid out screen is least welcome — and they are the states hardest to reach on
 // a device, so they are the ones most likely to go unseen without these.
 
-private fun sampleVideo(id: String, title: String, seconds: Int, views: Long) = Video(
-    id = id,
-    title = title,
-    channel = Channel(
-        id = "c",
-        name = "CBC News",
-        handle = "@CBCNews",
-        avatarPath = "channels/c/avatar.jpg",
-        subscribed = true,
+private fun sampleVideo(id: String, title: String, seconds: Int, views: Long, watched: Double = 0.0) =
+    Video(
+        id = id,
+        title = title,
+        channel = Channel(
+            id = "c",
+            name = "CBC News",
+            handle = "@CBCNews",
+            avatarPath = "channels/c/avatar.jpg",
+            subscribed = true,
+        ),
+        durationSeconds = seconds,
+        viewCount = views,
+        publishedAt = "2026-08-28T05:35:52Z",
+        thumbnailPath = "thumbnails/$id.jpg",
+        watchedFraction = watched,
+    )
+
+private fun sampleReady() = HomeState.Ready(
+    videos = listOf(
+        sampleVideo("a", "Canadian describes what he saw as catastrophic floods hit Nepal", 451, 157_000),
+        sampleVideo("b", "A short one", 42, 980),
+        sampleVideo("c", "Something over an hour long, with a title that runs on and has to be cut", 4_231, 4_730_000, 0.3),
     ),
-    durationSeconds = seconds,
-    viewCount = views,
-    publishedAt = "2026-08-28T05:35:52Z",
-    thumbnailPath = "thumbnails/$id.jpg",
+    nextPageToken = "t1",
+    chips = listOf(
+        Chip.All,
+        Chip.Live,
+        Chip.Category(Topic("Gaming", 1166)),
+        Chip.Category(Topic("Music", 787)),
+        Chip.Category(Topic("News & Politics", 637)),
+    ),
+    continueWatching = listOf(
+        sampleVideo("d", "Half way through this one", 900, 12_000, 0.42),
+        sampleVideo("e", "And this one too", 1_800, 3_400, 0.7),
+    ),
 )
 
 @Preview
 @Composable
 private fun HomeReadyPreview() = MytubeTheme {
-    HomeContent(
-        state = HomeState.Ready(
-            videos = listOf(
-                sampleVideo("a", "Canadian describes what he saw as catastrophic floods hit Nepal", 451, 157_000),
-                sampleVideo("b", "A short one", 42, 980),
-                sampleVideo("c", "Something over an hour long, with a title that runs on and on and has to be cut", 4_231, 4_730_000),
-            ),
-            nextPageToken = "t1",
-        ),
-        mediaBaseUrl = "",
-        onOpenSettings = {},
-        onOpenVideo = {},
-        onRetry = {},
-        onLoadMore = {},
-    )
+    HomeContent(sampleReady(), "", {}, {}, {}, {}, {})
+}
+
+@Preview
+@Composable
+private fun HomeVietnamesePreview() = MytubeTheme {
+    CompositionLocalProvider(LocalStrings provides VietnameseStrings) {
+        HomeContent(sampleReady(), "", {}, {}, {}, {}, {})
+    }
 }
 
 @Preview
 @Composable
 private fun HomeNeedsServerPreview() = MytubeTheme {
-    HomeContent(HomeState.NeedsServer, "", {}, {}, {}, {})
+    HomeContent(HomeState.NeedsServer, "", {}, {}, {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeFailedPreview() = MytubeTheme {
-    HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {})
+    HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeLoadingPreview() = MytubeTheme {
-    HomeContent(HomeState.Loading, "", {}, {}, {}, {})
-}
-
-/**
- * `1 day ago` / `1 ngày trước`, from an ISO timestamp.
- *
- * The two languages put the past marker in different places, so [Strings]
- * supplies the whole phrase rather than a word to slot into one template. See
- * the note on `Strings.relative`.
- *
- * Returns empty for a date in the future or one that cannot be read — a card
- * then shows the views alone rather than "in -1 days".
- */
-fun formatRelative(iso: String, strings: Strings, now: Instant = Clock.System.now()): String {
-    val published = runCatching { Instant.parse(iso) }.getOrNull() ?: return ""
-    val seconds = (now - published).inWholeSeconds
-    if (seconds < 0) return ""
-    for (unit in TimeUnit.entries) {
-        if (seconds >= unit.seconds) {
-            return strings.relative((seconds / unit.seconds).toInt(), unit)
-        }
-    }
-    return strings.justNow
+    HomeContent(HomeState.Loading, "", {}, {}, {}, {}, {})
 }

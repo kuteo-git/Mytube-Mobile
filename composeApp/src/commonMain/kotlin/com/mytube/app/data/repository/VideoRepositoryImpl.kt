@@ -2,6 +2,7 @@ package com.mytube.app.data.repository
 
 import com.mytube.app.data.remote.GatewayDataSource
 import com.mytube.app.data.remote.dto.toDomain
+import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.repository.ServerRepository
@@ -46,6 +47,23 @@ class VideoRepositoryImpl(
 
     override suspend fun search(query: String): List<Video> =
         gateway.search(requireBaseUrl(), server.profileId(), query).map { it.toDomain() }
+
+    override suspend fun topics(): List<Topic> =
+        gateway.topics(requireBaseUrl(), server.profileId()).topics.map { it.toDomain() }
+
+    override suspend fun live(): List<Video> =
+        gateway.live(requireBaseUrl(), server.profileId()).videos.map { it.toDomain() }
+
+    /**
+     * A page of history is enough for the rail.
+     *
+     * The rail shows at most a dozen and history comes back newest first, so a
+     * deeper read would be pages fetched to be thrown away. 24 is one page and
+     * leaves room for the finished videos that get filtered out of it.
+     */
+    override suspend fun history(): List<Video> =
+        gateway.history(requireBaseUrl(), server.profileId(), limit = 24)
+            .videos.map { it.toDomain() }
 
     /**
      * Refusing early, with a distinct type.

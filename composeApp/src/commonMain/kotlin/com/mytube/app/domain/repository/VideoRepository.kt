@@ -1,5 +1,6 @@
 package com.mytube.app.domain.repository
 
+import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 
 /**
@@ -50,6 +51,29 @@ interface VideoRepository {
 
     /** Videos matching a query, from this library and from YouTube. */
     suspend fun search(query: String): List<Video>
+
+    /** The categories with videos in them, most populated first. */
+    suspend fun topics(): List<Topic>
+
+    /**
+     * What is on air, for this member.
+     *
+     * Its own call rather than a topic: the server filters it to the viewer's
+     * own subscriptions and returns everything at once with no page token,
+     * because *"everything on air" is the whole promise* and the set is a few
+     * dozen.
+     */
+    suspend fun live(): List<Video>
+
+    /**
+     * Recently watched, newest first.
+     *
+     * The feed's "continue watching" rail is built from this rather than from a
+     * slot in the feed, which is what the web app does — and it does it that way
+     * because the two lists answer different questions and editing one to keep
+     * the other honest is how a card stays on screen after being marked watched.
+     */
+    suspend fun history(): List<Video>
 }
 
 data class FeedPage(

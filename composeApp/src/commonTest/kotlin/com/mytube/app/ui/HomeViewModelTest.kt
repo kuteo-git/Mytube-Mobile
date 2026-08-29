@@ -152,5 +152,12 @@ class HomeViewModelTest {
 
         override suspend fun video(id: String) = throw NotImplementedError()
         override suspend fun search(query: String) = throw NotImplementedError()
+
+        // The home screen fetches four things at once. A fake that throws for
+        // three of them would test error handling rather than the feed, so these
+        // answer emptily: no topics, nothing on air, nothing half-watched.
+        override suspend fun topics() = emptyList<com.mytube.app.domain.model.Topic>()
+        override suspend fun live() = emptyList<Video>()
+        override suspend fun history() = emptyList<Video>()
     }
 }
