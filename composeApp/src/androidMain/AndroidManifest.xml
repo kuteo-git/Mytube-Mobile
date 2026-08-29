@@ -13,6 +13,13 @@
          type declared to do the same. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!--
+      Android 13 and later suppress the media notification without this, and the
+      notification is not decoration: it is the lock-screen controls and the only
+      way to pause without opening the app. Playback still works — which is what
+      makes the omission easy to miss, since everything sounds right.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:label="Mytube"
@@ -28,5 +35,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          The player lives here so the sound survives the screen going off.
+          foregroundServiceType is not optional: without it the system refuses
+          to promote the service and kills it the moment the app is
+          backgrounded, which is precisely the case this app exists for.
+        -->
+        <service
+            android:name=".player.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

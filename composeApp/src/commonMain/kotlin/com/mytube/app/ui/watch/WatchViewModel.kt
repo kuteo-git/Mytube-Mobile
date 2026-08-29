@@ -6,6 +6,7 @@ import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Stream
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.PlaybackState
+import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
@@ -67,6 +68,8 @@ sealed interface WatchState {
  */
 class WatchViewModel(
     private val videoId: String,
+    /** Where images live, for the artwork the lock screen draws. */
+    private val mediaBaseUrl: String,
     private val videos: VideoRepository,
     private val streams: StreamRepository,
     playerFactory: VideoPlayerFactory,
@@ -116,7 +119,16 @@ class WatchViewModel(
                         // it is in the video's own user state — so the position
                         // is not something this app has to remember separately.
                         val resumeAt = video.durationSeconds * video.watchedFraction
-                        player.load(stream.url, if (video.isInProgress) resumeAt else 0.0)
+                        player.load(
+                            PlayingMedia(
+                                url = stream.url,
+                                title = video.title,
+                                channel = video.channel.name,
+                                artworkUrl = mediaBaseUrl.trimEnd('/') +
+                                    "/media/" + video.thumbnailPath,
+                            ),
+                            if (video.isInProgress) resumeAt else 0.0,
+                        )
                         player.play()
                         WatchState.Playing(video, PlaybackState())
                     }

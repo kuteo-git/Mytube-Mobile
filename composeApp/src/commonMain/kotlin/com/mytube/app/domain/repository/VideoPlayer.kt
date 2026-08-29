@@ -40,7 +40,7 @@ interface VideoPlayer {
      * seeked to afterwards, because a seek issued before the media is ready is
      * either ignored or, on some players, obeyed twice.
      */
-    fun load(url: String, startAtSeconds: Double = 0.0)
+    fun load(media: PlayingMedia, startAtSeconds: Double = 0.0)
 
     fun play()
 
@@ -94,6 +94,22 @@ data class PlaybackState(
         get() = if (durationSeconds <= 0) 0f
         else (positionSeconds / durationSeconds).coerceIn(0.0, 1.0).toFloat()
 }
+
+/**
+ * What a stream is, as far as the system outside this app is concerned.
+ *
+ * The URL alone is not enough, and the gap is visible: without a title the
+ * lock-screen notification says "Mytube is running", which tells somebody
+ * reaching for their phone in a pocket precisely nothing. The operating system
+ * draws these three, so the player has to carry them.
+ */
+data class PlayingMedia(
+    val url: String,
+    val title: String,
+    val channel: String,
+    /** Absolute; empty when there is none. */
+    val artworkUrl: String,
+)
 
 /**
  * Builds a player.

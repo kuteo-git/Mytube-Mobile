@@ -11,13 +11,16 @@ import com.mytube.app.player.ExoVideoPlayer
 @UnstableApi
 @Composable
 actual fun VideoSurface(player: VideoPlayer, modifier: Modifier) {
-    val exo = (player as? ExoVideoPlayer)?.exo ?: return
+    // Null while the controller is connecting to the service. Nothing is drawn
+    // until then, which is a fraction of a second and is why the watch screen
+    // keeps a black box of the right shape underneath.
+    val controller = (player as? ExoVideoPlayer)?.controller ?: return
 
     AndroidView(
         modifier = modifier,
         factory = { context ->
             PlayerView(context).apply {
-                this.player = exo
+                this.player = controller
                 // The app draws its own controls, in Compose, shared with iOS.
                 // Media3's are Android-only and would make the two platforms
                 // look and behave differently for no gain.
@@ -27,7 +30,7 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier) {
         // The view outlives a recomposition, but the player it points at may
         // not: a climb to a different source replaces the object. Rebinding on
         // update is what keeps the picture attached to whatever is playing now.
-        update = { it.player = exo },
+        update = { it.player = controller },
         onRelease = { it.player = null },
     )
 }

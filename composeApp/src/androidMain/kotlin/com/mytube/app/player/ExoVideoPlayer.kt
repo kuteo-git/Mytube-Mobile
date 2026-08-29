@@ -1,12 +1,18 @@
 package com.mytube.app.player
 
+import android.content.ComponentName
 import android.content.Context
+import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.MoreExecutors
 import com.mytube.app.domain.repository.PlaybackState
+import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
 import kotlinx.coroutines.CoroutineScope
@@ -20,31 +26,51 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * ExoPlayer behind the port.
+ * The app's handle on the player that lives in [PlaybackService].
  *
- * HLS needs no configuration here: `media3-exoplayer-hls` is on the classpath,
- * and ExoPlayer picks the source type from the URL. The ladder the server writes
- * is then ExoPlayer's to climb — it does adaptive selection itself, which is the
- * whole reason the server publishes a real ladder rather than one rendition.
+ * ## Why this is a MediaController and not an ExoPlayer
+ *
+ * It was an ExoPlayer, held by the ViewModel, and that cannot survive the screen
+ * going off — which is the one thing this app was written to do. The ownership
+ * had to invert: the service owns the player, and this connects to it.
+ *
+ * `MediaController` *is* a `Player`, so `PlayerView` takes it directly and the
+ * surface never learns the difference. What changes is that the thing actually
+ * decoding lives in a foreground service the system will leave alone.
+ *
+ * ## Why a load can arrive before the connection
+ *
+ * The controller comes back through a future: the service has to be started and
+ * bound first. A viewer who has pressed play does not wait for architecture, so
+ * a `load()` that arrives early is remembered and replayed the moment the
+ * connection lands. Without that, opening a video from a cold start is a black
+ * screen — the controller connects a few hundred milliseconds later with nothing
+ * to play, and nothing asks again.
+ *
+ * HLS needs no configuration: `media3-exoplayer-hls` is on the classpath and the
+ * source type comes from the URL. The ladder the server writes is then
+ * ExoPlayer's to climb, which is the whole reason the server publishes a real
+ * ladder rather than one rendition.
  */
 @UnstableApi
 class ExoVideoPlayer(context: Context) : VideoPlayer {
-
-    /**
-     * Exposed so the Compose surface can attach to it.
-     *
-     * A leak in the abstraction, and a deliberate one: `PlayerView` takes an
-     * `androidx.media3.common.Player`, and nothing in common code can hand it
-     * one. The alternative is a parallel surface API that exists only to avoid
-     * admitting this, which would be worse.
-     */
-    val exo: ExoPlayer = ExoPlayer.Builder(context).build()
 
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
     private val scope = CoroutineScope(Dispatchers.Main)
     private var ticker: Job? = null
+
+    /**
+     * The connected controller, or null while connecting.
+     *
+     * Read by the Compose surface, which draws nothing until it exists.
+     */
+    var controller: MediaController? = null
+        private set
+
+    /** A load that arrived before the connection did. */
+    private var pending: Pair<PlayingMedia, Double>? = null
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -59,7 +85,7 @@ class ExoVideoPlayer(context: Context) : VideoPlayer {
             _state.update {
                 it.copy(
                     isBuffering = playbackState == Player.STATE_BUFFERING,
-                    durationSeconds = exo.duration.takeIf { d -> d > 0 }?.div(1000.0) ?: 0.0,
+                    durationSeconds = durationOrZero(),
                 )
             }
         }
@@ -72,37 +98,86 @@ class ExoVideoPlayer(context: Context) : VideoPlayer {
     }
 
     init {
-        exo.addListener(listener)
+        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+        val future = MediaController.Builder(context, token).buildAsync()
+        future.addListener(
+            {
+                controller = future.get().also { it.addListener(listener) }
+                pending?.let { (media, at) -> start(media, at) }
+                pending = null
+            },
+            // Runs on the thread that completes the future, which Media3
+            // guarantees is the one the controller was built on — the main
+            // thread. A MediaController may only be touched from there.
+            MoreExecutors.directExecutor(),
+        )
     }
 
-    override fun load(url: String, startAtSeconds: Double) {
+    override fun load(media: PlayingMedia, startAtSeconds: Double) {
         _state.update { PlaybackState() }
-        exo.setMediaItem(MediaItem.fromUri(url))
-        if (startAtSeconds > 0) exo.seekTo((startAtSeconds * 1000).toLong())
-        exo.prepare()
+        if (controller == null) {
+            pending = media to startAtSeconds
+            return
+        }
+        start(media, startAtSeconds)
     }
 
     override fun play() {
-        exo.play()
+        controller?.play()
     }
 
     override fun pause() {
-        exo.pause()
+        controller?.pause()
     }
 
     override fun seekTo(seconds: Double) {
-        exo.seekTo((seconds * 1000).toLong())
+        controller?.seekTo((seconds * 1000).toLong())
         // Written straight away rather than waited for. A seek bar that snaps
         // back to the old position for a frame before jumping is the thing that
         // makes dragging one feel broken.
         _state.update { it.copy(positionSeconds = seconds) }
     }
 
+    /**
+     * Lets go of the connection, and deliberately does **not** stop the player.
+     *
+     * This is the difference between a screen closing and playback ending. The
+     * service keeps the sound going behind its notification; leaving the watch
+     * screen is not a request to stop listening. The ways to stop are the
+     * notification and swiping the app out of recents.
+     */
     override fun release() {
         stopTicking()
-        exo.removeListener(listener)
-        exo.release()
+        controller?.removeListener(listener)
+        controller?.release()
+        controller = null
     }
+
+    private fun start(media: PlayingMedia, startAtSeconds: Double) {
+        val player = controller ?: return
+        player.setMediaItem(
+            MediaItem.Builder()
+                .setUri(media.url)
+                // What the notification and the lock screen draw. Without it
+                // Media3 falls back to the app label, and the notification reads
+                // "Mytube is running" — which is exactly as useful as silence to
+                // somebody reaching into a pocket.
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(media.title)
+                        .setArtist(media.channel)
+                        .setArtworkUri(media.artworkUrl.takeIf { it.isNotEmpty() }?.toUri())
+                        .build(),
+                )
+                .build(),
+        )
+        if (startAtSeconds > 0) player.seekTo((startAtSeconds * 1000).toLong())
+        player.prepare()
+        player.play()
+    }
+
+    private fun durationOrZero(): Double =
+        controller?.duration?.takeIf { it > 0 }?.div(1000.0) ?: 0.0
 
     private fun startTicking() {
         stopTicking()
@@ -110,8 +185,8 @@ class ExoVideoPlayer(context: Context) : VideoPlayer {
             while (true) {
                 _state.update {
                     it.copy(
-                        positionSeconds = exo.currentPosition / 1000.0,
-                        durationSeconds = exo.duration.takeIf { d -> d > 0 }?.div(1000.0)
+                        positionSeconds = (controller?.currentPosition ?: 0L) / 1000.0,
+                        durationSeconds = durationOrZero().takeIf { d -> d > 0 }
                             ?: it.durationSeconds,
                     )
                 }

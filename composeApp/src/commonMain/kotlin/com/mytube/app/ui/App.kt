@@ -106,6 +106,7 @@ fun App(container: AppContainer) {
                     viewModel = viewModel(key = "watch-${current.videoId}") {
                         WatchViewModel(
                             videoId = current.videoId,
+                            mediaBaseUrl = baseUrl,
                             videos = container.videoRepository,
                             streams = container.streamRepository,
                             playerFactory = container.playerFactory,

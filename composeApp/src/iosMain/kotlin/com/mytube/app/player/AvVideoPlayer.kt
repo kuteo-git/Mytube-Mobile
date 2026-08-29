@@ -1,6 +1,7 @@
 package com.mytube.app.player
 
 import com.mytube.app.domain.repository.PlaybackState
+import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -77,9 +78,13 @@ class AvVideoPlayer : VideoPlayer {
         startObserving()
     }
 
-    override fun load(url: String, startAtSeconds: Double) {
+    override fun load(media: PlayingMedia, startAtSeconds: Double) {
         _state.update { PlaybackState() }
-        val nsUrl = NSURL.URLWithString(url) ?: run {
+        // The lock screen's title and artist come from MPNowPlayingInfoCenter on
+        // iOS rather than from the player item, and that is not wired up yet —
+        // recorded as missing rather than half-done, since there is no Xcode
+        // project to run it in.
+        val nsUrl = NSURL.URLWithString(media.url) ?: run {
             _state.update { it.copy(error = "bad url") }
             return
         }
