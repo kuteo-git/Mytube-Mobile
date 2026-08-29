@@ -105,6 +105,18 @@ interface VideoRepository {
     suspend fun setSaved(videoId: String, saved: Boolean)
 
     suspend fun setSubscribed(channelId: String, subscribed: Boolean)
+
+    /**
+     * A channel and a page of its uploads.
+     *
+     * `sortToken` is opaque and comes from a previous page's options; empty asks
+     * for whatever order the server gives by default.
+     */
+    suspend fun channelPage(
+        channelId: String,
+        sortToken: String = "",
+        pageToken: String = "",
+    ): ChannelPage
 }
 
 data class FeedPage(
@@ -119,3 +131,31 @@ data class FeedPage(
 ) {
     val hasMore: Boolean get() = nextPageToken.isNotEmpty()
 }
+
+/**
+ * A channel, and a page of what it has published.
+ *
+ * One object rather than two calls returning separately, because the videos
+ * cannot be drawn without the channel: the endpoint sends no channel per row,
+ * and every card needs a name and an avatar.
+ */
+data class ChannelPage(
+    val channel: Channel,
+    val videoCount: Int,
+    val videos: List<Video>,
+    val sortOptions: List<SortOption>,
+    val nextPageToken: String,
+) {
+    val hasMore: Boolean get() = nextPageToken.isNotEmpty()
+}
+
+/**
+ * One of the orders a channel's uploads can be asked for.
+ *
+ * The label comes from YouTube and is **not translated** — it arrives as
+ * "Latest", "Popular", "Oldest" in whatever language upstream answered in, and
+ * the token beside it is opaque. Translating a label whose value this app did
+ * not choose would mean guessing which of three it was, and being wrong on the
+ * day upstream adds a fourth.
+ */
+data class SortOption(val label: String, val token: String)

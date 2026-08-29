@@ -79,6 +79,14 @@ interface Strings {
     val upNext: String
     val close: String
 
+    // --- channel & search --------------------------------------------------
+    /** "videos", after a count. */
+    val videos: String
+    val searchHint: String
+    val noResults: String
+    val noResultsDetail: String
+    val searchPrompt: String
+
     // --- navigation --------------------------------------------------------
     val navHome: String
     val navSubscriptions: String
@@ -186,6 +194,12 @@ object EnglishStrings : Strings {
     override val upNext = "Up next"
     override val close = "Close"
 
+    override val videos = "videos"
+    override val searchHint = "Search this library"
+    override val noResults = "Nothing here matches"
+    override val noResultsDetail = "Try fewer words, or the name of the channel."
+    override val searchPrompt = "Titles and channels in this library."
+
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
     override val navHistory = "History"
@@ -268,6 +282,12 @@ object VietnameseStrings : Strings {
     override val subscribed = "Đã đăng ký"
     override val upNext = "Xem tiếp"
     override val close = "Đóng"
+
+    override val videos = "video"
+    override val searchHint = "Tìm trong thư viện"
+    override val noResults = "Không có gì khớp"
+    override val noResultsDetail = "Thử ít chữ hơn, hoặc gõ tên kênh."
+    override val searchPrompt = "Tìm theo tên video và tên kênh trong thư viện."
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"

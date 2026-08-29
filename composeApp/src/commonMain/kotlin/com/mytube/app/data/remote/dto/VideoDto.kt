@@ -125,3 +125,59 @@ fun ChannelDto.toDomain(): Channel = Channel(
     subscribed = subscribed,
     subscriberCount = subscriberCount,
 )
+
+@Serializable
+data class ChannelDetailDto(
+    val channel: ChannelDto = ChannelDto(),
+    val videoCount: Int = 0,
+)
+
+/**
+ * One of a channel's uploads, as the channel endpoint sends it.
+ *
+ * A different shape from [VideoDto] and deliberately not merged with it. This
+ * comes from **YouTube**, not the catalogue — the gateway asks upstream because
+ * a scan only brings in the newest few dozen uploads, so serving the page from
+ * the catalogue would cap a channel at that number for reasons the viewer cannot
+ * see. The consequences are visible in the fields: an absolute `thumbnailUrl`
+ * rather than a path under `/media`, no channel of its own, and no user state,
+ * because most of these have never been near this disk.
+ */
+@Serializable
+data class ChannelVideoDto(
+    val id: String,
+    val title: String = "",
+    val durationSeconds: Int = 0,
+    val viewCount: Long = 0,
+    val thumbnailUrl: String = "",
+    val publishedAt: String? = null,
+    val inLibrary: Boolean = false,
+)
+
+@Serializable
+data class SortOptionDto(val label: String = "", val token: String = "")
+
+@Serializable
+data class ChannelVideosDto(
+    val videos: List<ChannelVideoDto> = emptyList(),
+    val sortOptions: List<SortOptionDto> = emptyList(),
+    val nextPageToken: String = "",
+)
+
+/**
+ * An upstream listing, given this page's channel.
+ *
+ * The channel is supplied by the caller because the endpoint does not send one
+ * per row — it is the same channel for every row on the page, and repeating it
+ * on each would be the server sending the same object fifty times.
+ */
+fun ChannelVideoDto.toDomain(channel: Channel): Video = Video(
+    id = id,
+    title = title,
+    channel = channel,
+    durationSeconds = durationSeconds,
+    viewCount = viewCount,
+    publishedAt = publishedAt.orEmpty(),
+    // Absolute, and `imageModel` is what notices. See its comment.
+    thumbnailPath = thumbnailUrl,
+)

@@ -65,7 +65,7 @@ fun VideoCard(
                 .background(Tokens.surface),
         ) {
             AsyncImage(
-                model = "$mediaBaseUrl/media/${video.thumbnailPath}",
+                model = imageModel(mediaBaseUrl, video.thumbnailPath),
                 contentDescription = video.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(),
@@ -117,7 +117,7 @@ fun VideoCard(
             verticalAlignment = Alignment.Top,
         ) {
             AsyncImage(
-                model = "$mediaBaseUrl/media/${video.channel.avatarPath}",
+                model = imageModel(mediaBaseUrl, video.channel.avatarPath),
                 contentDescription = video.channel.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(Size.avatar).clip(CircleShape).background(Tokens.surface),

@@ -54,6 +54,7 @@ fun AppShell(
     onSelect: (Tab) -> Unit,
     /** The signed-in member's initial, or empty before anybody has chosen. */
     profileInitial: String = "",
+    onSearch: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val strings = LocalStrings.current
@@ -66,7 +67,7 @@ fun AppShell(
         // as a lesson: the bar is `absolute` and *"anything in the shell's flow
         // before <main> displaces every page"*, which cost that app a 44px gap
         // under the search field on every screen.
-        TopBar(profileInitial, Modifier.align(Alignment.TopCenter))
+        TopBar(profileInitial, onSearch, Modifier.align(Alignment.TopCenter))
 
         BottomBar(
             current = current,
@@ -85,7 +86,7 @@ fun AppShell(
 }
 
 @Composable
-private fun TopBar(profileInitial: String, modifier: Modifier = Modifier) {
+private fun TopBar(profileInitial: String, onSearch: () -> Unit, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
 
     // The inset is padding *around* the bar, not inside it: putting the bar's
@@ -115,14 +116,16 @@ private fun TopBar(profileInitial: String, modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.width(Space.md))
 
-            // The search field, as a shape for now. It is drawn because the bar is
-            // wrong without it — the eye reads the gap — and it is not wired up,
-            // because search is a screen that does not exist yet.
+            // Not a field: a button shaped like one. Typing happens on the
+            // search screen, whose own field lands exactly where this is — so
+            // the two never appear together, and there is no inert box left
+            // behind the one being typed into.
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .height(Size.chip + 8.dp)
                     .clip(RoundedCornerShape(percent = 50))
+                    .clickable(onClick = onSearch)
                     .border(1.dp, Tokens.line, RoundedCornerShape(percent = 50))
                     .background(Tokens.surfaceInput)
                     .padding(horizontal = Space.lg),

@@ -80,3 +80,20 @@ private fun trim(value: Double): String {
     val whole = oneDecimal.toLong()
     return if (oneDecimal == whole.toDouble()) whole.toString() else oneDecimal.toString()
 }
+
+/**
+ * Where an image actually lives.
+ *
+ * A thumbnail is either a path inside the library — served by the gateway under
+ * `/media` — or an address upstream. The channel page is the second case: it
+ * lists a channel's uploads by asking YouTube rather than the catalogue, because
+ * a scan only ever brings in the newest few dozen, so most of what it returns
+ * has never been near this disk and carries an `i.ytimg.com` URL.
+ *
+ * Deciding it here rather than at each `AsyncImage` means a card does not have
+ * to know which kind of list it is in, and one rule cannot disagree with itself
+ * across three call sites.
+ */
+fun imageModel(mediaBaseUrl: String, path: String): String =
+    if (path.startsWith("http://") || path.startsWith("https://")) path
+    else "${mediaBaseUrl.trimEnd('/')}/media/$path"

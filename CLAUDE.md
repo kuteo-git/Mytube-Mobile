@@ -504,3 +504,48 @@ force-stop and takes the tab bar with it.
 - **The miniplayer crosses tabs**, which is the whole point of holding the
   session above the routes. Measured: collapse on Home, switch to Subscriptions,
   `state=PLAYING` and the bar still on the tab bar.
+
+## Search and the channel page (2026-08-29)
+
+- **The top bar's search box was never a field.** It is a button shaped like one,
+  and the search screen's real field lands exactly where it was — so the two
+  never appear together and there is no inert box behind the one being typed
+  into.
+- **Typing is debounced by 300ms, and the pending job is cancelled.** A search is
+  a full-text query *and* a recorded behaviour signal — the gateway records one
+  per request — so typing "nothing phone" without this is thirteen queries and
+  thirteen signals for one intent, and recsys would be learning every prefix of
+  what somebody typed. Cancelling matters as much as the delay: without it the
+  wait postpones each request without reducing how many are made.
+  - The screen blanks only on the *first* search. Replacing results with a
+    spinner on every keystroke makes a list that is mostly still correct flicker
+    away while somebody refines a word.
+  - `Idle` is its own state, not an empty result. Nobody has asked anything yet.
+- **There is no "On YouTube" half.** The web app splits its results, but the
+  gateway has one search route and it answers from the catalogue only. A heading
+  over a single list would promise a second one that never arrives.
+- **The channel page's uploads come from YouTube, not the catalogue** — the
+  gateway asks upstream because a scan only brings in the newest few dozen, so a
+  page served from the catalogue would cap a channel at that number with nothing
+  to say why. The consequences are visible in the DTO: an absolute
+  `thumbnailUrl`, no channel per row, no user state.
+  - So `imageModel` decides per image whether a path is inside the library or an
+    address upstream. Deciding it in one function means a card does not have to
+    know which kind of list it is in.
+  - The channel is passed *into* the mapper because the endpoint sends one
+    channel for the whole page, not one per row.
+  - **The sort labels are not translated.** They arrive as "Latest", "Popular",
+    "Oldest" in whatever language upstream answered in, each with an opaque token
+    beside it; translating one would mean guessing which of the three it is, and
+    being wrong the day a fourth appears.
+  - **No banner**, though the gateway sends a `bannerPath`. It is 200dp of
+    decoration above the one thing the screen is for, and on a phone it pushes
+    the first video off the fold.
+- **The channel page carries its own back arrow, drawn over every state.** It has
+  no top bar and no tab bar, so without one a channel that would not load is a
+  dead end — and Android's system back leaves the app entirely, while iOS has no
+  system back at all. The way out has to be on the screen.
+- **The miniplayer moved above the routes.** It now shows on Home, Search and the
+  channel page, and deliberately not on the setup screen: somebody typing an
+  address is fixing the connection this video came through, and a bar playing
+  over that form is in the way of the one thing that screen is for.

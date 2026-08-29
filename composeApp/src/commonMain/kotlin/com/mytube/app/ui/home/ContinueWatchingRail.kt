@@ -97,7 +97,7 @@ private fun RailCard(video: Video, mediaBaseUrl: String, onClick: () -> Unit) {
                 .background(Tokens.surface),
         ) {
             AsyncImage(
-                model = "$mediaBaseUrl/media/${video.thumbnailPath}",
+                model = imageModel(mediaBaseUrl, video.thumbnailPath),
                 contentDescription = video.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(),

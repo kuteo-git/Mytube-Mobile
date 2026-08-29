@@ -7,7 +7,9 @@ import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
+import com.mytube.app.domain.repository.ChannelPage
 import com.mytube.app.domain.repository.ServerRepository
+import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.domain.repository.VideoRepository
 
 /**
@@ -103,6 +105,27 @@ class VideoRepositoryImpl(
 
     override suspend fun setSubscribed(channelId: String, subscribed: Boolean) =
         gateway.setSubscribed(requireBaseUrl(), server.profileId(), channelId, subscribed)
+
+    override suspend fun channelPage(
+        channelId: String,
+        sortToken: String,
+        pageToken: String,
+    ): ChannelPage {
+        val base = requireBaseUrl()
+        val user = server.profileId()
+        // In sequence, not in parallel: the videos cannot be mapped without the
+        // channel, since the listing carries none of its own.
+        val detail = gateway.channel(base, user, channelId)
+        val page = gateway.channelVideos(base, user, channelId, sortToken, pageToken)
+        val channel = detail.channel.toDomain()
+        return ChannelPage(
+            channel = channel,
+            videoCount = detail.videoCount,
+            videos = page.videos.map { it.toDomain(channel) },
+            sortOptions = page.sortOptions.map { SortOption(it.label, it.token) },
+            nextPageToken = page.nextPageToken,
+        )
+    }
 
     /**
      * Refusing early, with a distinct type.

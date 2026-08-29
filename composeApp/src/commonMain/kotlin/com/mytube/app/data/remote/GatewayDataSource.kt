@@ -1,5 +1,7 @@
 package com.mytube.app.data.remote
 
+import com.mytube.app.data.remote.dto.ChannelDetailDto
+import com.mytube.app.data.remote.dto.ChannelVideosDto
 import com.mytube.app.data.remote.dto.ChannelsDto
 import com.mytube.app.data.remote.dto.FeedDto
 import com.mytube.app.data.remote.dto.StreamDto
@@ -113,6 +115,26 @@ class GatewayDataSource(private val client: HttpClient) {
         client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/up-next") {
             identify(userId)
         }.orThrow().body()
+
+    suspend fun channel(baseUrl: String, userId: String, channelId: String): ChannelDetailDto =
+        client.get("${baseUrl.trimEnd('/')}/api/channels/$channelId") {
+            identify(userId)
+        }.orThrow().body()
+
+    suspend fun channelVideos(
+        baseUrl: String,
+        userId: String,
+        channelId: String,
+        sortToken: String,
+        pageToken: String,
+    ): ChannelVideosDto = client.get("${baseUrl.trimEnd('/')}/api/channels/$channelId/videos") {
+        identify(userId)
+        // Two different tokens with two different jobs: one picks the order,
+        // the other continues within it. Sending an empty one would ask the
+        // server to parse "" as a cursor.
+        if (sortToken.isNotBlank()) parameter("sort", sortToken)
+        if (pageToken.isNotBlank()) parameter("pageToken", pageToken)
+    }.orThrow().body()
 
     /**
      * Where the viewer has got to.

@@ -32,10 +32,15 @@ import com.mytube.app.ui.settings.ServerSetupScreen
 import com.mytube.app.ui.settings.ServerSetupViewModel
 import androidx.compose.runtime.CompositionLocalProvider
 import com.mytube.app.ui.i18n.LocalStrings
+import androidx.compose.ui.unit.dp
+import com.mytube.app.ui.channel.ChannelScreen
+import com.mytube.app.ui.channel.ChannelViewModel
 import com.mytube.app.ui.history.HistoryScreen
 import com.mytube.app.ui.history.HistoryViewModel
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.deviceLanguage
+import com.mytube.app.ui.search.SearchScreen
+import com.mytube.app.ui.search.SearchViewModel
 import com.mytube.app.ui.settings.SettingsScreen
 import com.mytube.app.ui.subscriptions.SubscriptionsScreen
 import com.mytube.app.ui.subscriptions.SubscriptionsViewModel
@@ -61,6 +66,8 @@ private sealed interface Route {
     data object Deciding : Route
     data object Setup : Route
     data object Home : Route
+    data object Search : Route
+    data class Channel(val channelId: String) : Route
 }
 
 /**
@@ -118,137 +125,169 @@ fun App(container: AppContainer) {
                 }
             }
 
-            when (val current = route) {
-                is Route.Deciding -> Unit
+            // Everything stacks in one Box so the player can sit over whichever
+            // screen is showing. It is the miniplayer that needs this, not the
+            // watch screen: the video keeps playing while somebody searches or
+            // opens a channel, and the bar has to be reachable from there.
+            Box(Modifier.fillMaxSize()) {
+                when (val current = route) {
+                    is Route.Deciding -> Unit
 
-                is Route.Setup -> ServerSetupScreen(
-                    viewModel = viewModel { ServerSetupViewModel(container.serverRepository) },
-                    onDone = { route = Route.Home },
-                )
+                    is Route.Setup -> ServerSetupScreen(
+                        viewModel = viewModel { ServerSetupViewModel(container.serverRepository) },
+                        onDone = { route = Route.Home },
+                    )
 
-                // The four tabs and the watch screen are one branch. The
-                // watch screen is a layer *over* the tab, so the tab has to be
-                // composed underneath it — otherwise dragging down reveals an
-                // empty background and the feed snaps in at the end. The
-                // miniplayer needs the same thing for a different reason: it
-                // sits on the tab bar while somebody browses another tab.
-                is Route.Home -> Box(Modifier.fillMaxSize()) {
-                    AppShell(current = tab, onSelect = { tab = it }) {
-                        when (tab) {
-                            Tab.Home -> HomeScreen(
-                                // Keyed on the address: changing it builds a new
-                                // HomeViewModel, because the old one holds a
-                                // feed fetched from somewhere else.
-                                viewModel = viewModel(key = "home-$baseUrl") {
-                                    HomeViewModel(container.videoRepository)
-                                },
-                                mediaBaseUrl = baseUrl,
-                                onOpenSettings = { tab = Tab.Settings },
-                                onOpenVideo = { watching = WatchSession(it) },
-                            )
-
-                            Tab.Subscriptions -> SubscriptionsScreen(
-                                viewModel = viewModel(key = "subs-$baseUrl") {
-                                    SubscriptionsViewModel(container.videoRepository)
-                                },
-                                mediaBaseUrl = baseUrl,
-                                onOpenSettings = { tab = Tab.Settings },
-                                // The channel screen does not exist yet, so
-                                // pressing a row does nothing rather than
-                                // pretending. Drawn anyway: the list is the
-                                // answer to "who do I follow", which is most of
-                                // what this tab is for.
-                                onOpenChannel = {},
-                            )
-
-                            Tab.History -> HistoryScreen(
-                                viewModel = viewModel(key = "history-$baseUrl") {
-                                    HistoryViewModel(container.videoRepository)
-                                },
-                                mediaBaseUrl = baseUrl,
-                                onOpenSettings = { tab = Tab.Settings },
-                                onOpenVideo = { watching = WatchSession(it) },
-                            )
-
-                            Tab.Settings -> SettingsScreen(
-                                baseUrl = baseUrl,
-                                language = chosen,
-                                onOpenServer = { route = Route.Setup },
-                                onPickLanguage = { picked ->
-                                    language = picked
-                                    scope.launch {
-                                        container.serverRepository.setLanguage(picked.code)
-                                    }
-                                },
-                            )
-                        }
-                    }
-
-                    val session = watching
-                    if (session != null) {
-                        // `remember` and a DisposableEffect, not `viewModel()`.
-                        // That helper stores a ViewModel in the *activity's*
-                        // store, where it outlives the screen entirely: every
-                        // video opened would leave another instance behind, each
-                        // holding a live connection to the playback service, and
-                        // none of them would ever run `close()`. This is only
-                        // correct because the activity declares `configChanges`
-                        // for rotation and so is never recreated under it.
-                        val watch = remember(session.videoId) {
-                            WatchViewModel(
-                                videoId = session.videoId,
-                                mediaBaseUrl = baseUrl,
-                                videos = container.videoRepository,
-                                streams = container.streamRepository,
-                                playerFactory = container.playerFactory,
-                            )
-                        }
-                        DisposableEffect(watch) { onDispose { watch.close() } }
-
-                        if (session.minimised) {
-                            val state by watch.state.collectAsStateWithLifecycle()
-                            val playing = state as? WatchState.Playing
-                            MiniPlayer(
-                                player = watch.player,
-                                title = playing?.video?.title.orEmpty(),
-                                channel = playing?.video?.channel?.name.orEmpty(),
-                                progress = playing?.playback?.progress ?: 0f,
-                                isPlaying = playing?.playback?.isPlaying == true,
-                                onExpand = { watching = session.copy(minimised = false) },
-                                onPlayPause = watch::playPause,
-                                onClose = {
-                                    // Stop first, then let go. The disposal that
-                                    // follows only releases the connection.
-                                    watch.stop()
-                                    watching = null
-                                },
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    // It sits *on* the tab bar, not over it. The
-                                    // bar is how somebody leaves for another tab
-                                    // while this keeps playing, which is the
-                                    // whole point of a miniplayer.
-                                    .padding(
-                                        bottom = WindowInsets.navigationBars
-                                            .asPaddingValues()
-                                            .calculateBottomPadding() + Size.topBar,
-                                    ),
-                            )
-                        } else {
-                            WatchLayer(
-                                onMinimise = { watching = session.copy(minimised = true) },
-                            ) {
-                                WatchScreen(
-                                    viewModel = watch,
+                    // The four tabs and the watch screen are one branch. The
+                    // watch screen is a layer *over* the tab, so the tab has to be
+                    // composed underneath it — otherwise dragging down reveals an
+                    // empty background and the feed snaps in at the end. The
+                    // miniplayer needs the same thing for a different reason: it
+                    // sits on the tab bar while somebody browses another tab.
+                    is Route.Home -> AppShell(
+                        current = tab,
+                        onSelect = { tab = it },
+                        onSearch = { route = Route.Search },
+                    ) {
+                            when (tab) {
+                                Tab.Home -> HomeScreen(
+                                    // Keyed on the address: changing it builds a new
+                                    // HomeViewModel, because the old one holds a
+                                    // feed fetched from somewhere else.
+                                    viewModel = viewModel(key = "home-$baseUrl") {
+                                        HomeViewModel(container.videoRepository)
+                                    },
                                     mediaBaseUrl = baseUrl,
-                                    onBack = { watching = session.copy(minimised = true) },
+                                    onOpenSettings = { tab = Tab.Settings },
                                     onOpenVideo = { watching = WatchSession(it) },
+                                )
+
+                                Tab.Subscriptions -> SubscriptionsScreen(
+                                    viewModel = viewModel(key = "subs-$baseUrl") {
+                                        SubscriptionsViewModel(container.videoRepository)
+                                    },
+                                    mediaBaseUrl = baseUrl,
+                                    onOpenSettings = { tab = Tab.Settings },
+                                    // The channel screen does not exist yet, so
+                                    // pressing a row does nothing rather than
+                                    // pretending. Drawn anyway: the list is the
+                                    // answer to "who do I follow", which is most of
+                                    // what this tab is for.
+                                    onOpenChannel = { route = Route.Channel(it) },
+                                )
+
+                                Tab.History -> HistoryScreen(
+                                    viewModel = viewModel(key = "history-$baseUrl") {
+                                        HistoryViewModel(container.videoRepository)
+                                    },
+                                    mediaBaseUrl = baseUrl,
+                                    onOpenSettings = { tab = Tab.Settings },
+                                    onOpenVideo = { watching = WatchSession(it) },
+                                )
+
+                                Tab.Settings -> SettingsScreen(
+                                    baseUrl = baseUrl,
+                                    language = chosen,
+                                    onOpenServer = { route = Route.Setup },
+                                    onPickLanguage = { picked ->
+                                        language = picked
+                                        scope.launch {
+                                            container.serverRepository.setLanguage(picked.code)
+                                        }
+                                    },
                                 )
                             }
                         }
+
+                    is Route.Search -> SearchScreen(
+                        viewModel = viewModel(key = "search-$baseUrl") {
+                            SearchViewModel(container.videoRepository)
+                        },
+                        mediaBaseUrl = baseUrl,
+                        onBack = { route = Route.Home },
+                        onOpenVideo = { watching = WatchSession(it) },
+                    )
+
+                    is Route.Channel -> ChannelScreen(
+                        viewModel = viewModel(key = "channel-${current.channelId}") {
+                            ChannelViewModel(current.channelId, container.videoRepository)
+                        },
+                        mediaBaseUrl = baseUrl,
+                        onBack = { route = Route.Home },
+                        onOpenSettings = { route = Route.Setup },
+                        onOpenVideo = { watching = WatchSession(it) },
+                    )
+                }
+
+                val session = watching
+            // Not on the setup screen. Somebody typing an address is fixing the
+            // connection this video came through, and a bar playing over that
+            // form is in the way of the one thing that screen is for.
+            val browsing = route is Route.Home || route is Route.Search ||
+                route is Route.Channel
+
+            if (session != null && browsing) {
+                // `remember` and a DisposableEffect, not `viewModel()`. That
+                // helper stores a ViewModel in the *activity's* store, where it
+                // outlives the screen entirely: every video opened would leave
+                // another instance behind, each holding a live connection to the
+                // playback service, and none of them would ever run `close()`.
+                // This is only correct because the activity declares
+                // `configChanges` for rotation and so is never recreated under
+                // it.
+                val watch = remember(session.videoId) {
+                    WatchViewModel(
+                        videoId = session.videoId,
+                        mediaBaseUrl = baseUrl,
+                        videos = container.videoRepository,
+                        streams = container.streamRepository,
+                        playerFactory = container.playerFactory,
+                    )
+                }
+                DisposableEffect(watch) { onDispose { watch.close() } }
+
+                if (session.minimised) {
+                    val playbackState by watch.state.collectAsStateWithLifecycle()
+                    val playing = playbackState as? WatchState.Playing
+                    MiniPlayer(
+                        player = watch.player,
+                        title = playing?.video?.title.orEmpty(),
+                        channel = playing?.video?.channel?.name.orEmpty(),
+                        progress = playing?.playback?.progress ?: 0f,
+                        isPlaying = playing?.playback?.isPlaying == true,
+                        onExpand = { watching = session.copy(minimised = false) },
+                        onPlayPause = watch::playPause,
+                        onClose = {
+                            // Stop first, then let go. The disposal that follows
+                            // only releases the connection.
+                            watch.stop()
+                            watching = null
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            // It sits *on* the tab bar, not over it — the bar is
+                            // how somebody leaves for another tab while this
+                            // keeps playing. Search and the channel page have no
+                            // tab bar, so there is nothing to clear there.
+                            .padding(
+                                bottom = WindowInsets.navigationBars
+                                    .asPaddingValues()
+                                    .calculateBottomPadding() +
+                                    if (route is Route.Home) Size.topBar else 0.dp,
+                            ),
+                    )
+                } else {
+                    WatchLayer(onMinimise = { watching = session.copy(minimised = true) }) {
+                        WatchScreen(
+                            viewModel = watch,
+                            mediaBaseUrl = baseUrl,
+                            onBack = { watching = session.copy(minimised = true) },
+                            onOpenVideo = { watching = WatchSession(it) },
+                        )
                     }
                 }
             }
         }
+    }
     }
 }

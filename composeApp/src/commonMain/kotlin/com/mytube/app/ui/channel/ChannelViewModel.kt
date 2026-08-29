@@ -1,0 +1,123 @@
+package com.mytube.app.ui.channel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.mytube.app.data.repository.ServerNotConfigured
+import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Video
+import com.mytube.app.domain.repository.SortOption
+import com.mytube.app.domain.repository.VideoRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+sealed interface ChannelState {
+    data object Loading : ChannelState
+    data object NeedsServer : ChannelState
+    data class Failed(val message: String) : ChannelState
+
+    data class Ready(
+        val channel: Channel,
+        val videoCount: Int,
+        val videos: List<Video>,
+        val sortOptions: List<SortOption>,
+        val sortToken: String,
+        val nextPageToken: String,
+        val loadingMore: Boolean = false,
+    ) : ChannelState
+}
+
+/**
+ * One channel's page.
+ *
+ * The uploads come from **YouTube**, not the catalogue — the gateway asks
+ * upstream because a scan only brings in the newest few dozen, so a page served
+ * from the catalogue would cap a channel at that number with nothing to say why.
+ * That is also why the sort options are the server's tokens rather than
+ * something this app computes: they are InnerTube's own, and it cannot reorder
+ * a list it does not hold.
+ */
+class ChannelViewModel(
+    private val channelId: String,
+    private val videos: VideoRepository,
+) : ViewModel() {
+
+    private val _state = MutableStateFlow<ChannelState>(ChannelState.Loading)
+    val state: StateFlow<ChannelState> = _state.asStateFlow()
+
+    init {
+        load(sortToken = "")
+    }
+
+    fun retry() = load((_state.value as? ChannelState.Ready)?.sortToken.orEmpty())
+
+    fun selectSort(option: SortOption) {
+        val current = _state.value as? ChannelState.Ready ?: return
+        if (current.sortToken == option.token) return
+        load(option.token)
+    }
+
+    fun toggleSubscribed() {
+        val current = _state.value as? ChannelState.Ready ?: return
+        val next = !current.channel.subscribed
+        // Drawn first, sent second, put back if refused — the same rule the
+        // watch screen's buttons follow, and for the same reason.
+        _state.value = current.copy(channel = current.channel.copy(subscribed = next))
+        viewModelScope.launch {
+            runCatching { videos.setSubscribed(channelId, next) }.onFailure {
+                val now = _state.value
+                if (now is ChannelState.Ready) _state.value = now.copy(channel = current.channel)
+            }
+        }
+    }
+
+    fun loadMore() {
+        val current = _state.value as? ChannelState.Ready ?: return
+        if (current.loadingMore || current.nextPageToken.isEmpty()) return
+
+        _state.update { current.copy(loadingMore = true) }
+        viewModelScope.launch {
+            _state.value = runCatching {
+                videos.channelPage(channelId, current.sortToken, current.nextPageToken)
+            }.fold(
+                onSuccess = {
+                    current.copy(
+                        videos = current.videos + it.videos,
+                        nextPageToken = it.nextPageToken,
+                        loadingMore = false,
+                    )
+                },
+                // A page that failed leaves what is on screen alone. Replacing a
+                // working list with an error because the *next* page failed
+                // takes away what the viewer had.
+                onFailure = { current.copy(loadingMore = false) },
+            )
+        }
+    }
+
+    private fun load(sortToken: String) {
+        _state.value = ChannelState.Loading
+        viewModelScope.launch {
+            _state.value = runCatching { videos.channelPage(channelId, sortToken) }.fold(
+                onSuccess = {
+                    ChannelState.Ready(
+                        channel = it.channel,
+                        videoCount = it.videoCount,
+                        videos = it.videos,
+                        sortOptions = it.sortOptions,
+                        sortToken = sortToken,
+                        nextPageToken = it.nextPageToken,
+                    )
+                },
+                onFailure = ::asState,
+            )
+        }
+    }
+
+    private fun asState(error: Throwable): ChannelState = when (error) {
+        is ServerNotConfigured -> ChannelState.NeedsServer
+        else -> ChannelState.Failed(error.message ?: "could not reach the library")
+    }
+}
