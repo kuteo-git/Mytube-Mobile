@@ -32,7 +32,15 @@ import com.mytube.app.ui.settings.ServerSetupScreen
 import com.mytube.app.ui.settings.ServerSetupViewModel
 import androidx.compose.runtime.CompositionLocalProvider
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.history.HistoryScreen
+import com.mytube.app.ui.history.HistoryViewModel
+import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.deviceLanguage
+import com.mytube.app.ui.settings.SettingsScreen
+import com.mytube.app.ui.subscriptions.SubscriptionsScreen
+import com.mytube.app.ui.subscriptions.SubscriptionsViewModel
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.mytube.app.ui.theme.MytubeTheme
 
 /**
@@ -73,19 +81,31 @@ private data class WatchSession(val videoId: String, val minimised: Boolean = fa
  */
 @Composable
 fun App(container: AppContainer) {
-    // Read once per process. There is no language switch yet, so nothing can
-    // change it while the app runs; when that screen arrives this becomes state
-    // and the provider below is already in the right place.
-    val strings = remember { deviceLanguage().strings }
+    // Null until the stored choice has been read. Nothing is drawn before then:
+    // showing English for a frame to somebody who chose Vietnamese is the exact
+    // flicker the web app avoided by reading its preference at module load.
+    var language: Language? by remember { mutableStateOf(null) }
 
-    CompositionLocalProvider(LocalStrings provides strings) {
+    LaunchedEffect(Unit) {
+        val stored = container.serverRepository.language()
+        // Empty means "follow the device", and it stays empty rather than being
+        // resolved and written back. Storing what the phone happened to be set
+        // to on the first launch freezes it there for ever.
+        language = if (stored.isEmpty()) deviceLanguage() else Language.forTag(stored)
+    }
+
+    val chosen = language ?: return
+
+    CompositionLocalProvider(LocalStrings provides chosen.strings) {
         MytubeTheme {
             var route: Route by remember { mutableStateOf(Route.Deciding) }
+            var tab by remember { mutableStateOf(Tab.Home) }
             var baseUrl by remember { mutableStateOf("") }
             // Null when nothing is playing. Held above the routes so that
             // changing tab, or stepping into settings, does not take the video
             // with it.
             var watching: WatchSession? by remember { mutableStateOf(null) }
+            val scope = rememberCoroutineScope()
 
             // Which screen opens is a question for the settings store, and that
             // cannot be answered during composition. Nothing is drawn until it is:
@@ -106,31 +126,62 @@ fun App(container: AppContainer) {
                     onDone = { route = Route.Home },
                 )
 
-                // Home and the watch screen are one branch, not two. The watch
-                // screen is a layer *over* the tab, so the tab has to be
+                // The four tabs and the watch screen are one branch. The
+                // watch screen is a layer *over* the tab, so the tab has to be
                 // composed underneath it — otherwise dragging down reveals an
-                // empty background and the feed snaps in at the end.
+                // empty background and the feed snaps in at the end. The
+                // miniplayer needs the same thing for a different reason: it
+                // sits on the tab bar while somebody browses another tab.
                 is Route.Home -> Box(Modifier.fillMaxSize()) {
-                    AppShell(
-                        current = Tab.Home,
-                        // The other three tabs are screens that do not exist
-                        // yet. They are drawn because the bar is the app's shape
-                        // and a bar with one item is not it — and pressing them
-                        // does nothing rather than pretending, which is the
-                        // honest state until the screens arrive.
-                        onSelect = { if (it == Tab.Settings) route = Route.Setup },
-                    ) {
-                        HomeScreen(
-                            // Keyed on the address: changing it builds a new
-                            // HomeViewModel, because the old one holds a feed
-                            // fetched from somewhere else.
-                            viewModel = viewModel(key = "home-$baseUrl") {
-                                HomeViewModel(container.videoRepository)
-                            },
-                            mediaBaseUrl = baseUrl,
-                            onOpenSettings = { route = Route.Setup },
-                            onOpenVideo = { watching = WatchSession(it) },
-                        )
+                    AppShell(current = tab, onSelect = { tab = it }) {
+                        when (tab) {
+                            Tab.Home -> HomeScreen(
+                                // Keyed on the address: changing it builds a new
+                                // HomeViewModel, because the old one holds a
+                                // feed fetched from somewhere else.
+                                viewModel = viewModel(key = "home-$baseUrl") {
+                                    HomeViewModel(container.videoRepository)
+                                },
+                                mediaBaseUrl = baseUrl,
+                                onOpenSettings = { tab = Tab.Settings },
+                                onOpenVideo = { watching = WatchSession(it) },
+                            )
+
+                            Tab.Subscriptions -> SubscriptionsScreen(
+                                viewModel = viewModel(key = "subs-$baseUrl") {
+                                    SubscriptionsViewModel(container.videoRepository)
+                                },
+                                mediaBaseUrl = baseUrl,
+                                onOpenSettings = { tab = Tab.Settings },
+                                // The channel screen does not exist yet, so
+                                // pressing a row does nothing rather than
+                                // pretending. Drawn anyway: the list is the
+                                // answer to "who do I follow", which is most of
+                                // what this tab is for.
+                                onOpenChannel = {},
+                            )
+
+                            Tab.History -> HistoryScreen(
+                                viewModel = viewModel(key = "history-$baseUrl") {
+                                    HistoryViewModel(container.videoRepository)
+                                },
+                                mediaBaseUrl = baseUrl,
+                                onOpenSettings = { tab = Tab.Settings },
+                                onOpenVideo = { watching = WatchSession(it) },
+                            )
+
+                            Tab.Settings -> SettingsScreen(
+                                baseUrl = baseUrl,
+                                language = chosen,
+                                onOpenServer = { route = Route.Setup },
+                                onPickLanguage = { picked ->
+                                    language = picked
+                                    scope.launch {
+                                        container.serverRepository.setLanguage(picked.code)
+                                    }
+                                },
+                            )
+                        }
                     }
 
                     val session = watching

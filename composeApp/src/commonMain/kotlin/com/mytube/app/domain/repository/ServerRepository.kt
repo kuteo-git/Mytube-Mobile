@@ -39,6 +39,21 @@ interface ServerRepository {
     suspend fun setProfileId(id: String)
 
     /**
+     * The language tag this device reads in, or empty to follow the device.
+     *
+     * Empty is a real answer and not a missing one: a machine nobody has set up
+     * should follow the system, and storing the resolved language on first
+     * launch would freeze a phone into English because that is what it happened
+     * to be that day.
+     *
+     * Per device, like the web app's — it belongs to whoever is holding the
+     * phone, not to the household.
+     */
+    suspend fun language(): String
+
+    suspend fun setLanguage(tag: String)
+
+    /**
      * Whether a server really answers at this address.
      *
      * Takes the address rather than reading the saved one: testing what has

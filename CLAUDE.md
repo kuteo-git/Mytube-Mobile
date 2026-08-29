@@ -453,3 +453,54 @@ nothing anywhere said why.
 position before it has loaded, and on some that is negative, which is not a place
 in a video. It is a named function rather than an expression inside the request
 builder so `ProgressBodyTest` can assert it without a network.
+
+## The other three tabs (2026-08-29)
+
+Measured on the emulator against the running library: Subscriptions lists the
+household's channels alphabetically with counts (`1.8Tr`, `127N` under the
+Vietnamese formatter), History shows what was watched with the red bar the
+progress writes now feed, and Settings switches language — which survives a
+force-stop and takes the tab bar with it.
+
+- **One frame, three screens.** `tabContentPadding`, `ScreenTitle`, `EmptyState`
+  and `TabScaffold` exist because the same arithmetic was about to be written a
+  fourth time. Both bars float over the content, so every list starts below one
+  and ends above the other, and the top bar is 56dp *plus* the status bar — the
+  server charter records the web app learning four separate times that this
+  number belongs in exactly one place.
+- **Subscriptions lists channels, not their uploads.** New uploads from followed
+  channels already have a fixed share of Home (`slotFreshSubscribed`), so
+  repeating them here would be a second feed with the same contents and nothing
+  to tell the two apart. This tab is for *reaching a channel*.
+  - Sorted by name **here**, not asked for in that order: a list somebody scans
+    for one channel wants one predictable order, and sorting on the server would
+    change that endpoint for every other reader.
+  - **A subscriber count is drawn only when there is one.** A row reading "0
+    subscribers" states a fact nobody measured, and most rows here have none —
+    a flat listing does not carry it.
+  - **Pressing a row does nothing yet.** The channel screen is not built, and a
+    row that navigates nowhere is the honest state until it is. The list is
+    already the answer to "who do I follow", which is most of what the tab is
+    for.
+- **An empty tab says two things, not one.** A bare "nothing here" reads as a
+  fault; the second line says what would put something here.
+- **Settings is deliberately four rows.** Storage, Activity, the feed mix, the
+  ranking constants, the proxy, narration and speech are screens for *fixing the
+  server*, and people fix a server sitting in front of a computer. What is left
+  is what belongs to this device: where its library is, and what language it
+  reads in.
+  - **The server row shows the address, not "Configured".** Somebody opening it
+    is checking *which* machine, usually because it stopped answering.
+  - **Each language is named in its own words, always.** Somebody who pressed the
+    wrong row is looking at an interface they cannot read, and "English" written
+    in English is the way back out.
+  - **The selected row is a filled dot.** The same lesson the Like button cost:
+    a background cannot carry a state when the two surface tokens are six units
+    apart.
+- **Empty means "follow the device", and it stays empty.** Resolving the language
+  on first launch and writing it back would freeze a phone into whatever it
+  happened to be set to that day. Nothing is drawn until the stored value has
+  been read, so English never flashes at somebody who chose Vietnamese.
+- **The miniplayer crosses tabs**, which is the whole point of holding the
+  session above the routes. Measured: collapse on Home, switch to Subscriptions,
+  `state=PLAYING` and the bar still on the tab bar.

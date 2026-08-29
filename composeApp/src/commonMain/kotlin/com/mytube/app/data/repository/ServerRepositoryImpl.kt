@@ -28,6 +28,12 @@ class ServerRepositoryImpl(
 
     override suspend fun setProfileId(id: String) = settings.set(SettingsKeys.PROFILE_ID, id)
 
+    override suspend fun language(): String =
+        settings.get(SettingsKeys.LANGUAGE).orEmpty()
+
+    override suspend fun setLanguage(tag: String) =
+        settings.set(SettingsKeys.LANGUAGE, tag)
+
     override suspend fun reachable(url: String): Boolean = gateway.reachable(normalise(url))
 
     private fun normalise(url: String) = normaliseBaseUrl(url)

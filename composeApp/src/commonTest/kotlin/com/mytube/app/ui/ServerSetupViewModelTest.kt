@@ -97,6 +97,8 @@ class ServerSetupViewModelTest {
     ) : ServerRepository {
         override suspend fun baseUrl(): String = saved
         override suspend fun setBaseUrl(url: String) { saved = url }
+        override suspend fun language() = ""
+        override suspend fun setLanguage(tag: String) = Unit
         override suspend fun profileId(): String = ""
         override suspend fun setProfileId(id: String) = Unit
         override suspend fun reachable(url: String): Boolean = reachable

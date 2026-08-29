@@ -34,4 +34,5 @@ interface SettingsDataSource {
 object SettingsKeys {
     const val BASE_URL = "server.baseUrl"
     const val PROFILE_ID = "profile.id"
+    const val LANGUAGE = "ui.language"
 }
