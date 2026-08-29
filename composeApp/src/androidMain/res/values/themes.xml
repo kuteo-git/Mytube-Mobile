@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      No action bar, and a window that is already the app's background colour.
+
+      Both halves matter. Without NoActionBar, Android draws its own title bar
+      above the Compose tree showing the app label — a second header nobody
+      designed, sitting over a screen that has its own. And without the window
+      background, the frame between the window opening and Compose's first draw
+      is the platform's default grey, which on a dark app is a white flash.
+    -->
+    <style name="Theme.Mytube" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/mytube_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

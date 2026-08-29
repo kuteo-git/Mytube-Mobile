@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -138,7 +141,15 @@ private fun Feed(
         snapshotFlow { atEnd }.collect { if (it) onLoadMore() }
     }
 
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        // The list scrolls under the status bar and the gesture bar, which is
+        // what edge-to-edge is for — but its *content* must not start under
+        // them. Without this the first thumbnail sits behind the clock, which is
+        // exactly what the first run on a device showed.
+        contentPadding = WindowInsets.systemBars.asPaddingValues(),
+    ) {
         items(state.videos, key = { it.id }) { video ->
             VideoCard(video, mediaBaseUrl, strings)
         }

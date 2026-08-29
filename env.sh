@@ -33,6 +33,10 @@ export GRADLE_USER_HOME="$DEV/gradle"
 # ~/.konan on the internal disk, which is the one place this project is not
 # allowed to grow.
 export KONAN_DATA_DIR="$DEV/konan"
+# Emulator images live here too. An AVD is several gigabytes and defaults to
+# ~/.android on the internal disk.
+export ANDROID_AVD_HOME="$DEV/avd"
+export ANDROID_EMULATOR_HOME="$DEV/emulator-home"
 
 export PATH="$JAVA_HOME/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
 

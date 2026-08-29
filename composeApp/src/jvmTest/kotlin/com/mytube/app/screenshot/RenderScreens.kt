@@ -7,6 +7,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Density
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.Strings
 import com.mytube.app.ui.theme.MytubeTheme
@@ -27,6 +29,13 @@ import java.io.File
  * draw the same composables the phone draws, so this costs nothing but the file
  * it writes.
  */
+private val coilReady: Unit by lazy {
+    // Coil needs an ImageLoader before AsyncImage will fetch anything, and off
+    // Android nobody installs one. Without this every image in a screenshot is
+    // the placeholder — which is exactly what the first batch showed.
+    SingletonImageLoader.setSafe { context -> ImageLoader(context) }
+}
+
 class ScreenRenderer(
     private val outputDir: File,
     private val width: Int = 1080,
@@ -35,7 +44,17 @@ class ScreenRenderer(
     private val density: Float = 2.75f,
 ) {
     fun render(name: String, strings: Strings, content: @Composable () -> Unit) {
+        coilReady
         outputDir.mkdirs()
+        // **Images do not appear in these renders, and cannot.** Coil loads
+        // asynchronously and ImageComposeScene draws a single frame without a
+        // recomposition loop, so an AsyncImage is always still on its
+        // placeholder. Two-pass rendering with a delay was tried and changes
+        // nothing.
+        //
+        // That is a real limit and it bounds what these pictures are for:
+        // layout, spacing, type, colour and copy — everything except the
+        // photographs. Anything about the images is judged on a device.
         ImageComposeScene(
             width = width,
             height = height,

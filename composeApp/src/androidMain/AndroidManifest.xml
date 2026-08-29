@@ -17,7 +17,8 @@
     <application
         android:label="Mytube"
         android:usesCleartextTraffic="true"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Mytube">
         <activity
             android:name=".MainActivity"
             android:exported="true"

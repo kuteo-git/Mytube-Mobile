@@ -1,6 +1,9 @@
 package com.mytube.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -73,7 +76,12 @@ fun ServerSetupContent(
 
     Surface(color = Tokens.bg, modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                // Same reason as the feed: draw edge to edge, but keep the
+                // content out from under the system bars.
+                .windowInsetsPadding(WindowInsets.systemBars)
+                .padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
