@@ -25,8 +25,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.model.NarrationStatus
+import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.theme.Tokens
@@ -52,8 +56,11 @@ import com.mytube.app.ui.theme.Tokens
 @Composable
 fun PlayerSettingsPanel(
     visible: Boolean,
+    subtitles: List<SubtitleTrack>,
+    subtitleLanguage: String,
     narrating: Boolean,
     narration: Narration,
+    onSelectSubtitles: (String) -> Unit,
     onToggleNarration: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -71,6 +78,32 @@ fun PlayerSettingsPanel(
                 .background(Tokens.surface)
                 .padding(horizontal = Space.lg, vertical = Space.md),
         ) {
+            // Only when the video has any. A "Subtitles: Off" row over a video
+            // with no tracks is a control whose every option is the state it is
+            // already in.
+            if (subtitles.isNotEmpty()) {
+                Text(
+                    text = strings.subtitles,
+                    color = Tokens.text2,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(Space.sm))
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                ) {
+                    TrackChip(strings.off, subtitleLanguage.isEmpty()) { onSelectSubtitles("") }
+                    subtitles.forEach { track ->
+                        TrackChip(
+                            label = trackLabel(track),
+                            selected = subtitleLanguage == track.language,
+                        ) { onSelectSubtitles(track.language) }
+                    }
+                }
+                Spacer(Modifier.height(Space.lg))
+            }
+
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -141,4 +174,46 @@ fun PlayerSettingsPanel(
             }
         }
     }
+}
+
+
+/**
+ * One caption track in the row, or Off.
+ *
+ * The same shape as the feed's chips rather than a menu: there are rarely more
+ * than three, and a row shows every option at once where a dropdown shows the
+ * current one and hides the rest — which on this panel is the whole question.
+ */
+@Composable
+private fun TrackChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        color = if (selected) Tokens.bg else Tokens.text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .background(if (selected) Tokens.text else Tokens.surfaceHover)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    )
+}
+
+
+/**
+ * A caption track, named for a chip.
+ *
+ * The server's own label is a sentence — "Vietnamese (auto-generated)" — which
+ * does not fit a control two words wide. What is left is the language and
+ * whether a machine wrote it.
+ *
+ * The subtag is dropped. The machine track is tagged `vi-x-mt`, which the server
+ * chose deliberately so nothing mistakes it for the human Vietnamese track a
+ * video may also carry — that is a *storage* distinction, and printing it raw
+ * gave a chip reading "VI-X-MT (auto)". The viewer's question is which language,
+ * and "(auto)" already says the rest.
+ */
+internal fun trackLabel(track: SubtitleTrack): String {
+    val language = track.language.substringBefore('-').uppercase()
+    return if (track.generated) "$language (auto)" else language
 }

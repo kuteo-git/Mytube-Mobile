@@ -94,6 +94,8 @@ fun PlayerControls(
     onBack: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onOpenSettings: () -> Unit,
+    onPlayNext: () -> Unit,
+    hasNext: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -173,16 +175,17 @@ fun PlayerControls(
                             label = if (playback.isPlaying) strings.pause else strings.play,
                             onClick = { onPlayPause(); lastTouch++ },
                         )
-                        // Forward ten seconds, in the slot the web app gives to
-                        // "next video". Next needs a queue this app does not
-                        // have yet, and a skip is the thing most reached for on
-                        // a phone — a button that does something beats one that
-                        // matches a layout and does nothing.
-                        ControlButton(
-                            icon = SkipForwardIcon,
-                            label = strings.skipForward,
-                            onClick = { onSkip(SKIP_SECONDS); lastTouch++ },
-                        )
+                        // The next video, which is the first row of the rail
+                        // below — so the button and the list always name the
+                        // same thing. Absent when the rail is empty, rather
+                        // than drawn and dead.
+                        if (hasNext) {
+                            ControlButton(
+                                icon = NextIcon,
+                                label = strings.playNext,
+                                onClick = { onPlayNext(); lastTouch++ },
+                            )
+                        }
 
                         Spacer(Modifier.width(Space.xs))
                         if (isLive) {

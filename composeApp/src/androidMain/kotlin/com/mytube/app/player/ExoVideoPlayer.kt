@@ -4,7 +4,9 @@ import android.content.ComponentName
 import android.content.Context
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
+import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -199,11 +201,40 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
         controller = null
     }
 
+    override fun showSubtitles(language: String) {
+        val player = controller ?: return
+        player.trackSelectionParameters = player.trackSelectionParameters
+            .buildUpon()
+            // Both together. Setting only the language leaves the type disabled
+            // if it was switched off, and disabling only the type leaves a
+            // language selected that nothing will show — the two have to move as
+            // one or the menu and the picture disagree.
+            .setPreferredTextLanguage(language.ifEmpty { null })
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, language.isEmpty())
+            .build()
+    }
+
     private fun start(media: PlayingMedia, startAtSeconds: Double) {
         val player = controller ?: return
         player.setMediaItem(
             MediaItem.Builder()
                 .setUri(media.url)
+                // Side-loaded, not part of the HLS manifest: the captions live
+                // beside the video on this server as .vtt files, and the ladder
+                // the server writes carries no text tracks at all.
+                .setSubtitleConfigurations(
+                    media.subtitles.map {
+                        MediaItem.SubtitleConfiguration.Builder(it.url.toUri())
+                            .setMimeType(MimeTypes.TEXT_VTT)
+                            .setLanguage(it.language)
+                            .setLabel(it.label)
+                            // Not SELECTION_FLAG_DEFAULT. A track marked default
+                            // is shown the moment the video opens, and subtitles
+                            // nobody asked for over a video they did not choose
+                            // them for is the wrong way round.
+                            .build()
+                    },
+                )
                 // What the notification and the lock screen draw. Without it
                 // Media3 falls back to the app label, and the notification reads
                 // "Mytube is running" — which is exactly as useful as silence to
@@ -216,8 +247,16 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
                         .build(),
                 )
                 .build(),
+            // The start position goes *into* setMediaItem, not into a seekTo
+            // after it.
+            //
+            // Measured: a seek issued between setMediaItem and prepare is
+            // dropped. Before prepare the controller's timeline is empty, so
+            // there is no window to seek within, and the video opened at zero —
+            // a video left at 18 seconds of 74 restarted every time, silently,
+            // while the server held the right number all along.
+            (startAtSeconds * 1000).toLong().coerceAtLeast(0),
         )
-        if (startAtSeconds > 0) player.seekTo((startAtSeconds * 1000).toLong())
         player.prepare()
         player.play()
     }

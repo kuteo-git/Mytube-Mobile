@@ -119,6 +119,16 @@ class AvVideoPlayer : VideoPlayer {
      */
     override fun narrate(clips: List<NarrationClip>) = Unit
 
+    /**
+     * Not implemented, and saying so.
+     *
+     * AVPlayer side-loads captions through `AVMutableComposition` or an
+     * `AVAssetResourceLoader`, neither of which can be built and run without an
+     * Xcode project. The menu is drawn on both platforms because the panel's
+     * shape is the same; on iOS choosing a track does nothing yet.
+     */
+    override fun showSubtitles(language: String) = Unit
+
     override fun play() = av.play()
 
     override fun pause() = av.pause()

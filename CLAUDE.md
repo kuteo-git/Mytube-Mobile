@@ -830,3 +830,61 @@ reply to them, and it would be a reply nobody outside this house will ever see.
 Commenters get a coloured initial rather than an image: the gateway sends an
 empty `avatarPath` for every one of them, so `AsyncImage` would be a request per
 comment for a 404 and a grid of grey circles.
+
+## Subtitles, next, and resuming (2026-08-30)
+
+Three things that were stand-ins. A stand-in named in a comment is still a debt.
+
+### Subtitles
+
+Side-loaded, not from the manifest: the captions live beside the video as `.vtt`
+files and the HLS ladder the server writes carries no text tracks at all. Every
+track is attached at **load**, because both platforms bind text to the *media
+item* — adding one later means a new item and a restarted video — and choosing
+one afterwards is a track selection, which costs no buffering.
+
+- **Language and disabled-flag move together.** Setting only the language leaves
+  the type disabled if it was off; disabling only the type leaves a language
+  selected that nothing shows. Either alone makes the menu and the picture
+  disagree.
+- **No `SELECTION_FLAG_DEFAULT`.** A track marked default appears the moment the
+  video opens, and subtitles nobody asked for is the wrong way round.
+- **The row is absent when a video has no tracks**, rather than showing a
+  Subtitles control whose every option is the state it is already in.
+- **The chip says `VI (auto)`, not `VI-X-MT (auto)`.** The machine track is
+  tagged `vi-x-mt` so nothing confuses it with a human Vietnamese track on disk
+  — that is a *storage* distinction, and printing it raw put the subtag in a
+  control two words wide.
+
+Measured on the emulator: EN and VI (auto) offered, EN selected, captions drawn
+over the picture.
+
+### Next
+
+The control bar's second button was forward-ten-seconds standing in for "next
+video". It is now the first row of the rail below it, so the button and the list
+always name the same thing, and it is **absent when the rail is empty** rather
+than drawn dead.
+
+### Resuming, and two faults under it
+
+The position was computed as `durationSeconds × watchedFraction`. That looks
+equivalent to the server's own `watchPositionSeconds` and is not: a video whose
+duration the catalogue never learned — every video that arrived through a flat
+listing — has `durationSeconds` 0, so the product is 0 and the video silently
+restarts every time. It reads the server's number now.
+
+Then two more, both found by measuring rather than reading:
+
+- **A seek between `setMediaItem` and `prepare` is dropped.** Before prepare the
+  controller's timeline is empty, so there is no window to seek within. A video
+  left at 18 seconds of 74 opened at zero, every time, while the server held the
+  right number all along. The start position goes *into* `setMediaItem`.
+- **`startAtBeginning` had a default and the one call site did not pass it.** The
+  compiler said nothing, and pressing next resumed the following video twelve
+  minutes in — the precise behaviour the flag exists to prevent. The default is
+  gone: it bought one short call site and paid for it with a fault nothing can
+  catch.
+
+Measured after: a video stored at 18s reopens and is at 26s ten seconds later;
+pressing next on a video stored at 60s starts it at zero.

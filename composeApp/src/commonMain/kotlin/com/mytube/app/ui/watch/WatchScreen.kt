@@ -66,6 +66,14 @@ fun WatchScreen(
     mediaBaseUrl: String,
     onBack: () -> Unit,
     onOpenVideo: (String) -> Unit,
+    /**
+     * Open a video by *advancing* to it, which starts it at the beginning.
+     *
+     * Distinct from [onOpenVideo] deliberately: advancing means "play me the
+     * next thing", and dropping somebody into the middle of a track they did
+     * not pick reads as a glitch.
+     */
+    onAdvanceTo: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -82,6 +90,11 @@ fun WatchScreen(
         onToggleSaved = viewModel::toggleSaved,
         onToggleSubscribed = viewModel::toggleSubscribed,
         onToggleNarration = viewModel::toggleNarration,
+        onSelectSubtitles = viewModel::selectSubtitles,
+        onPlayNext = {
+            val next = (state as? WatchState.Playing)?.upNext?.firstOrNull()
+            if (next != null) onAdvanceTo(next.id)
+        },
         onToggleRail = viewModel::toggleRail,
         onFilterRail = viewModel::filterRail,
         onOpenVideo = onOpenVideo,
@@ -102,6 +115,8 @@ fun WatchContent(
     onToggleSaved: () -> Unit,
     onToggleSubscribed: () -> Unit,
     onToggleNarration: () -> Unit,
+    onSelectSubtitles: (String) -> Unit,
+    onPlayNext: () -> Unit,
     onToggleRail: () -> Unit,
     onFilterRail: (Boolean) -> Unit,
     onOpenVideo: (String) -> Unit,
@@ -159,6 +174,10 @@ fun WatchContent(
                         onBack = { if (fullscreen) fullscreen = false else onBack() },
                         onToggleFullscreen = { fullscreen = !fullscreen },
                         onOpenSettings = { settingsOpen = !settingsOpen },
+                        onPlayNext = onPlayNext,
+                        // Nothing to advance to, so the button is not drawn
+                        // rather than drawn dead.
+                        hasNext = state.upNext.isNotEmpty(),
                     )
                 }
 
@@ -177,6 +196,9 @@ fun WatchContent(
         if (state is WatchState.Playing) {
             PlayerSettingsPanel(
                 visible = settingsOpen && !fullscreen,
+                subtitles = state.video.subtitles,
+                subtitleLanguage = state.subtitleLanguage,
+                onSelectSubtitles = onSelectSubtitles,
                 narrating = state.narrating,
                 narration = state.narration,
                 onToggleNarration = onToggleNarration,
@@ -422,6 +444,8 @@ private fun preview(state: WatchState) {
             onToggleSaved = {},
             onToggleSubscribed = {},
             onToggleNarration = {},
+            onSelectSubtitles = {},
+            onPlayNext = {},
             onToggleRail = {},
             onFilterRail = {},
             onOpenVideo = {},

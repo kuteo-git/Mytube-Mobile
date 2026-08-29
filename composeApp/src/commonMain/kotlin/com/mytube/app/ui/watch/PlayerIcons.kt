@@ -244,6 +244,14 @@ internal val ChevronIcon: ImageVector by lazy {
     }
 }
 
+/** A triangle against a bar: the next video. */
+internal val NextIcon: ImageVector by lazy {
+    filled("Next") {
+        moveTo(5f, 5f); lineTo(15f, 12f); lineTo(5f, 19f); close()
+        moveTo(17f, 5f); lineTo(19.5f, 5f); lineTo(19.5f, 19f); lineTo(17f, 19f); close()
+    }
+}
+
 /** A bookmark: Save, which keeps the file against the eviction sweep. */
 internal val SaveFilledIcon: ImageVector by lazy {
     filled("SaveFilled") {

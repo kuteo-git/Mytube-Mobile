@@ -70,6 +70,15 @@ interface VideoPlayer {
     fun narrate(clips: List<NarrationClip>)
 
     /**
+     * Show one of the tracks handed over at load, or none.
+     *
+     * An empty language switches subtitles off. It selects rather than loads:
+     * everything was attached at `load`, so this is a track-selection change and
+     * costs no buffering.
+     */
+    fun showSubtitles(language: String)
+
+    /**
      * Stop playing and let go of the media, ending the session.
      *
      * Distinct from [release], and the distinction is the whole of what a
@@ -145,7 +154,17 @@ data class PlayingMedia(
     val channel: String,
     /** Absolute; empty when there is none. */
     val artworkUrl: String,
+    /**
+     * The caption tracks to side-load, already absolute.
+     *
+     * Handed over at load rather than added afterwards, because both platforms
+     * attach a text track to the *media item* — adding one later means building
+     * a new item and re-preparing, which restarts the video.
+     */
+    val subtitles: List<PlayingSubtitle> = emptyList(),
 )
+
+data class PlayingSubtitle(val url: String, val language: String, val label: String)
 
 /**
  * Builds a player.

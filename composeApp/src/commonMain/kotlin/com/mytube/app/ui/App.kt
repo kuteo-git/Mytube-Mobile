@@ -77,7 +77,12 @@ private sealed interface Route {
  * playing while you go elsewhere — modelling it as a destination is what made
  * leaving the screen the same act as stopping the video.
  */
-private data class WatchSession(val videoId: String, val minimised: Boolean = false)
+private data class WatchSession(
+    val videoId: String,
+    val minimised: Boolean = false,
+    /** Arrived at by pressing next, so it opens at zero rather than resuming. */
+    val startAtBeginning: Boolean = false,
+)
 
 /**
  * The root.
@@ -238,6 +243,7 @@ fun App(container: AppContainer) {
                 val watch = remember(session.videoId) {
                     WatchViewModel(
                         videoId = session.videoId,
+                        startAtBeginning = session.startAtBeginning,
                         mediaBaseUrl = baseUrl,
                         videos = container.videoRepository,
                         streams = container.streamRepository,
@@ -284,6 +290,13 @@ fun App(container: AppContainer) {
                             mediaBaseUrl = baseUrl,
                             onBack = { watching = session.copy(minimised = true) },
                             onOpenVideo = { watching = WatchSession(it) },
+                            // Advancing starts the next video at the beginning;
+                            // choosing one resumes it. Two different acts, and
+                            // the difference is what stops "next" dropping
+                            // somebody into the middle of a track.
+                            onAdvanceTo = {
+                                watching = WatchSession(it, startAtBeginning = true)
+                            },
                         )
                     }
                 }

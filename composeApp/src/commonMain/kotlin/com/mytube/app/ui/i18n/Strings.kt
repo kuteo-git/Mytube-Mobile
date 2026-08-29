@@ -117,6 +117,7 @@ interface Strings {
     val allSources: String
     fun fromChannel(name: String): String
     val newBadge: String
+    val playNext: String
 
     // --- navigation --------------------------------------------------------
     val navHome: String
@@ -263,6 +264,7 @@ object EnglishStrings : Strings {
     override val allSources = "All"
     override fun fromChannel(name: String) = "From $name"
     override val newBadge = "New"
+    override val playNext = "Next video"
 
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
@@ -379,6 +381,7 @@ object VietnameseStrings : Strings {
     override val allSources = "Tất cả"
     override fun fromChannel(name: String) = "Từ $name"
     override val newBadge = "Mới"
+    override val playNext = "Video kế tiếp"
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"

@@ -2,6 +2,7 @@ package com.mytube.app.data.remote.dto
 
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Comment
+import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.model.NarrationStatus
@@ -38,6 +39,7 @@ data class VideoDto(
     val likeCount: Long = 0,
     val description: String = "",
     val addedAt: String = "",
+    val subtitles: List<SubtitleDto> = emptyList(),
     val publishedAt: String? = null,
     val thumbnailPath: String = "",
     /**
@@ -76,8 +78,17 @@ data class ChannelsDto(
 )
 
 @Serializable
+data class SubtitleDto(
+    val language: String = "",
+    val label: String = "",
+    val url: String = "",
+    val generated: Boolean = false,
+)
+
+@Serializable
 data class UserStateDto(
     @SerialName("watchProgress") val watchProgress: Double = 0.0,
+    val watchPositionSeconds: Int = 0,
     /** "LIKE", "DISLIKE", or absent. */
     val reaction: String = "",
 )
@@ -116,7 +127,13 @@ fun VideoDto.toDomain(): Video = Video(
     likeCount = likeCount,
     description = description,
     addedAt = addedAt,
+    subtitles = subtitles
+        // A track with no address cannot be loaded, and offering it would put a
+        // row in the menu that turns subtitles off when pressed.
+        .filter { it.url.isNotEmpty() }
+        .map { SubtitleTrack(it.language, it.label, it.url, it.generated) },
     watchedFraction = userState?.watchProgress ?: 0.0,
+    watchPositionSeconds = userState?.watchPositionSeconds ?: 0,
     reaction = when (userState?.reaction) {
         "LIKE" -> Reaction.Like
         "DISLIKE" -> Reaction.Dislike
@@ -162,6 +179,7 @@ data class ChannelVideoDto(
     val likeCount: Long = 0,
     val description: String = "",
     val addedAt: String = "",
+    val subtitles: List<SubtitleDto> = emptyList(),
     val thumbnailUrl: String = "",
     val publishedAt: String? = null,
     val inLibrary: Boolean = false,

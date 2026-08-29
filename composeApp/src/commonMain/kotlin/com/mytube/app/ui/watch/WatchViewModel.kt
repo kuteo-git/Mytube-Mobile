@@ -10,6 +10,7 @@ import com.mytube.app.domain.model.Stream
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
+import com.mytube.app.domain.repository.PlayingSubtitle
 import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayer
@@ -101,6 +102,8 @@ sealed interface WatchState {
         val railCollapsed: Boolean = false,
         /** The rail is filtered to this video's own channel. */
         val railChannelOnly: Boolean = false,
+        /** The track being shown, or empty for none. */
+        val subtitleLanguage: String = "",
     ) : WatchState
 }
 
@@ -120,6 +123,17 @@ sealed interface WatchState {
  */
 class WatchViewModel(
     private val videoId: String,
+    /**
+     * Whether this video was arrived at by advancing rather than by being
+     * chosen, in which case it starts at zero.
+     *
+     * **No default, deliberately.** It had one, the single call site was not
+     * updated to pass it, and the compiler said nothing — so "next" resumed the
+     * following video at twelve minutes in, which is the precise behaviour the
+     * flag exists to prevent. A default here buys one short call site and pays
+     * for it with a fault nothing can catch.
+     */
+    private val startAtBeginning: Boolean,
     /** Where images live, for the artwork the lock screen draws. */
     private val mediaBaseUrl: String,
     private val videos: VideoRepository,
@@ -173,6 +187,20 @@ class WatchViewModel(
      * that the next viewing will use, and abandoning it halfway through means
      * paying for the same lines twice.
      */
+    /**
+     * Show a caption track, or turn them off.
+     *
+     * The empty string is off, deliberately the same call: "show nothing" and
+     * "stop showing" are one state, and two methods for it would be two states
+     * that can disagree.
+     */
+    fun selectSubtitles(language: String) {
+        val current = _state.value as? WatchState.Playing ?: return
+        val next = if (current.subtitleLanguage == language) "" else language
+        _state.value = current.copy(subtitleLanguage = next)
+        player.showSubtitles(next)
+    }
+
     fun toggleRail() = _state.update {
         if (it is WatchState.Playing) it.copy(railCollapsed = !it.railCollapsed) else it
     }
@@ -383,12 +411,21 @@ class WatchViewModel(
                         // Where the viewer left off. The server already knows —
                         // it is in the video's own user state — so the position
                         // is not something this app has to remember separately.
+                        // The server's own number, not the fraction times the
+                        // duration. See `Video.watchPositionSeconds` for why
+                        // those are not the same thing.
+                        //
                         // A broadcast has no position to resume to — its zero is
                         // an hour ago and its end is now — so it always opens at
-                        // the live edge, which is where the playlist starts.
-                        val resumeAt =
-                            if (stream.isLive) 0.0
-                            else video.durationSeconds * video.watchedFraction
+                        // the live edge, which is where the playlist starts. And
+                        // `startAtBeginning` is set when this video was arrived
+                        // at by pressing next: advancing means "play me the next
+                        // thing", and dropping somebody into the middle of a
+                        // track they did not pick reads as a glitch.
+                        val resumeAt = when {
+                            stream.isLive || startAtBeginning -> 0.0
+                            else -> video.watchPositionSeconds.toDouble()
+                        }
                         lastReported = resumeAt
                         player.load(
                             PlayingMedia(
@@ -397,8 +434,21 @@ class WatchViewModel(
                                 channel = video.channel.name,
                                 artworkUrl = mediaBaseUrl.trimEnd('/') +
                                     "/media/" + video.thumbnailPath,
+                                // Every track, attached now. Both platforms bind
+                                // text to the media item, so adding one later
+                                // means a new item and a restarted video.
+                                subtitles = video.subtitles.map {
+                                    PlayingSubtitle(
+                                        url = mediaBaseUrl.trimEnd('/') + it.url,
+                                        language = it.language,
+                                        label = it.label,
+                                    )
+                                },
                             ),
-                            if (!stream.isLive && video.isInProgress) resumeAt else 0.0,
+                            // `isInProgress` still gates it: a video watched to
+                            // the end has its position saved near the end, so
+                            // resuming would run out immediately.
+                            if (video.isInProgress) resumeAt else 0.0,
                         )
                         player.play()
                         WatchState.Playing(video, PlaybackState(), isLive = stream.isLive)
