@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The library lives on the house wifi and is reached by IP over plain
+         HTTP: the gateway has no TLS, and the charter leaves media URLs
+         unprotected on the reasoning that the LAN is trusted. Android blocks
+         cleartext by default, so it has to be allowed - deliberately, and only
+         for that reason. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Audio has to keep playing with the screen off. That is the whole point
+         of this app existing: risk 4 in the charter says a native app is the
+         only path to background playback on iOS, and Android needs the service
+         type declared to do the same. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <application
+        android:label="Mytube"
+        android:usesCleartextTraffic="true"
+        android:supportsRtl="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

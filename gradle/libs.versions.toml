@@ -1,0 +1,82 @@
+# The one place a version is written.
+#
+# ## Read this before changing any number here
+#
+# These versions are not "the latest of everything". They are the one set that
+# actually resolves, found by hitting five walls in a row, and four of them are
+# deliberately older than what is published. The constraints, in the order they
+# bite:
+#
+#   1. AGP 9.x cannot be used at all.
+#      "The 'com.android.application' plugin is not compatible with the
+#      'org.jetbrains.kotlin.multiplatform' plugin since AGP 9.0." AGP 9 wants
+#      the separate com.android.kotlin.multiplatform.library plugin instead.
+#      So AGP is 8.x, and everything downstream follows from that.
+#
+#   2. Compose Multiplatform 1.12.0 is therefore unusable.
+#      Its Android artifacts declare "requires Android Gradle plugin 9.1.0 or
+#      higher". 1.11.0 does not, and is otherwise the same generation.
+#
+#   3. Kotlin is pinned by Compose, not chosen.
+#      CMP 1.11.0's klibs are built with Kotlin 2.3.20 (compiler_version read
+#      from the manifest inside the artifact). An older Kotlin cannot read them
+#      and says so as "KLIB resolver: Could not find <a file that is plainly
+#      there>" — a missing-file message for a version mismatch. That one cost
+#      three wrong turns: the external volume, the configuration cache, and
+#      filesystem case sensitivity were all investigated before the manifest was
+#      read. Read the manifest first next time.
+#
+#   4. Gradle 8.14 is the ceiling of Kotlin 2.3.20's tested range, and AGP 8.11.1
+#      refuses anything below 8.13. The window is 8.13-8.14.
+#
+#   5. Ktor must be 3.3+ for minSdk below 30.
+#      3.2.0 fails to dex: "Space characters in SimpleName 'use streaming syntax'
+#      are not allowed prior to DEX version 040", and DEX 040 means minSdk 30.
+#      3.5.2 dexes cleanly at minSdk 26, which keeps Android 8 devices.
+#
+# Two of the repositories lie about what is newest. Maven Central's search API
+# returned stale answers for Kotlin, Compose and Ktor alike — always confirm with
+# maven-metadata.xml or a direct HEAD on the version directory.
+
+[versions]
+kotlin = "2.3.20"
+compose = "1.11.0"
+agp = "8.11.1"
+
+ktor = "3.5.2"
+serialization = "1.9.0"
+coroutines = "1.10.2"
+
+androidMinSdk = "26"
+# 36, and not by preference: androidx.navigationevent, pulled in transitively by
+# Compose Multiplatform 1.12.0, refuses to be consumed by anything compiled
+# against less. 33 AAR metadata checks failed at 35.
+androidCompileSdk = "36"
+androidTargetSdk = "36"
+
+media3 = "1.11.0"
+androidxActivity = "1.13.0"
+
+[libraries]
+ktor-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
+
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+
+media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
+media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3" }
+media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
+media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
+
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
+
+[plugins]
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose" }
+composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+androidApplication = { id = "com.android.application", version.ref = "agp" }

@@ -1,0 +1,16 @@
+# Build outputs
+build/
+*/build/
+.gradle/
+local.properties
+
+# The toolchain lives on Data2 and is named by env.sh; nothing about it belongs
+# in the repository.
+.kotlin/
+
+# Xcode
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+DerivedData/
+
+.DS_Store
