@@ -189,11 +189,29 @@ rule as the server charter, with no exception. Only display strings go through
 i18n and have a Vietnamese translation. Conversation happens in Vietnamese; the
 artifact does not.
 
+### The dictionary is an interface, not a key lookup
+
+`Strings` declares every word the app shows as a **property**; `EnglishStrings`
+and `VietnameseStrings` implement it; `LocalStrings` provides the current one.
+
+- **A missing translation cannot exist.** Add a property and every language stops
+  compiling until it is supplied, with the compiler naming the class and the
+  field. A resource file with keys can always be missing a key. This is the web
+  app's typed-keys layer taken one step further, and it exists because
+  *half*-translating — not missing translations — is what shipped there.
+- **Not Compose Resources.** It would work, and it means XML, a codegen step, and
+  a lookup that fails at runtime for a key one language lacks. That trades the
+  guarantee above for a familiar file format.
+- **`UntranslatedGuardTest` catches what the type cannot**: a literal that was
+  never put on the interface at all, sitting in a composable and rendering in
+  English while nothing reports it. **Proven to fail** — replacing one
+  `strings.tryAgain` with `"Try again"` turns the build red.
+- **Units and grammar belong to the language.** Count suffixes are `K/M/B` and
+  `N/Tr/T`; formatters take `Strings` rather than hard-coding either. The web
+  app's version once appended an English plural and printed "3 ngàys trước".
+
 Translations are **copied into Kotlin** rather than shared with the web app as
-JSON. The web app's three guard layers are built on TypeScript's type system, and
-trading them away to synchronise with an app that shows half the screens is a bad
-bargain. Expect the two to drift; that is the accepted cost of running two
-clients.
+JSON. Expect the two to drift; that is the accepted cost of running two clients.
 
 ## 8. Testing
 
@@ -201,19 +219,27 @@ Written alongside, not after.
 
 | layer | where | what it catches |
 |---|---|---|
-| Unit | `commonTest`, `kotlin.test` | pure decisions: rung choice, ducking levels, manifest parsing |
-| Guard | `jvmTest` | dependency direction |
-| UI | `commonTest`, `runComposeUiTest` | screen behaviour |
+| Unit | `commonTest`, `kotlin.test` | pure decisions: mapping, formatting, ViewModel branches |
+| Guard | `jvmTest` | dependency direction, and copy that never reached the dictionary |
+| Preview | `@Preview` on every screen | how a screen looks in every state |
 
-- **`runComposeUiTest` is marked Experimental** by JetBrains. Recorded as it is.
-- **There is no official golden/screenshot support** in Compose Multiplatform. A
-  third-party tool on the Android target may be tried; no library is named here
-  until one has actually run.
+- **No Compose UI tests.** Decided directly, and `runComposeUiTest` is in any
+  case still marked Experimental. Previews cover what a screen looks like;
+  ViewModel tests cover what it does.
+- **Every screen has previews, and more than one.** The states that matter are
+  the ones that are hard to reach on a device — loading, empty, failed — plus a
+  Vietnamese preview where the copy length differs, because a layout only ever
+  seen in English breaks for half the household.
+- **This forces the right structure.** A composable holding a ViewModel cannot be
+  previewed, so each screen is split: `XScreen(viewModel, …)` unwraps the state
+  holder and calls `XContent(state, callbacks…)`, which takes plain values.
 - **A `jvm` target exists only to run tests.** Every other target needs hardware
   — `connectedAndroidTest` an emulator, `iosSimulatorArm64Test` a multi-gigabyte
-  runtime — while `jvmTest` runs in seconds. That is the difference between tests
-  that run on every edit and tests that run when somebody remembers to plug in a
-  phone. It does not contradict "no desktop": what was dropped is shipping one.
+  runtime — while `jvmTest` runs in seconds. It does not contradict "no desktop":
+  what was dropped is shipping one.
+- **Both guards are proven to fail.** An `io.ktor` import in `domain`, and a
+  hardcoded `"Try again"` in a screen, each turn the build red. A guard nobody
+  has watched fail is a guard nobody should believe.
 
 **Nothing is called done because it compiled.** Background audio, lock-screen
 controls and ducking have to be heard on real hardware with the screen off.
@@ -247,13 +273,15 @@ Everything on the external volume; `source env.sh` before working.
 
 ## 10. Status
 
-- Builds for **Android (APK), iOS device and iOS simulator**; **21 tests pass**.
-- The layers are in place end to end for the feed: `VideoRepository` and
-  `ServerRepository` ports, a Ktor data source, DTOs with mappers, and
-  `HomeViewModel`.
-- `ArchitectureGuardTest` is **proven to fail**: adding `import io.ktor` to a
-  `domain` file turns the build red. A guard nobody has watched fail is a guard
-  nobody should believe.
-- **Still to write**: `SettingsDataSource` for each platform, the composition
-  root, every screen, both players, and the narration manifest endpoint on the
-  server.
+- Builds for **Android (APK), iOS device and iOS simulator**; **33 tests pass**.
+- **The app runs end to end on Android**: type the server address, and the home
+  feed loads from the gateway with thumbnails and channel avatars.
+- In place: the four layers for the feed, `AppContainer` as the composition root,
+  `SettingsDataSource` for Android and iOS, the design tokens copied from
+  `MASTER.md`, and the English/Vietnamese dictionary.
+- **Still to write**: the watch screen and both players, background audio and the
+  media session, the remaining five screens, a language switch, and the narration
+  manifest endpoint on the server.
+- **Never run on iOS.** It compiles for the device and the simulator; Xcode is
+  not installed, so nothing has been launched there. Do not describe the iOS half
+  as working.

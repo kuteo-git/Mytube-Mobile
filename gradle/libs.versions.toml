@@ -64,6 +64,8 @@ media3 = "1.11.0"
 androidxActivity = "1.13.0"
 # 2.10.0, not 2.11.0 — see constraint 5 above.
 lifecycle = "2.10.0"
+# Coil 3 is the multiplatform line; Coil 2 is Android only.
+coil = "3.4.0"
 
 [libraries]
 ktor-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
@@ -87,6 +89,11 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 # prefix matters: `androidx.lifecycle` is Android only, and this is the same
 # ViewModel API published for iOS as well.
 lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+# Coil does not bring its own networking; it is told which engine to use, and
+# here that is the Ktor client the rest of the app already has.
+coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

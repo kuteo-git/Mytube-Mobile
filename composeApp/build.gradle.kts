@@ -41,6 +41,11 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            // @Preview in common code. The annotation is JetBrains' own, not
+            // androidx's: androidx.compose.ui.tooling.preview.Preview is Android
+            // only, and a preview that cannot be written in commonMain would
+            // mean previews only for half the screens.
+            implementation(compose.components.uiToolingPreview)
             // compose.components.resources is not here yet: its iOS klib failed to
             // resolve and nothing uses it. Added back with the first bundled asset.
 
@@ -50,12 +55,12 @@ kotlin {
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.lifecycle.viewmodel.compose)
+            implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
-            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
-            implementation(compose.uiTest)
         }
         androidMain.dependencies {
             implementation(compose.preview)
