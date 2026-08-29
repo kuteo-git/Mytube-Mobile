@@ -728,3 +728,105 @@ system bars.
   filled the screen wants out of *that* first.
 - iOS is a no-op that says so: rotation there is a property of the view
   controller and of the Info.plist, and neither can be run without Xcode.
+
+## Compared with the web, screen by screen (2026-08-29)
+
+Screenshots of the web app on a phone were the first real reference this project
+has had. Reading them beside the app found more than the four bugs before it, and
+almost all of it was the same failure: **the app was built from the design
+tokens, and the tokens describe pieces rather than screens.** A card's radius was
+right; the order and shape of the things around it were guesses.
+
+The lesson is recorded rather than the corrections alone: for anything the web
+app already does, read `web/src/features/watch/ui/*.tsx` and copy the structure.
+Guessing at it produced eight differences on one screen.
+
+### The control bar
+
+It was a centre play button flanked by two ±10s circles — the shape a phone's
+*system* player uses. The web app's is a thin progress line with **one row under
+it**: play, next, the clock on the left; audio, settings, fullscreen on the
+right. The old arrangement put the three most-pressed controls over the middle of
+the picture, which is exactly where somebody is looking.
+
+The "next video" slot holds forward-ten-seconds here. Next needs a queue this
+app has not got, and a button that does something beats one that matches a
+layout and does nothing.
+
+### The menus belong on the player
+
+The gear now opens a panel **under the picture**, so the video keeps running
+above whatever is being changed — a sheet over the video would have somebody
+changing the narration setting while looking at a grey rectangle.
+
+Narration moved into it from the action row. As a pill its label had to carry the
+pass's progress, and a label that grows in a row that scrolls is a label that
+runs off the edge of the phone — measured: "Đang chuẩn bị" with the numbers cut
+off. In the panel it is a switch with a progress bar, which can say *how far*.
+
+**Subtitles and Autoplay are in the web's panel and deliberately not in this
+one**: this app renders no subtitle track and holds no queue, so either row would
+be a dead button. The equaliser is phase 2 and its button is not drawn.
+
+### Icons
+
+Three were wrong and each was wrong in the same way — a shape that reads as
+something else. Subscriptions was a **stack of cards**, which is a playlist;
+Settings was a **sun**, which is brightness; the mark was a bare red rectangle,
+which reads as an image that failed to load. They are now two people, a cog, and
+a rectangle with a play triangle in it. The search field gained the magnifier
+segment that makes it read as a search box.
+
+### The chip row is pinned
+
+It was the first item in the feed's list, which is how a phone usually does a
+header. The chips are the feed's *filter*, and a filter that scrolls away means
+changing your mind costs a journey back to the top.
+
+### The watch screen's order
+
+Title → channel with subscriber count → actions → description box → comments →
+up next, which is the web's order and was not this app's.
+
+- **Like and dislike are one pill with a divider**, and the like carries its
+  count. Two separate pills read as two unrelated opinions rather than one
+  control with two directions — which is what they are, since pressing either
+  clears the other.
+- **Share exists**, through a platform share sheet, and shares the **YouTube**
+  link: a LAN address only works inside this house.
+- **The channel row has a subscriber line.** Without it the row is a name and a
+  button, and the button is the only thing with any weight — so the eye goes to
+  Subscribe rather than to whose channel this is.
+- **The description box** clamps to two lines and opens on a press anywhere in
+  it. The description is the one block whose length is out of the app's hands.
+
+### Up next was a second feed
+
+Full-width cards, in the shape the feed uses. The web's rail is a header naming
+what plays next, two chips (**All / From <channel>**), and **horizontal** rows —
+a 168dp thumbnail with the text beside it. The card shape is the difference that
+matters: full-width cards fill the screen, so reaching the third suggestion is a
+journey, and the rail competes with the video instead of sitting beside it.
+
+The channel filter is **sent to the server**, not applied here: the endpoint
+answers with a different *ranking* for a channel, not a subset of the unfiltered
+one, so filtering locally would show the wrong videos in the wrong order and only
+look right.
+
+### Comments were missing entirely
+
+Now read-only, with replies nested one level — YouTube nests no deeper. The
+catalogue holds none for a video nobody has opened, so an empty section triggers
+the import once and says *"checking"* meanwhile: "none yet" and "still asking"
+are different answers, and saying the first while the second is true is the fault
+this section is most likely to show.
+
+**There is no "Add a comment" field**, and that is a decision rather than an
+omission. The gateway accepts a post and writes it into *this household's own
+catalogue* — it never reaches YouTube. Beside a keyboard on the web that is
+defensible; under two thousand real YouTube comments on a phone it reads as a
+reply to them, and it would be a reply nobody outside this house will ever see.
+
+Commenters get a coloured initial rather than an image: the gateway sends an
+empty `avatarPath` for every one of them, so `AsyncImage` would be a request per
+comment for a 404 and a grid of grey circles.

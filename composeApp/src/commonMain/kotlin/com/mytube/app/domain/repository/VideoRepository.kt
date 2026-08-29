@@ -1,6 +1,7 @@
 package com.mytube.app.domain.repository
 
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
@@ -87,8 +88,26 @@ interface VideoRepository {
      */
     suspend fun subscriptions(): List<Channel>
 
+    suspend fun comments(videoId: String): List<Comment>
+
+    /**
+     * Bring this video's comments in from YouTube.
+     *
+     * Called once when there are none, which is what the web app does — the
+     * catalogue holds no comments for a video nobody has opened, so without this
+     * every video would show an empty section for ever.
+     */
+    suspend fun importComments(videoId: String)
+
     /** What to play after this one. */
-    suspend fun upNext(videoId: String): List<Video>
+    /**
+     * What to play after this one, optionally narrowed to one channel.
+     *
+     * The channel is sent to the server rather than filtered here, because the
+     * endpoint answers with a *different ranking* for it — not a subset of the
+     * unfiltered one.
+     */
+    suspend fun upNext(videoId: String, channelId: String = ""): List<Video>
 
     /**
      * Where the viewer has got to.

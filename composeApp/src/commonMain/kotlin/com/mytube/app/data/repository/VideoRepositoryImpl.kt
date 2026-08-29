@@ -4,6 +4,7 @@ import com.mytube.app.data.remote.GatewayDataSource
 import com.mytube.app.data.remote.dto.toDomain
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Topic
+import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
@@ -92,8 +93,15 @@ class VideoRepositoryImpl(
         gateway.subscriptions(requireBaseUrl(), server.profileId())
             .channels.map { it.toDomain() }
 
-    override suspend fun upNext(videoId: String): List<Video> =
-        gateway.upNext(requireBaseUrl(), server.profileId(), videoId)
+    override suspend fun comments(videoId: String): List<Comment> =
+        gateway.comments(requireBaseUrl(), server.profileId(), videoId)
+            .comments.map { it.toDomain() }
+
+    override suspend fun importComments(videoId: String) =
+        gateway.importComments(requireBaseUrl(), server.profileId(), videoId)
+
+    override suspend fun upNext(videoId: String, channelId: String): List<Video> =
+        gateway.upNext(requireBaseUrl(), server.profileId(), videoId, channelId)
             .videos.map { it.toDomain() }
 
     override suspend fun recordProgress(

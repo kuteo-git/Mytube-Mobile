@@ -3,6 +3,7 @@ package com.mytube.app.ui.watch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mytube.app.data.repository.ServerNotConfigured
+import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Stream
@@ -93,6 +94,13 @@ sealed interface WatchState {
         val narration: Narration = Narration.Empty,
         /** A broadcast on air: no length, no end, and nothing to resume. */
         val isLive: Boolean = false,
+        val comments: List<Comment> = emptyList(),
+        /** An import is running because the catalogue held none. */
+        val loadingComments: Boolean = false,
+        /** The rail is folded away, which is a per-video preference nobody stores. */
+        val railCollapsed: Boolean = false,
+        /** The rail is filtered to this video's own channel. */
+        val railChannelOnly: Boolean = false,
     ) : WatchState
 }
 
@@ -165,6 +173,25 @@ class WatchViewModel(
      * that the next viewing will use, and abandoning it halfway through means
      * paying for the same lines twice.
      */
+    fun toggleRail() = _state.update {
+        if (it is WatchState.Playing) it.copy(railCollapsed = !it.railCollapsed) else it
+    }
+
+    /**
+     * Narrow the rail to this channel, or widen it again.
+     *
+     * Re-asks the server rather than filtering what is already held: the
+     * endpoint takes a channel and returns a *different ranking* for it, not a
+     * subset of the same one, so filtering here would show the wrong videos in
+     * the wrong order and only look right.
+     */
+    fun filterRail(channelOnly: Boolean) {
+        val current = _state.value as? WatchState.Playing ?: return
+        if (current.railChannelOnly == channelOnly) return
+        _state.value = current.copy(railChannelOnly = channelOnly, upNext = emptyList())
+        loadUpNext(if (channelOnly) current.video.channel.id else "")
+    }
+
     fun toggleNarration() {
         val current = _state.value as? WatchState.Playing ?: return
         val next = !current.narrating
@@ -385,7 +412,44 @@ class WatchViewModel(
                 }
             }.getOrElse(::asState)
 
-            loadUpNext()
+            loadUpNext("")
+            loadComments()
+        }
+    }
+
+    /**
+     * The comments, fetched after the picture like the rail.
+     *
+     * A failure leaves the list empty rather than raising: comments are the one
+     * thing on this screen nothing depends on, and the server charter records
+     * the web app's lesson about that — a refusal here once turned the console
+     * red over a video that played perfectly.
+     */
+    private fun loadComments() {
+        if (_state.value !is WatchState.Playing) return
+        viewModelScope.launch {
+            var found = runCatching { videos.comments(videoId) }.getOrDefault(emptyList())
+
+            if (found.isEmpty()) {
+                // The catalogue holds none for a video nobody has opened, so
+                // without this every video shows an empty section for ever.
+                // Once, and never on a retry loop: upstream declining is a real
+                // answer, and asking again on every visit is a request per view
+                // to an endpoint that can only say no.
+                _state.update { c ->
+                    if (c is WatchState.Playing) c.copy(loadingComments = true) else c
+                }
+                runCatching { videos.importComments(videoId) }
+                found = runCatching { videos.comments(videoId) }.getOrDefault(emptyList())
+            }
+
+            _state.update { current ->
+                if (current is WatchState.Playing) {
+                    current.copy(comments = found, loadingComments = false)
+                } else {
+                    current
+                }
+            }
         }
     }
 
@@ -396,10 +460,11 @@ class WatchViewModel(
      * concurrently with the stream request would put it in front of the one call
      * a viewer is actually waiting on. A rail that fails simply stays empty.
      */
-    private fun loadUpNext() {
+    private fun loadUpNext(channelId: String) {
         if (_state.value !is WatchState.Playing) return
         viewModelScope.launch {
-            val rail = runCatching { videos.upNext(videoId) }.getOrDefault(emptyList())
+            val rail = runCatching { videos.upNext(videoId, channelId) }
+                .getOrDefault(emptyList())
             _state.update { current ->
                 if (current is WatchState.Playing) current.copy(upNext = rail) else current
             }

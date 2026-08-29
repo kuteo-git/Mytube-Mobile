@@ -98,6 +98,25 @@ interface Strings {
     val fullscreen: String
     val exitFullscreen: String
     val notInterested: String
+    /** The gear on the control bar: what belongs to this video. */
+    val settingsInPlayer: String
+    val subtitles: String
+    val off: String
+    val autoplay: String
+    val comments: String
+    val noComments: String
+    val subscribersShort: String
+    val share: String
+    val showMore: String
+    val showLess: String
+    /** "29 Aug 2026" / "29 thg 8, 2026" — the month is spelled, never numbered. */
+    fun dateFormat(day: String, month: Int, year: String): String
+    /** "Next: <title>" over the up-next rail. */
+    fun nextUp(title: String): String
+    val nothingQueued: String
+    val allSources: String
+    fun fromChannel(name: String): String
+    val newBadge: String
 
     // --- navigation --------------------------------------------------------
     val navHome: String
@@ -222,6 +241,28 @@ object EnglishStrings : Strings {
     override val fullscreen = "Fullscreen"
     override val exitFullscreen = "Exit fullscreen"
     override val notInterested = "Not interested"
+    override val settingsInPlayer = "Settings"
+    override val subtitles = "Subtitles"
+    override val off = "Off"
+    override val autoplay = "Autoplay"
+    override val comments = "Comments"
+    override val noComments = "No comments yet"
+    override val subscribersShort = "subscribers"
+    override val share = "Share"
+    override val showMore = "...more"
+    override val showLess = "Show less"
+    override fun dateFormat(day: String, month: Int, year: String): String {
+        val months = listOf(
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        )
+        return "$day ${months.getOrElse(month - 1) { "" }} $year"
+    }
+    override fun nextUp(title: String) = "Next: $title"
+    override val nothingQueued = "Nothing queued"
+    override val allSources = "All"
+    override fun fromChannel(name: String) = "From $name"
+    override val newBadge = "New"
 
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
@@ -320,6 +361,24 @@ object VietnameseStrings : Strings {
     override val fullscreen = "Toàn màn hình"
     override val exitFullscreen = "Thoát toàn màn hình"
     override val notInterested = "Không quan tâm"
+    override val settingsInPlayer = "Cài đặt"
+    override val subtitles = "Phụ đề"
+    override val off = "Tắt"
+    override val autoplay = "Tự động phát"
+    override val comments = "Bình luận"
+    override val noComments = "Chưa có bình luận"
+    override val subscribersShort = "người đăng ký"
+    override val share = "Chia sẻ"
+    override val showMore = "...thêm"
+    override val showLess = "Thu gọn"
+    // "29 thg 8, 2026" — the form ICU gives for vi-VN, and the one the web app
+    // settled on rather than a table of month names.
+    override fun dateFormat(day: String, month: Int, year: String) = "$day thg $month, $year"
+    override fun nextUp(title: String) = "Tiếp theo: $title"
+    override val nothingQueued = "Chưa có gì tiếp theo"
+    override val allSources = "Tất cả"
+    override fun fromChannel(name: String) = "Từ $name"
+    override val newBadge = "Mới"
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"

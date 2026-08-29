@@ -51,7 +51,9 @@ import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.VideoCard
-import com.mytube.app.ui.home.formatViews
+import com.mytube.app.ui.home.formatCount
+import com.mytube.app.ui.home.imageModel
+import com.mytube.app.ui.home.todayISO
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.theme.MytubeTheme
@@ -80,6 +82,8 @@ fun WatchScreen(
         onToggleSaved = viewModel::toggleSaved,
         onToggleSubscribed = viewModel::toggleSubscribed,
         onToggleNarration = viewModel::toggleNarration,
+        onToggleRail = viewModel::toggleRail,
+        onFilterRail = viewModel::filterRail,
         onOpenVideo = onOpenVideo,
     )
 }
@@ -98,10 +102,21 @@ fun WatchContent(
     onToggleSaved: () -> Unit,
     onToggleSubscribed: () -> Unit,
     onToggleNarration: () -> Unit,
+    onToggleRail: () -> Unit,
+    onFilterRail: (Boolean) -> Unit,
     onOpenVideo: (String) -> Unit,
 ) {
     val strings = LocalStrings.current
+    // Today, so the rail's "New" badge can be decided without a clock inside a
+    // pure function. Read once per composition rather than per row.
+    val today = remember { todayISO() }
     var fullscreen by remember { mutableStateOf(false) }
+    var settingsOpen by remember { mutableStateOf(false) }
+    val openShare = rememberShare()
+    val share: () -> Unit = {
+        val id = (state as? WatchState.Playing)?.video?.id.orEmpty()
+        if (id.isNotEmpty()) openShare("https://www.youtube.com/watch?v=$id")
+    }
 
     // Told the platform as state, not as an event: a screen disposed while
     // fullscreen must not leave the phone sideways with no system bars.
@@ -143,6 +158,7 @@ fun WatchContent(
                         // is the reading nobody intends.
                         onBack = { if (fullscreen) fullscreen = false else onBack() },
                         onToggleFullscreen = { fullscreen = !fullscreen },
+                        onOpenSettings = { settingsOpen = !settingsOpen },
                     )
                 }
 
@@ -154,6 +170,17 @@ fun WatchContent(
                 // where somebody lands.
                 else -> BackOnly(onBack, strings.back)
             }
+        }
+
+        // Directly under the picture, so the video keeps playing above whatever
+        // is being changed.
+        if (state is WatchState.Playing) {
+            PlayerSettingsPanel(
+                visible = settingsOpen && !fullscreen,
+                narrating = state.narrating,
+                narration = state.narration,
+                onToggleNarration = onToggleNarration,
+            )
         }
 
         if (fullscreen) return@Column
@@ -191,6 +218,11 @@ fun WatchContent(
             // lazy: an up-next of twenty videos is twenty thumbnails, and
             // composing them all under a Column would fetch every one before the
             // viewer had scrolled to any.
+            // One scroller for everything below the picture, in the web app's
+            // order: title, channel and actions, description, comments, then
+            // what plays next. It is lazy because the comments and the rail are
+            // both lists of unknown length, and a Column would compose every
+            // thumbnail and every comment before the viewer had scrolled to any.
             is WatchState.Playing -> LazyColumn(
                 Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
@@ -198,51 +230,110 @@ fun WatchContent(
                         .calculateBottomPadding() + Space.lg,
                 ),
             ) {
-                item(key = "details") {
-                    Details(
-                        video = state.video,
-                        mediaBaseUrl = mediaBaseUrl,
-                        narrating = state.narrating,
-                        // The label carries the progress while a pass runs, so
-                        // the button says what is happening instead of sitting
-                        // lit over silence for the first few seconds.
-                        narrationLabel = when {
-                            state.narration.status == NarrationStatus.Failed ->
-                                strings.narrationFailed
-                            state.narrating && state.narration.isWorking ->
-                                strings.narrationPreparing(
-                                    state.narration.done,
-                                    state.narration.total,
-                                )
-                            else -> strings.narration
-                        },
-                        onReact = onReact,
-                        onToggleSaved = onToggleSaved,
-                        onToggleSubscribed = onToggleSubscribed,
-                        onToggleNarration = onToggleNarration,
+                item(key = "title") {
+                    Text(
+                        text = state.video.title,
+                        color = Tokens.text,
+                        fontSize = 20.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(
+                            start = Space.lg,
+                            end = Space.lg,
+                            top = Space.md,
+                        ),
                     )
                 }
 
-                if (state.upNext.isNotEmpty()) {
-                    item(key = "up-next") {
-                        Text(
-                            text = strings.upNext,
-                            color = Tokens.text,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(
-                                start = Space.lg,
-                                top = Space.lg,
-                                bottom = Space.sm,
-                            ),
-                        )
-                    }
-                    items(state.upNext, key = { it.id }) { next ->
-                        VideoCard(next, mediaBaseUrl, strings, onClick = { onOpenVideo(next.id) })
-                    }
+                item(key = "channel") {
+                    ChannelRow(state.video, mediaBaseUrl, onToggleSubscribed)
+                }
+
+                item(key = "actions") {
+                    Spacer(Modifier.height(Space.md))
+                    WatchActions(
+                        video = state.video,
+                        onReact = onReact,
+                        onToggleSaved = onToggleSaved,
+                        onShare = share,
+                    )
+                }
+
+                item(key = "description") {
+                    Spacer(Modifier.height(Space.md))
+                    DescriptionBox(state.video, Modifier.padding(horizontal = Space.lg))
+                }
+
+                item(key = "comments") {
+                    Spacer(Modifier.height(Space.xl))
+                    CommentSection(state.comments.size, state.comments, state.loadingComments)
+                }
+
+                item(key = "up-next") {
+                    Spacer(Modifier.height(Space.lg))
+                    UpNextRail(
+                        current = state.video,
+                        videos = state.upNext,
+                        collapsed = state.railCollapsed,
+                        channelOnly = state.railChannelOnly,
+                        mediaBaseUrl = mediaBaseUrl,
+                        onToggleCollapsed = onToggleRail,
+                        onSelectFilter = onFilterRail,
+                        onOpenVideo = onOpenVideo,
+                        today = today,
+                    )
                 }
             }
         }
+    }
+}
+
+/**
+ * Avatar, name, subscriber count, Subscribe.
+ *
+ * The subscriber line was missing and it is not decoration: without it the row
+ * is a name and a button, and the button is the only thing with any weight — so
+ * the eye goes to Subscribe rather than to whose channel this is.
+ */
+@Composable
+private fun ChannelRow(video: Video, mediaBaseUrl: String, onToggleSubscribed: () -> Unit) {
+    val strings = LocalStrings.current
+
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AsyncImage(
+            model = imageModel(mediaBaseUrl, video.channel.avatarPath),
+            contentDescription = video.channel.name,
+            contentScale = ContentScale.Crop,
+            // 40 on the watch page, against 36 in a card and 24 on a comment.
+            // From the design system, and the differences are deliberate there.
+            modifier = Modifier.size(40.dp).clip(CircleShape).background(Tokens.surface),
+        )
+        Spacer(Modifier.width(Space.md))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = video.channel.name,
+                color = Tokens.text,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (video.channel.subscriberCount > 0) {
+                Text(
+                    text = formatCount(video.channel.subscriberCount, strings) + " " +
+                        strings.subscribersShort,
+                    color = Tokens.text2,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+        Spacer(Modifier.width(Space.sm))
+        SubscribeButton(video.channel.subscribed, onToggleSubscribed)
     }
 }
 
@@ -265,78 +356,6 @@ private fun BackOnly(onBack: () -> Unit, label: String) {
                 modifier = Modifier.size(24.dp),
             )
         }
-    }
-}
-
-@Composable
-private fun Details(
-    video: Video,
-    mediaBaseUrl: String,
-    narrating: Boolean,
-    narrationLabel: String,
-    onReact: (Reaction) -> Unit,
-    onToggleSaved: () -> Unit,
-    onToggleSubscribed: () -> Unit,
-    onToggleNarration: () -> Unit,
-) {
-    val strings = LocalStrings.current
-
-    Column {
-        Column(Modifier.padding(horizontal = Space.lg, vertical = Space.md)) {
-            Text(
-                text = video.title,
-                color = Tokens.text,
-                fontSize = 20.sp,
-                lineHeight = 28.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(Space.sm))
-            Text(
-                text = formatViews(video.viewCount, strings),
-                color = Tokens.text2,
-                fontSize = 12.sp,
-            )
-        }
-
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = Space.lg),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                AsyncImage(
-                    model = "$mediaBaseUrl/media/${video.channel.avatarPath}",
-                    contentDescription = video.channel.name,
-                    contentScale = ContentScale.Crop,
-                    // 40 on the watch page, against 36 in a card. From the
-                    // design system, and the difference is deliberate there.
-                    modifier = Modifier.size(40.dp).clip(CircleShape).background(Tokens.surface),
-                )
-                Spacer(Modifier.width(Space.md))
-                Text(
-                    text = video.channel.name,
-                    color = Tokens.text,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Spacer(Modifier.width(Space.sm))
-            SubscribeButton(video.channel.subscribed, onToggleSubscribed)
-        }
-
-        Spacer(Modifier.height(Space.md))
-        WatchActions(
-            video = video,
-            narrating = narrating,
-            narrationLabel = narrationLabel,
-            onReact = onReact,
-            onToggleSaved = onToggleSaved,
-            onToggleNarration = onToggleNarration,
-        )
     }
 }
 
@@ -403,6 +422,8 @@ private fun preview(state: WatchState) {
             onToggleSaved = {},
             onToggleSubscribed = {},
             onToggleNarration = {},
+            onToggleRail = {},
+            onFilterRail = {},
             onOpenVideo = {},
         )
     }

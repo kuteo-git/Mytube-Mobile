@@ -160,7 +160,7 @@ class HomeViewModelTest {
         override suspend fun live() = emptyList<Video>()
         override suspend fun history(limit: Int) = emptyList<Video>()
         override suspend fun subscriptions() = emptyList<com.mytube.app.domain.model.Channel>()
-        override suspend fun upNext(videoId: String) = emptyList<Video>()
+        override suspend fun upNext(videoId: String, channelId: String) = emptyList<Video>()
         override suspend fun recordProgress(
             videoId: String,
             positionSeconds: Double,
@@ -173,6 +173,9 @@ class HomeViewModelTest {
         override suspend fun setSaved(videoId: String, saved: Boolean) = Unit
         override suspend fun setSubscribed(channelId: String, subscribed: Boolean) = Unit
         override suspend fun setNotInterested(videoId: String) = Unit
+        override suspend fun comments(videoId: String) =
+            emptyList<com.mytube.app.domain.model.Comment>()
+        override suspend fun importComments(videoId: String) = Unit
         override suspend fun channelPage(
             channelId: String,
             sortToken: String,

@@ -1,5 +1,6 @@
 package com.mytube.app.ui.home
 
+import androidx.compose.ui.graphics.Color
 import com.mytube.app.ui.i18n.Strings
 import com.mytube.app.ui.i18n.TimeUnit
 import kotlin.math.roundToLong
@@ -97,3 +98,50 @@ private fun trim(value: Double): String {
 fun imageModel(mediaBaseUrl: String, path: String): String =
     if (path.startsWith("http://") || path.startsWith("https://")) path
     else "${mediaBaseUrl.trimEnd('/')}/media/$path"
+
+
+/**
+ * An absolute date, for the description box.
+ *
+ * Distinct from `formatRelative`, which the cards use: "1 day ago" is what a
+ * feed wants, and a description is where somebody looks for *when* — which is a
+ * date, not a distance from now.
+ *
+ * The month is spelled rather than numbered, because 8/9 and 9/8 are the same
+ * two digits in the two languages this app speaks.
+ */
+fun formatDate(iso: String, strings: Strings): String {
+    if (iso.length < 10) return ""
+    val year = iso.substring(0, 4)
+    val month = iso.substring(5, 7).toIntOrNull() ?: return ""
+    val day = iso.substring(8, 10).trimStart('0')
+    return strings.dateFormat(day, month, year)
+}
+
+
+/**
+ * A colour for somebody's name or initial.
+ *
+ * Derived rather than stored, so a new member — or a commenter nobody has ever
+ * seen — is never grey. Shared by the top bar's avatar and the comment list,
+ * because two functions computing "a colour from a name" would give the same
+ * person two colours on one screen.
+ */
+fun avatarColourFor(seed: String): Color {
+    if (seed.isEmpty()) return Color(0xFF5C6BC0)
+    val hues = listOf(
+        Color(0xFF9C4A6E), Color(0xFF7E57C2), Color(0xFF2E7D96),
+        Color(0xFF4B7B3F), Color(0xFFB4713A), Color(0xFF5C6BC0),
+    )
+    return hues[(seed.sumOf { it.code }) % hues.size]
+}
+
+
+/**
+ * Today, as `YYYY-MM-DD` in UTC.
+ *
+ * UTC rather than local, deliberately: it decides whether to draw a small grey
+ * "New" label, and being an hour out at midnight changes nothing about that
+ * while a timezone database would be a dependency.
+ */
+fun todayISO(now: Instant = Clock.System.now()): String = now.toString().substring(0, 10)

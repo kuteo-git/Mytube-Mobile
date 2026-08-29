@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import androidx.compose.runtime.CompositionLocalProvider
@@ -185,6 +186,26 @@ private fun Feed(
         modifier = Modifier.fillMaxSize(),
         indicator = { TabRefreshIndicator(refreshState, state.refreshing) },
     ) {
+        // Pinned under the top bar rather than scrolled with the feed.
+        //
+        // It was the first item in the list, which is how a phone usually does
+        // a header — and it is wrong here: the chips are the feed's *filter*,
+        // and a filter that scrolls away means changing your mind costs a
+        // journey back to the top. The web app pins it and so does this.
+        ChipRow(
+            chips = state.chips,
+            selected = state.selected,
+            onSelect = onSelectChip,
+            modifier = Modifier
+                .zIndex(1f)
+                .background(Tokens.bg)
+                .padding(
+                    top = WindowInsets.statusBars.asPaddingValues()
+                        .calculateTopPadding() + Size.topBar,
+                    bottom = Space.md,
+                ),
+        )
+
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -192,22 +213,17 @@ private fun Feed(
             // like glass over content rather than walls — but its content must
             // start below the top bar and end above the tab bar. Insets alone are
             // not enough: those describe the system's bars, not this app's.
+            // The chip row is pinned, so the list has to start below it as well
+            // as below the top bar. This is the fourth thing in this app to need
+            // the bar's height and the second to need the row's — both live in
+            // `Size`, and nothing here computes either.
             contentPadding = PaddingValues(
                 top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
-                    Size.topBar,
+                    Size.topBar + Size.chipRow,
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
                     Size.topBar,
             ),
         ) {
-            item(key = "chips") {
-                ChipRow(
-                    chips = state.chips,
-                    selected = state.selected,
-                    onSelect = onSelectChip,
-                    modifier = Modifier.padding(vertical = Space.md),
-                )
-            }
-
             // The rail scrolls away with the feed rather than sticking. It is a
             // shelf to glance at on the way past, not a fixture.
             item(key = "continue") {

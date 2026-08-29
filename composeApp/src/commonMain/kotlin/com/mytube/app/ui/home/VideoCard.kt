@@ -261,6 +261,16 @@ object Size {
     val iconButton = 40.dp
     val topBar = 56.dp
     val chip = 32.dp
+
+    /**
+     * The pinned chip row, including the padding above and below it.
+     *
+     * Named here because two places need it and they must not disagree: the row
+     * itself, and the feed's top inset, which has to clear it. The charter
+     * records the web app learning four separate times that a bar's height
+     * belongs in exactly one place.
+     */
+    val chipRow = chip + 24.dp
 }
 
 /** `--badge-bg`: rgba(0,0,0,0.80). */

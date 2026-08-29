@@ -3,6 +3,7 @@ package com.mytube.app.data.remote
 import com.mytube.app.data.remote.dto.ChannelDetailDto
 import com.mytube.app.data.remote.dto.ChannelVideosDto
 import com.mytube.app.data.remote.dto.ChannelsDto
+import com.mytube.app.data.remote.dto.CommentsDto
 import com.mytube.app.data.remote.dto.FeedDto
 import com.mytube.app.data.remote.dto.NarrationDto
 import com.mytube.app.data.remote.dto.StreamDto
@@ -112,10 +113,15 @@ class GatewayDataSource(private val client: HttpClient) {
      * taste only breaks ties*. Asking the feed for a rail beside a playing video
      * would give a page of what somebody likes rather than of what follows.
      */
-    suspend fun upNext(baseUrl: String, userId: String, videoId: String): FeedDto =
-        client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/up-next") {
-            identify(userId)
-        }.orThrow().body()
+    suspend fun upNext(
+        baseUrl: String,
+        userId: String,
+        videoId: String,
+        channelId: String,
+    ): FeedDto = client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/up-next") {
+        identify(userId)
+        if (channelId.isNotBlank()) parameter("channel", channelId)
+    }.orThrow().body()
 
     suspend fun channel(baseUrl: String, userId: String, channelId: String): ChannelDetailDto =
         client.get("${baseUrl.trimEnd('/')}/api/channels/$channelId") {
@@ -154,6 +160,33 @@ class GatewayDataSource(private val client: HttpClient) {
         client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/narration") {
             identify(userId)
         }.orThrow().body()
+
+    /**
+     * The video's comments, top-level with their replies.
+     *
+     * Read-only here. The gateway can post one, and this app does not: a
+     * comment written from the sofa lands in this household's own catalogue and
+     * never reaches YouTube, which is a thing worth building deliberately rather
+     * than by putting a text field on a screen.
+     */
+    suspend fun comments(baseUrl: String, userId: String, videoId: String): CommentsDto =
+        client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/comments") {
+            identify(userId)
+        }.orThrow().body()
+
+    /**
+     * Ask the server to import this video's comments from YouTube.
+     *
+     * Answers 200 with `{"imported":0,"unavailable":true}` when upstream
+     * declines — never an error status. The server charter is explicit about
+     * why: a temporary refusal on the one thing on this page that nothing
+     * depends on used to turn the console red over a video that played fine.
+     */
+    suspend fun importComments(baseUrl: String, userId: String, videoId: String) {
+        client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/comments/fetch") {
+            identify(userId)
+        }.orThrow()
+    }
 
     /**
      * Where the viewer has got to.

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -92,6 +93,7 @@ fun PlayerControls(
     onSkip: (Double) -> Unit,
     onBack: () -> Unit,
     onToggleFullscreen: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -134,83 +136,22 @@ fun PlayerControls(
                     modifier = Modifier.align(Alignment.TopStart).padding(Space.sm),
                 )
 
-                Row(
-                    Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(32.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ControlButton(
-                        icon = SkipBackIcon,
-                        label = strings.skipBack,
-                        onClick = { onSkip(-SKIP_SECONDS); lastTouch++ },
-                    )
-                    ControlButton(
-                        icon = if (playback.isPlaying) PauseIcon else PlayIcon,
-                        label = if (playback.isPlaying) strings.pause else strings.play,
-                        onClick = { onPlayPause(); lastTouch++ },
-                        size = 44.dp,
-                    )
-                    ControlButton(
-                        icon = SkipForwardIcon,
-                        label = strings.skipForward,
-                        onClick = { onSkip(SKIP_SECONDS); lastTouch++ },
-                    )
-                }
-
+                // The bar the web app draws: a thin progress line across the
+                // whole width, and one row under it — play, next, the clock on
+                // the left; audio, settings, fullscreen on the right.
+                //
+                // It replaced a centre play button flanked by two ±10s circles.
+                // That arrangement is what a phone's *system* player uses, and
+                // it puts the three most-pressed controls over the middle of the
+                // picture — exactly where somebody is looking. Compared with the
+                // web app on a phone, it was the largest single difference on
+                // the screen.
                 Column(
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = Space.md, vertical = Space.sm),
+                        .fillMaxWidth(),
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        Arrangement.SpaceBetween,
-                        Alignment.CenterVertically,
-                    ) {
-                        if (isLive) {
-                            // A red dot and the word, in place of two numbers
-                            // that would both be wrong. What a viewer wants to
-                            // know here is whether this is happening now.
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier.size(8.dp).clip(CircleShape)
-                                        .background(Tokens.brand),
-                                )
-                                Spacer(Modifier.height(Space.xs))
-                                Text(
-                                    text = "  " + strings.live,
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
-                        } else {
-                            Text(
-                                formatDuration(playback.positionSeconds.toInt()),
-                                color = Color.White,
-                                fontSize = 12.sp,
-                            )
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (!isLive) {
-                                Text(
-                                    formatDuration(playback.durationSeconds.toInt()),
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                )
-                            }
-                            ControlButton(
-                                icon = if (fullscreen) ShrinkIcon else ExpandIcon,
-                                label = if (fullscreen) strings.exitFullscreen
-                                else strings.fullscreen,
-                                onClick = { onToggleFullscreen(); lastTouch++ },
-                                size = 22.dp,
-                            )
-                        }
-                    }
                     if (!isLive) {
-                        Spacer(Modifier.height(Space.xs))
                         SeekBar(
                             progress = playback.progress,
                             enabled = playback.durationSeconds > 0,
@@ -218,6 +159,67 @@ fun PlayerControls(
                                 onSeek(it * playback.durationSeconds)
                                 lastTouch++
                             },
+                        )
+                    }
+
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Space.sm, vertical = Space.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ControlButton(
+                            icon = if (playback.isPlaying) PauseIcon else PlayIcon,
+                            label = if (playback.isPlaying) strings.pause else strings.play,
+                            onClick = { onPlayPause(); lastTouch++ },
+                        )
+                        // Forward ten seconds, in the slot the web app gives to
+                        // "next video". Next needs a queue this app does not
+                        // have yet, and a skip is the thing most reached for on
+                        // a phone — a button that does something beats one that
+                        // matches a layout and does nothing.
+                        ControlButton(
+                            icon = SkipForwardIcon,
+                            label = strings.skipForward,
+                            onClick = { onSkip(SKIP_SECONDS); lastTouch++ },
+                        )
+
+                        Spacer(Modifier.width(Space.xs))
+                        if (isLive) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier.size(8.dp).clip(CircleShape)
+                                        .background(Tokens.brand),
+                                )
+                                Spacer(Modifier.width(Space.sm))
+                                Text(
+                                    text = strings.live,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = formatDuration(playback.positionSeconds.toInt()) +
+                                    " / " + formatDuration(playback.durationSeconds.toInt()),
+                                color = Color.White,
+                                fontSize = 13.sp,
+                            )
+                        }
+
+                        Spacer(Modifier.weight(1f))
+
+                        ControlButton(
+                            icon = SettingsGearIcon,
+                            label = strings.settingsInPlayer,
+                            onClick = { onOpenSettings(); lastTouch++ },
+                        )
+                        ControlButton(
+                            icon = if (fullscreen) ShrinkIcon else ExpandIcon,
+                            label = if (fullscreen) strings.exitFullscreen
+                            else strings.fullscreen,
+                            onClick = { onToggleFullscreen(); lastTouch++ },
                         )
                     }
                 }
@@ -307,13 +309,14 @@ private fun ControlButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 32.dp,
+    size: androidx.compose.ui.unit.Dp = 24.dp,
 ) {
     Box(
         modifier
-            // 48dp of target around whatever is drawn. Below that a moving
-            // thumb misses, and the picture underneath swallows the tap.
-            .size(48.dp)
+            // 44dp of target around a 24dp glyph. Six of these sit in one row
+            // on a phone; 48 each would not fit, and below 44 a moving thumb
+            // misses and the picture underneath swallows the tap.
+            .size(44.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,

@@ -163,6 +163,32 @@ internal val ShrinkIcon: ImageVector by lazy {
     }
 }
 
+/** The gear in the control bar: what belongs to *this* video. */
+internal val SettingsGearIcon: ImageVector by lazy {
+    stroke("PlayerSettings") {
+        moveTo(12f, 9.2f)
+        curveTo(10.5f, 9.2f, 9.2f, 10.5f, 9.2f, 12f)
+        curveTo(9.2f, 13.5f, 10.5f, 14.8f, 12f, 14.8f)
+        curveTo(13.5f, 14.8f, 14.8f, 13.5f, 14.8f, 12f)
+        curveTo(14.8f, 10.5f, 13.5f, 9.2f, 12f, 9.2f)
+        close()
+        moveTo(12f, 4.2f)
+        curveTo(16.3f, 4.2f, 19.8f, 7.7f, 19.8f, 12f)
+        curveTo(19.8f, 16.3f, 16.3f, 19.8f, 12f, 19.8f)
+        curveTo(7.7f, 19.8f, 4.2f, 16.3f, 4.2f, 12f)
+        curveTo(4.2f, 7.7f, 7.7f, 4.2f, 12f, 4.2f)
+        close()
+        moveTo(12f, 2.6f); lineTo(12f, 5.4f)
+        moveTo(12f, 18.6f); lineTo(12f, 21.4f)
+        moveTo(2.6f, 12f); lineTo(5.4f, 12f)
+        moveTo(18.6f, 12f); lineTo(21.4f, 12f)
+        moveTo(5.4f, 5.4f); lineTo(7.3f, 7.3f)
+        moveTo(16.7f, 16.7f); lineTo(18.6f, 18.6f)
+        moveTo(18.6f, 5.4f); lineTo(16.7f, 7.3f)
+        moveTo(7.3f, 16.7f); lineTo(5.4f, 18.6f)
+    }
+}
+
 /** A speaker with sound coming out of it: the Vietnamese voice. */
 internal val SpeakerIcon: ImageVector by lazy {
     stroke("Speaker") {
@@ -182,6 +208,39 @@ internal val SpeakerFilledIcon: ImageVector by lazy {
         lineTo(14.2f, 15.4f)
         curveTo(15.9f, 13.6f, 15.9f, 10.4f, 14.2f, 8.6f)
         close()
+    }
+}
+
+/** Three nodes joined by two lines: share. */
+internal val ShareIcon: ImageVector by lazy {
+    stroke("Share") {
+        moveTo(18f, 4.2f)
+        curveTo(19.2f, 4.2f, 20.2f, 5.2f, 20.2f, 6.4f)
+        curveTo(20.2f, 7.6f, 19.2f, 8.6f, 18f, 8.6f)
+        curveTo(16.8f, 8.6f, 15.8f, 7.6f, 15.8f, 6.4f)
+        curveTo(15.8f, 5.2f, 16.8f, 4.2f, 18f, 4.2f)
+        close()
+        moveTo(6f, 9.8f)
+        curveTo(7.2f, 9.8f, 8.2f, 10.8f, 8.2f, 12f)
+        curveTo(8.2f, 13.2f, 7.2f, 14.2f, 6f, 14.2f)
+        curveTo(4.8f, 14.2f, 3.8f, 13.2f, 3.8f, 12f)
+        curveTo(3.8f, 10.8f, 4.8f, 9.8f, 6f, 9.8f)
+        close()
+        moveTo(18f, 15.4f)
+        curveTo(19.2f, 15.4f, 20.2f, 16.4f, 20.2f, 17.6f)
+        curveTo(20.2f, 18.8f, 19.2f, 19.8f, 18f, 19.8f)
+        curveTo(16.8f, 19.8f, 15.8f, 18.8f, 15.8f, 17.6f)
+        curveTo(15.8f, 16.4f, 16.8f, 15.4f, 18f, 15.4f)
+        close()
+        moveTo(8f, 11f); lineTo(16f, 7.4f)
+        moveTo(8f, 13f); lineTo(16f, 16.6f)
+    }
+}
+
+/** A chevron pointing down. Rotated where it needs to point elsewhere. */
+internal val ChevronIcon: ImageVector by lazy {
+    stroke("Chevron") {
+        moveTo(6f, 9f); lineTo(12f, 15f); lineTo(18f, 9f)
     }
 }
 

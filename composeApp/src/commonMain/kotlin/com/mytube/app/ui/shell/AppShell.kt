@@ -27,14 +27,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.ui.home.Size
+import com.mytube.app.ui.home.avatarColourFor
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.theme.Tokens
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.graphics.Color
 
 /**
  * The frame every screen sits in: a bar above, a bar below, content between.
@@ -105,15 +110,28 @@ private fun TopBar(profileInitial: String, onSearch: () -> Unit, modifier: Modif
                 .padding(horizontal = Space.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // The mark, in brand red. A rounded rectangle rather than the play
-            // triangle: this is not YouTube and borrowing its logo would be both
-            // wrong and confusing on a home screen beside the real one.
+            // The mark: a red rounded rectangle with a white triangle in it.
+            //
+            // The triangle was left out on the reasoning that borrowing
+            // YouTube's logo would be confusing beside the real app. Compared
+            // against the web app on a phone, the bare rectangle is what reads
+            // as wrong — it looks like an image that failed to load. The shape
+            // is a play button, which is what every video app uses and none of
+            // them owns.
             Box(
                 Modifier
                     .size(width = 28.dp, height = 20.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(Tokens.brand),
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = PlayMark,
+                    contentDescription = strings.appName,
+                    tint = Color.White,
+                    modifier = Modifier.size(12.dp),
+                )
+            }
             Spacer(Modifier.width(Space.md))
 
             // Not a field: a button shaped like one. Typing happens on the
@@ -126,12 +144,37 @@ private fun TopBar(profileInitial: String, onSearch: () -> Unit, modifier: Modif
                     .height(Size.chip + 8.dp)
                     .clip(RoundedCornerShape(percent = 50))
                     .clickable(onClick = onSearch)
-                    .border(1.dp, Tokens.line, RoundedCornerShape(percent = 50))
-                    .background(Tokens.surfaceInput)
-                    .padding(horizontal = Space.lg),
+                    .border(1.dp, Tokens.line, RoundedCornerShape(percent = 50)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(strings.search, color = Tokens.text2, fontSize = 14.sp)
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(Tokens.surfaceInput)
+                        .padding(horizontal = Space.lg),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.search, color = Tokens.text2, fontSize = 14.sp)
+                }
+                // The magnifier is its own segment at the right end, divided
+                // from the field by a line — the web app's shape, and the thing
+                // that makes the pill read as a search box rather than as an
+                // empty input.
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .width(56.dp)
+                        .background(Tokens.surfaceHover),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = SearchIcon,
+                        contentDescription = strings.search,
+                        tint = Tokens.text,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
             Spacer(Modifier.width(Space.md))
 
@@ -141,13 +184,22 @@ private fun TopBar(profileInitial: String, onSearch: () -> Unit, modifier: Modif
             // It is empty until the profile picker exists, and an empty circle
             // is the honest drawing of "nobody has said who they are".
             Box(
-                Modifier.size(32.dp).clip(CircleShape).background(Tokens.surfaceHover),
+                Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    // Coloured from the initial, the way every avatar in this
+                    // app is. A grey circle beside a red logo reads as an image
+                    // that has not loaded; a coloured one reads as a person.
+                    .background(
+                        if (profileInitial.isEmpty()) Tokens.surfaceHover
+                        else avatarColourFor(profileInitial),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 if (profileInitial.isNotEmpty()) {
                     Text(
-                        text = profileInitial,
-                        color = Tokens.text,
+                        text = profileInitial.take(1).uppercase(),
+                        color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                     )
@@ -215,4 +267,20 @@ private fun TabItem(
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
         )
     }
+}
+
+
+/** The white triangle inside the mark. */
+private val PlayMark: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "PlayMark",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(8f, 5f); lineTo(19f, 12f); lineTo(8f, 19f); close()
+        }
+    }.build()
 }

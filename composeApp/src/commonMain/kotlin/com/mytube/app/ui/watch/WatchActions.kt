@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -34,9 +35,9 @@ import com.mytube.app.ui.theme.Tokens
  *
  * ## What is deliberately not here
  *
- * **Share** is in the web app and is dropped for now rather than drawn: it needs
- * a platform share sheet on each side, and a button that opens nothing is the
- * one thing §5 of the server charter forbids outright.
+ * **Narration moved to the gear on the control bar**, where the web app keeps
+ * it. As a pill its label had to carry the pass's progress, and a label that
+ * grows in a row that scrolls is a label that runs off the edge of the phone.
  *
  * **Watch later** is absent for a different reason — it is a read-only mirror of
  * the member's YouTube account, and nothing in this system writes to it.
@@ -47,12 +48,9 @@ import com.mytube.app.ui.theme.Tokens
 @Composable
 fun WatchActions(
     video: Video,
-    narrating: Boolean,
-    /** Either the feature's name or how far the server has got with it. */
-    narrationLabel: String,
     onReact: (Reaction) -> Unit,
     onToggleSaved: () -> Unit,
-    onToggleNarration: () -> Unit,
+    onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -63,41 +61,47 @@ fun WatchActions(
             .padding(horizontal = Space.lg),
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
     ) {
-        // Narration sits in this row rather than behind a gear, because it is
-        // the reason somebody opened this app rather than the web one, and a
-        // feature reached through a menu is a feature most people never find.
-        //
-        // It is **first**, against the convention that puts Like first, because
-        // its label grows to carry the pass's progress — and in fourth place
-        // that label ran off the edge of the phone, leaving "Đang chuẩn bị" with
-        // the numbers cut off. A row that scrolls is not an excuse for hiding
-        // the one control the screen is for.
+        // Like and dislike are **one pill with a divider**, and the like carries
+        // its count. Two separate pills is what this was, and beside the web app
+        // it reads as two unrelated opinions rather than one control with two
+        // directions — which is what they are: pressing either clears the other.
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .background(Tokens.surface),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PillHalf(
+                icon = if (video.reaction == Reaction.Like) ThumbFilledIcon else ThumbIcon,
+                label = strings.like,
+                // The count sits beside the thumb, as it does on the web. Zero
+                // is drawn rather than hidden: an empty space where a number
+                // belongs reads as a number that failed to load.
+                trailing = video.likeCount.toString(),
+                onClick = { onReact(Reaction.Like) },
+            )
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(20.dp)
+                    .background(Tokens.line),
+            )
+            PillHalf(
+                icon = if (video.reaction == Reaction.Dislike) ThumbFilledIcon else ThumbIcon,
+                label = strings.dislike,
+                trailing = "",
+                flipped = true,
+                onClick = { onReact(Reaction.Dislike) },
+            )
+        }
+
         ActionPill(
-            icon = if (narrating) SpeakerFilledIcon else SpeakerIcon,
-            label = narrationLabel,
-            active = narrating,
-            onClick = onToggleNarration,
+            icon = ShareIcon,
+            label = strings.share,
+            active = false,
+            onClick = onShare,
         )
-        ActionPill(
-            // Filled when it is on. The background cannot carry this: the two
-            // surface tokens are six units apart, which is a hover difference
-            // and invisible as a state — measured on the emulator, pressing Like
-            // set the reaction on the server and looked like nothing happened.
-            icon = if (video.reaction == Reaction.Like) ThumbFilledIcon else ThumbIcon,
-            label = strings.like,
-            active = video.reaction == Reaction.Like,
-            onClick = { onReact(Reaction.Like) },
-        )
-        ActionPill(
-            icon = if (video.reaction == Reaction.Dislike) ThumbFilledIcon else ThumbIcon,
-            label = strings.dislike,
-            active = video.reaction == Reaction.Dislike,
-            // The same glyph turned over, which is what a thumbs-down is. Two
-            // separately drawn paths would drift, and a pair that does not
-            // mirror is visible side by side.
-            flipped = true,
-            onClick = { onReact(Reaction.Dislike) },
-        )
+
         ActionPill(
             icon = if (video.saved) SaveFilledIcon else SaveIcon,
             // The label states what the button *did*, not what it will do:
@@ -108,6 +112,42 @@ fun WatchActions(
             active = video.saved,
             onClick = onToggleSaved,
         )
+    }
+}
+
+/**
+ * One end of the like/dislike pill.
+ *
+ * Its own composable rather than a flag on [ActionPill], because it has no
+ * background and no rounding of its own — the pill around it owns both, which is
+ * what makes the two halves read as one control.
+ */
+@Composable
+private fun PillHalf(
+    icon: ImageVector,
+    label: String,
+    trailing: String,
+    onClick: () -> Unit,
+    flipped: Boolean = false,
+) {
+    Row(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = Tokens.text,
+            modifier = Modifier
+                .size(20.dp)
+                .scale(scaleX = 1f, scaleY = if (flipped) -1f else 1f),
+        )
+        if (trailing.isNotEmpty()) {
+            Spacer(Modifier.width(Space.sm))
+            Text(trailing, color = Tokens.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        }
     }
 }
 

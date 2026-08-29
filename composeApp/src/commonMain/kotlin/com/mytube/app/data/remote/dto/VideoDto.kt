@@ -1,6 +1,7 @@
 package com.mytube.app.data.remote.dto
 
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.model.NarrationStatus
@@ -34,6 +35,9 @@ data class VideoDto(
     val channel: ChannelDto = ChannelDto(),
     val durationSeconds: Int = 0,
     val viewCount: Long = 0,
+    val likeCount: Long = 0,
+    val description: String = "",
+    val addedAt: String = "",
     val publishedAt: String? = null,
     val thumbnailPath: String = "",
     /**
@@ -109,6 +113,9 @@ fun VideoDto.toDomain(): Video = Video(
     publishedAt = publishedAt.orEmpty(),
     thumbnailPath = thumbnailPath,
     saved = pinned,
+    likeCount = likeCount,
+    description = description,
+    addedAt = addedAt,
     watchedFraction = userState?.watchProgress ?: 0.0,
     reaction = when (userState?.reaction) {
         "LIKE" -> Reaction.Like
@@ -152,6 +159,9 @@ data class ChannelVideoDto(
     val title: String = "",
     val durationSeconds: Int = 0,
     val viewCount: Long = 0,
+    val likeCount: Long = 0,
+    val description: String = "",
+    val addedAt: String = "",
     val thumbnailUrl: String = "",
     val publishedAt: String? = null,
     val inLibrary: Boolean = false,
@@ -228,4 +238,32 @@ fun NarrationDto.toDomain(baseUrl: String): Narration = Narration(
                 text = it.text,
             )
         },
+)
+
+
+@Serializable
+data class CommentsDto(
+    val comments: List<CommentDto> = emptyList(),
+    val nextPageToken: String = "",
+)
+
+@Serializable
+data class CommentDto(
+    val id: String = "",
+    val authorHandle: String = "",
+    val avatarPath: String = "",
+    val text: String = "",
+    val publishedAt: String = "",
+    val likeCount: Long = 0,
+    val replies: List<CommentDto> = emptyList(),
+)
+
+fun CommentDto.toDomain(): Comment = Comment(
+    id = id,
+    authorHandle = authorHandle,
+    avatarPath = avatarPath,
+    text = text,
+    publishedAt = publishedAt,
+    likeCount = likeCount,
+    replies = replies.map { it.toDomain() },
 )
