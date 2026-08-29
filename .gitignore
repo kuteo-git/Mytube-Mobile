@@ -14,3 +14,6 @@ local.properties
 DerivedData/
 
 .DS_Store
+
+# Built APKs. They are large, and a fresh one is one command away.
+dist/
