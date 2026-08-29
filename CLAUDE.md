@@ -549,3 +549,64 @@ force-stop and takes the tab bar with it.
   channel page, and deliberately not on the setup screen: somebody typing an
   address is fixing the connection this video came through, and a bar playing
   over that form is in the way of the one thing that screen is for.
+
+## The iOS half exists in Kotlin and has nowhere to run (2026-08-29)
+
+Everything on the Kotlin side is written and compiles for
+`iosSimulatorArm64`: the player, the audio session, the lock-screen entry, the
+settings store, the language, and `MainViewController` — the counterpart of
+`MainActivity`, building the same container and handing it to the same `App`.
+The Swift entry point and `Info.plist` are in `iosApp/iosApp/`.
+
+**What is missing is the Xcode project, and it cannot be written here.** This
+machine has the Command Line Tools and not Xcode, so there is no `.xcodeproj`,
+nothing has ever run on a simulator or a device, and `linkDebugTestIosSimulator`
+fails on `xcrun xcodebuild -version`. A hand-written `project.pbxproj` was
+considered and refused: it could not be opened or built here, so it would be a
+file claiming to work with nothing behind the claim.
+
+None of the iOS behaviour below is measured. It is written to the platform's
+documented contract and marked untested, which is not the same as working.
+
+- **Background audio needs two things and either alone is silence**:
+  `AVAudioSessionCategoryPlayback`, set when a player is built, and
+  `UIBackgroundModes: audio` in the Info.plist. The category is set at player
+  construction rather than at launch because it is global to the process, and
+  claiming playback while nothing plays takes audio focus from whatever else the
+  phone is doing.
+- **The lock screen is two APIs, not one.** `MPNowPlayingInfoCenter` carries the
+  text and the scrubber; `MPRemoteCommandCenter` carries the buttons. Setting
+  only the first gives a lock screen that reads correctly and whose play button
+  does nothing. This is the counterpart of Android's `MediaMetadata`, and it
+  exists because that side measured what its absence looks like: a notification
+  reading "Mytube is running".
+  - **`togglePlayPause` is registered beside play and pause**, because headphone
+    buttons and car stereos send toggle rather than either — a lock screen that
+    works while a steering wheel does not is worse than neither.
+  - **The artwork is deliberately not fetched.** `MPMediaItemPropertyArtwork`
+    takes a `UIImage`, so showing one means downloading and decoding here, on a
+    URL that is on the house wifi and unreachable the moment the phone leaves it.
+    A lock screen with a title and no picture is complete.
+  - **`release()` does not clear it and `stop()` does** — the same split as
+    Android's, for the same reason: releasing hands back this app's hold while
+    the sound carries on, and a lock screen that empties while audio plays is the
+    miniplayer fault in reverse.
+- **`NSAllowsLocalNetworking`, not `NSAllowsArbitraryLoads`.** The gateway has no
+  TLS and the charter leaves media URLs unprotected because the LAN is trusted;
+  the narrow key permits cleartext to local addresses and refuses it to the
+  internet. `NSLocalNetworkUsageDescription` is required too — without it iOS 14+
+  refuses the network with no error a person could act on.
+- **Portrait only, matching Android.** The activity there declares
+  `configChanges` for rotation, which is what makes holding the watch ViewModel
+  in `remember` correct; letting iOS rotate would be the two platforms behaving
+  differently in the one place that costs a restarted video.
+
+### To finish it, on a machine with Xcode
+
+1. Create an iOS App target named `iosApp` in `iosApp/`, using the `Info.plist`,
+   `iOSApp.swift` and `ContentView.swift` already there.
+2. Add the `composeApp` framework to it (`./gradlew :composeApp:embedAndSignAppleFrameworkForXcode` as a build phase, the standard KMP setup).
+3. Then, and only then, the claims above become measurable — and the ones that
+   matter are the charter's: play, lock the screen, and confirm the sound
+   continues and the lock-screen controls work; take a call mid-video, hang up,
+   and confirm it resumes.

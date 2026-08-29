@@ -72,6 +72,19 @@ class AvVideoPlayer : VideoPlayer {
 
     private var observer: Any? = null
 
+    /**
+     * The lock screen's entry.
+     *
+     * Built here rather than by the ViewModel: the commands it registers are
+     * process-wide, and something that outlives one screen must not be owned by
+     * one screen.
+     */
+    private val nowPlaying = NowPlaying(
+        onPlay = { play() },
+        onPause = { pause() },
+        onSeek = { seekTo(it) },
+    )
+
     init {
         AVAudioSession.sharedInstance().setCategory(AVAudioSessionCategoryPlayback, null)
         AVAudioSession.sharedInstance().setActive(true, null)
@@ -80,15 +93,16 @@ class AvVideoPlayer : VideoPlayer {
 
     override fun load(media: PlayingMedia, startAtSeconds: Double) {
         _state.update { PlaybackState() }
-        // The lock screen's title and artist come from MPNowPlayingInfoCenter on
-        // iOS rather than from the player item, and that is not wired up yet —
-        // recorded as missing rather than half-done, since there is no Xcode
-        // project to run it in.
         val nsUrl = NSURL.URLWithString(media.url) ?: run {
             _state.update { it.copy(error = "bad url") }
             return
         }
         av.replaceCurrentItemWithPlayerItem(AVPlayerItem(nsUrl))
+        // Described with the length it has *now*, which is zero until the item
+        // loads. `progress` corrects it on the first tick; describing nothing
+        // until then would leave the lock screen blank for the seconds a viewer
+        // is most likely to look at it.
+        nowPlaying.describe(media, _state.value.durationSeconds)
         if (startAtSeconds > 0) seekTo(startAtSeconds)
     }
 
@@ -105,6 +119,7 @@ class AvVideoPlayer : VideoPlayer {
     }
 
     override fun stop() {
+        nowPlaying.clear()
         av.pause()
         // Replacing the item with nothing is what clears the Now Playing entry
         // and the lock-screen controls. Pausing alone leaves the session showing
@@ -114,6 +129,10 @@ class AvVideoPlayer : VideoPlayer {
     }
 
     override fun release() {
+        // Deliberately *not* cleared here. Releasing hands back this app's hold
+        // while the sound carries on — the whole point of the miniplayer — and a
+        // lock screen that empties while the audio plays is the fault Android's
+        // side of this already measured, in reverse.
         observer?.let { av.removeTimeObserver(it) }
         observer = null
         av.pause()
@@ -144,6 +163,12 @@ class AvVideoPlayer : VideoPlayer {
                     isPlaying = av.timeControlStatus == AVPlayerTimeControlStatusPlaying,
                 )
             }
+            // The lock screen is told from the same tick. iOS interpolates
+            // between updates from the rate, so four a second is more than it
+            // needs — but the *rate* has to be right the instant it changes, or
+            // the lock screen's clock counts on through a pause.
+            val now = _state.value
+            nowPlaying.progress(now.positionSeconds, now.isPlaying)
         }
     }
 }
