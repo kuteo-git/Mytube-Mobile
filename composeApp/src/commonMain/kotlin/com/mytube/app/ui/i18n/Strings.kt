@@ -60,6 +60,12 @@ interface Strings {
     /** Shown when a topic or Live has nothing in it. */
     val nothingHere: String
 
+    // --- watch -------------------------------------------------------------
+    val couldNotPlay: String
+    val upcomingTitle: String
+    val upcomingDetail: String
+    val unavailableTitle: String
+
     // --- navigation --------------------------------------------------------
     val navHome: String
     val navSubscriptions: String
@@ -129,6 +135,11 @@ object EnglishStrings : Strings {
     override val chipLive = "Live"
     override val nothingHere = "Nothing here"
 
+    override val couldNotPlay = "Could not play this"
+    override val upcomingTitle = "Not started yet"
+    override val upcomingDetail = "It will begin playing on its own."
+    override val unavailableTitle = "YouTube will not hand this over"
+
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
     override val navHistory = "History"
@@ -178,6 +189,11 @@ object VietnameseStrings : Strings {
     // broadcast, and "trực tiếp" is longer than the chip it sits in.
     override val chipLive = "Live"
     override val nothingHere = "Chưa có gì ở đây"
+
+    override val couldNotPlay = "Không phát được"
+    override val upcomingTitle = "Chưa bắt đầu"
+    override val upcomingDetail = "Tới giờ nó sẽ tự phát."
+    override val unavailableTitle = "YouTube không cho lấy video này"
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"

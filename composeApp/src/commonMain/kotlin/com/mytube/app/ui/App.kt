@@ -12,6 +12,8 @@ import com.mytube.app.ui.home.HomeScreen
 import com.mytube.app.ui.home.HomeViewModel
 import com.mytube.app.ui.shell.AppShell
 import com.mytube.app.ui.shell.Tab
+import com.mytube.app.ui.watch.WatchScreen
+import com.mytube.app.ui.watch.WatchViewModel
 import com.mytube.app.ui.settings.ServerSetupScreen
 import com.mytube.app.ui.settings.ServerSetupViewModel
 import androidx.compose.runtime.CompositionLocalProvider
@@ -34,6 +36,7 @@ private sealed interface Route {
     data object Deciding : Route
     data object Setup : Route
     data object Home : Route
+    data class Watch(val videoId: String) : Route
 }
 
 /**
@@ -66,7 +69,7 @@ fun App(container: AppContainer) {
                 }
             }
 
-            when (route) {
+            when (val current = route) {
                 is Route.Deciding -> Unit
 
                 is Route.Setup -> ServerSetupScreen(
@@ -77,24 +80,40 @@ fun App(container: AppContainer) {
                 is Route.Home -> AppShell(
                     current = Tab.Home,
                     // The other three tabs are screens that do not exist yet.
-                    // They are drawn because the bar is the app's shape and a
-                    // bar with one item is not it — and pressing them does
-                    // nothing rather than pretending, which is the honest state
-                    // until the screens arrive.
+                    // They are drawn because the bar is the app's shape and a bar
+                    // with one item is not it — and pressing them does nothing
+                    // rather than pretending, which is the honest state until the
+                    // screens arrive.
                     onSelect = { if (it == Tab.Settings) route = Route.Setup },
                 ) {
                     HomeScreen(
                         // Keyed on the address: changing it builds a new
-                        // HomeViewModel, because the old one holds a feed
-                        // fetched from somewhere else.
+                        // HomeViewModel, because the old one holds a feed fetched
+                        // from somewhere else.
                         viewModel = viewModel(key = "home-$baseUrl") {
                             HomeViewModel(container.videoRepository)
                         },
                         mediaBaseUrl = baseUrl,
                         onOpenSettings = { route = Route.Setup },
-                        onOpenVideo = { },
+                        onOpenVideo = { route = Route.Watch(it) },
                     )
                 }
+
+                is Route.Watch -> WatchScreen(
+                    // Keyed on the video: opening another one builds a new
+                    // ViewModel, because the old one owns a player pointed at the
+                    // previous stream — and releases it when it is cleared.
+                    viewModel = viewModel(key = "watch-${current.videoId}") {
+                        WatchViewModel(
+                            videoId = current.videoId,
+                            videos = container.videoRepository,
+                            streams = container.streamRepository,
+                            playerFactory = container.playerFactory,
+                        )
+                    },
+                    mediaBaseUrl = baseUrl,
+                    onBack = { route = Route.Home },
+                )
             }
         }
     }
