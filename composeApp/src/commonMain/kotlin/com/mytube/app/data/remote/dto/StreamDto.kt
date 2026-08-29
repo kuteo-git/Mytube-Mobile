@@ -38,6 +38,22 @@ data class SourceDto(
 fun StreamDto.toDomain(baseUrl: String, maxHeight: Int): Stream = when {
     upcoming -> Stream.Upcoming
     unavailable -> Stream.Unavailable(reason.orEmpty().ifBlank { "unavailable" })
+    // Live is checked **before** hls, and the server never sends both: a
+    // broadcast answers with the live tier alone, because offering hls beside it
+    // would have the player climb toward a playlist built from adaptive tracks
+    // the broadcast does not publish. The order is belt and braces, and it is
+    // the honest one — a broadcast is a broadcast whatever else is in the
+    // answer.
+    //
+    // No `?max=`. That parameter is read where the *ordinary* master playlist is
+    // written; the live master is built by a different route that has never seen
+    // it, and the charter's own measurement of a live ladder is 144p–720p — it
+    // is already under a phone's ceiling.
+    live != null && live.url.isNotBlank() -> Stream.Playable(
+        url = baseUrl.trimEnd('/') + live.url,
+        height = if (live.height > 0) live.height else maxHeight,
+        isLive = true,
+    )
     hls != null && hls.url.isNotBlank() -> Stream.Playable(
         url = baseUrl.trimEnd('/') + hls.url + capQuery(hls.url, maxHeight),
         height = if (hls.height > 0) hls.height else maxHeight,

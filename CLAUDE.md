@@ -653,3 +653,78 @@ is measured is the arithmetic (`levelsFor`, `clipAt`, with tests) and the fact
 that clips are fetched and started. Whether the voice sits right against the
 video is a question for a real phone, and it is the thing most likely to need a
 number changed.
+
+## Four bugs the phone found (2026-08-29)
+
+Narration was confirmed audible on a real device; these came back with it. All
+four were the same shape — something drawn that was not wired, or wired in a way
+that removed it.
+
+### A live broadcast said YouTube had refused it
+
+`live` was parsed in the DTO and **never read** in `toDomain`, so a broadcast
+fell through to `NothingPlayable`, which the watch screen turned into "YouTube
+will not hand this over / no_tier". That is a lie in the worst direction: it
+names an upstream refusal for a video upstream is serving perfectly well, and it
+offers no retry.
+
+Measured after the fix, on a real broadcast through this server: it plays,
+`state=PLAYING`.
+
+- **Live is checked before HLS.** The server never sends both — a broadcast
+  answers with the live tier alone, because offering `hls` beside it would have
+  the player climb toward a playlist built from adaptive tracks the broadcast
+  does not publish. The order is belt and braces and it is the honest one.
+- **No `?max=` on a live URL.** That parameter is read where the *ordinary*
+  master playlist is written; the live master comes from a different route that
+  has never seen it, and the charter's measurement of a live ladder is 144p–720p
+  — already under a phone's ceiling.
+- **A broadcast has nothing to resume to and nothing to report.** Its zero is an
+  hour ago and its end is now, so it opens at the live edge; and its "fraction
+  watched" is a position inside a sliding window, which would put a nonsense
+  figure in Continue watching.
+- **The bar is replaced by a red dot and the word LIVE.** The server charter
+  records what drawing one anyway looks like: `position / duration` on a stream
+  26 minutes into a live video is **155,700%** — solid red from the first second,
+  reading "25:57 / 0:00" beside it.
+
+### `indicator = {}` does not move an indicator, it removes one
+
+All three pull-to-refresh screens passed it, with a comment saying the default
+"would land under the floating top bar". The gesture worked and refreshed the
+list, and **nothing on screen ever said so** — which reads as a pull that did
+nothing, so people pull again. `TabRefreshIndicator` offsets it by the same
+arithmetic as `tabContentPadding`.
+
+### The overflow menu was a dead button
+
+Drawn on every card and wired to nothing, which is the one thing §5 of the server
+charter forbids outright. It now opens **Lưu · Không quan tâm**, both real
+endpoints; measured, "not interested" removes the row and the feed goes on.
+
+- **Null callbacks draw no button at all.** A card in a list of upstream results,
+  where neither action means anything, has no dot rather than a dead one — the
+  channel page and the up-next rail are that case.
+- **History gets Save and not "not interested".** It is a record of what was
+  watched, and telling the ranker off from a list of things somebody chose to
+  watch is the wrong signal in the wrong place.
+- **A removed row is not put back if the request fails.** It is gone from the
+  viewer's page either way, and returning it a second later is the more confusing
+  outcome; the next feed load is where the truth shows.
+
+### Fullscreen did not exist
+
+`ApplyFullscreen` is `expect/actual` — the case that rule is for, since there is
+no object with methods, only a call into the platform's window. Measured: the
+emulator reports `cur=2400x1080` and the screenshot comes back landscape with no
+system bars.
+
+- **It takes the state, not an event.** An event has nothing to undo, and a
+  screen disposed while fullscreen would leave the phone sideways with no bars.
+- **`LocalContext` is not the Activity** — Compose wraps it, sometimes several
+  times. Unwrapping and returning null on failure means a preview, which has no
+  Activity at all, draws instead of crashing.
+- **In fullscreen the back arrow leaves fullscreen, not the video.** Somebody who
+  filled the screen wants out of *that* first.
+- iOS is a no-op that says so: rotation there is a property of the view
+  controller and of the Info.plist, and neither can be run without Xcode.

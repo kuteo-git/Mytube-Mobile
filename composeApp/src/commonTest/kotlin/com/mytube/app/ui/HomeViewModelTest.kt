@@ -172,6 +172,7 @@ class HomeViewModelTest {
         ) = Unit
         override suspend fun setSaved(videoId: String, saved: Boolean) = Unit
         override suspend fun setSubscribed(channelId: String, subscribed: Boolean) = Unit
+        override suspend fun setNotInterested(videoId: String) = Unit
         override suspend fun channelPage(
             channelId: String,
             sortToken: String,

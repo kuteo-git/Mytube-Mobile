@@ -1,6 +1,7 @@
 package com.mytube.app.ui.shell
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,9 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -141,4 +145,32 @@ fun TabScaffold(
 @Composable
 private fun Centered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
+}
+
+/**
+ * The pull-to-refresh spinner, clear of the floating top bar.
+ *
+ * It exists because the three tabs passed `indicator = {}` — which does not move
+ * the indicator out of the way, it **removes it**. The gesture worked and
+ * refreshed the list, and nothing on screen ever said so: a pull that produces
+ * no spinner reads as a pull that did nothing, so people pull again.
+ *
+ * The offset is the same arithmetic as [tabContentPadding] and for the same
+ * reason: the bar is 56dp *plus* the status bar, and it floats over the list.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BoxScope.TabRefreshIndicator(state: PullToRefreshState, isRefreshing: Boolean) {
+    PullToRefreshDefaults.Indicator(
+        state = state,
+        isRefreshing = isRefreshing,
+        containerColor = Tokens.surface,
+        color = Tokens.text,
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(
+                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
+                    Size.topBar,
+            ),
+    )
 }

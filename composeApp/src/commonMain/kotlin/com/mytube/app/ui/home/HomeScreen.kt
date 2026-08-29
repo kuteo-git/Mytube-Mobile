@@ -27,6 +27,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import com.mytube.app.ui.shell.TabRefreshIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -80,6 +82,8 @@ fun HomeScreen(
         onSelectChip = viewModel::select,
         onRetry = viewModel::refresh,
         onLoadMore = viewModel::loadMore,
+        onSaveVideo = viewModel::toggleSaved,
+        onNotInterested = viewModel::notInterested,
     )
 }
 
@@ -98,6 +102,8 @@ fun HomeContent(
     onSelectChip: (Chip) -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
+    onSaveVideo: (Video) -> Unit = {},
+    onNotInterested: (Video) -> Unit = {},
 ) {
     val strings = LocalStrings.current
 
@@ -126,6 +132,7 @@ fun HomeContent(
             is HomeState.Ready -> Feed(
                 current, mediaBaseUrl, strings,
                 onSelectChip, onOpenVideo, onRetry, onLoadMore,
+                onSaveVideo, onNotInterested,
             )
         }
     }
@@ -141,6 +148,8 @@ private fun Feed(
     onOpenVideo: (String) -> Unit,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
+    onSaveVideo: (Video) -> Unit,
+    onNotInterested: (Video) -> Unit,
 ) {
     val listState = rememberLazyListState()
 
@@ -163,12 +172,18 @@ private fun Feed(
     // curve. That curve exists because a browser has no gesture of its own and
     // the constants were fitted to feel native; here the native one is available
     // and matching the rest of the phone is the whole point.
+    //
+    // The indicator has to clear the top bar, which floats over this list — and
+    // `indicator = {}` does not move it out of the way, it removes it. That is
+    // what this was, and the gesture then refreshed the feed with nothing on
+    // screen ever saying so, which reads as a pull that did nothing.
+    val refreshState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = state.refreshing,
         onRefresh = onRefresh,
+        state = refreshState,
         modifier = Modifier.fillMaxSize(),
-        // The indicator has to clear the top bar, which floats over this list.
-        indicator = {},
+        indicator = { TabRefreshIndicator(refreshState, state.refreshing) },
     ) {
         LazyColumn(
             state = listState,
@@ -212,7 +227,14 @@ private fun Feed(
             }
 
             items(state.videos, key = { it.id }) { video ->
-                VideoCard(video, mediaBaseUrl, strings, onClick = { onOpenVideo(video.id) })
+                VideoCard(
+                    video = video,
+                    mediaBaseUrl = mediaBaseUrl,
+                    strings = strings,
+                    onClick = { onOpenVideo(video.id) },
+                    onSave = { onSaveVideo(video) },
+                    onNotInterested = { onNotInterested(video) },
+                )
             }
 
             if (state.loadingMore) {

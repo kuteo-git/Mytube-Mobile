@@ -106,6 +106,9 @@ interface VideoRepository {
 
     suspend fun setSubscribed(channelId: String, subscribed: Boolean)
 
+    /** Take this one out of the feed, and tell the ranker why. */
+    suspend fun setNotInterested(videoId: String)
+
     /**
      * A channel and a page of its uploads.
      *

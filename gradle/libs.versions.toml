@@ -68,6 +68,10 @@ lifecycle = "2.10.0"
 coil = "3.4.0"
 
 [libraries]
+# Needed for WindowInsetsControllerCompat, which is how fullscreen hides the
+# system bars on every version back to the minimum — the platform API for it
+# changed twice and the compat wrapper is the only call that works on all three.
+androidx-core-ktx = { module = "androidx.core:core-ktx", version = "1.15.0" }
 ktor-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }

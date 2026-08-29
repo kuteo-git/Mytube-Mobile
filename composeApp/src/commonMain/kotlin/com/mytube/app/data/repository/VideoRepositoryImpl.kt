@@ -122,6 +122,9 @@ class VideoRepositoryImpl(
     override suspend fun setSaved(videoId: String, saved: Boolean) =
         gateway.setSaved(requireBaseUrl(), server.profileId(), videoId, saved)
 
+    override suspend fun setNotInterested(videoId: String) =
+        gateway.setNotInterested(requireBaseUrl(), server.profileId(), videoId)
+
     override suspend fun setSubscribed(channelId: String, subscribed: Boolean) =
         gateway.setSubscribed(requireBaseUrl(), server.profileId(), channelId, subscribed)
 

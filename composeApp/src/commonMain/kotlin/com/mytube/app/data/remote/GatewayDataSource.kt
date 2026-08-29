@@ -193,6 +193,20 @@ class GatewayDataSource(private val client: HttpClient) {
         }.orThrow()
     }
 
+    /**
+     * Tell the ranker this one was not wanted.
+     *
+     * A body-less POST: the server takes the video from the path and records a
+     * dislike signal against it. Distinct from an actual dislike — the charter
+     * keeps the two apart, since a dislike is a statement about the video and
+     * this is a statement about the *recommendation*.
+     */
+    suspend fun setNotInterested(baseUrl: String, userId: String, videoId: String) {
+        client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/not-interested") {
+            identify(userId)
+        }.orThrow()
+    }
+
     suspend fun setSubscribed(
         baseUrl: String,
         userId: String,

@@ -15,9 +15,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,7 +60,19 @@ fun VideoCard(
     strings: Strings,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * The overflow menu's two actions, or null for a card that has none.
+     *
+     * Null draws **no button at all**, which is the point: this icon was drawn
+     * unconditionally and wired to nothing, so pressing it did nothing — the one
+     * thing §5 of the server charter forbids outright. A card in a list of
+     * upstream results, where neither action means anything, now has no dot
+     * rather than a dead one.
+     */
+    onSave: (() -> Unit)? = null,
+    onNotInterested: (() -> Unit)? = null,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Box(
             Modifier
@@ -160,12 +178,49 @@ fun VideoCard(
             // The overflow button. On the web it appears on hover or focus;
             // a phone has neither, so it is always there — which is what the
             // web app itself shows on a phone.
-            Icon(
-                imageVector = MoreVertical,
-                contentDescription = strings.moreOptions,
-                tint = Tokens.text2,
-                modifier = Modifier.size(Size.iconButton).padding(Space.sm),
-            )
+            if (onSave != null || onNotInterested != null) {
+                Box {
+                    Icon(
+                        imageVector = MoreVertical,
+                        contentDescription = strings.moreOptions,
+                        tint = Tokens.text2,
+                        modifier = Modifier
+                            .size(Size.iconButton)
+                            .clip(CircleShape)
+                            .clickable { menuOpen = true }
+                            .padding(Space.sm),
+                    )
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                        containerColor = Tokens.surface,
+                    ) {
+                        if (onSave != null) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        // What the button *did*, once it is
+                                        // done — the same rule the watch
+                                        // screen's Save pill follows.
+                                        if (video.saved) strings.savedVideo
+                                        else strings.saveVideo,
+                                        color = Tokens.text,
+                                    )
+                                },
+                                onClick = { menuOpen = false; onSave() },
+                            )
+                        }
+                        if (onNotInterested != null) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(strings.notInterested, color = Tokens.text)
+                                },
+                                onClick = { menuOpen = false; onNotInterested() },
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // 40px between cards, from the grid's vertical gap. It is what makes a

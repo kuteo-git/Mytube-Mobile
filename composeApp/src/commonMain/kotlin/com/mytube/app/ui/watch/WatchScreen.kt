@@ -29,6 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -98,15 +101,29 @@ fun WatchContent(
     onOpenVideo: (String) -> Unit,
 ) {
     val strings = LocalStrings.current
+    var fullscreen by remember { mutableStateOf(false) }
+
+    // Told the platform as state, not as an event: a screen disposed while
+    // fullscreen must not leave the phone sideways with no system bars.
+    ApplyFullscreen(fullscreen)
 
     Column(Modifier.fillMaxSize().background(Tokens.bg)) {
-        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        // No status-bar gap in fullscreen — there is no status bar, and the gap
+        // would be a black band where the picture should be.
+        if (!fullscreen) Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
 
         // The picture keeps its 16:9 box in every state. A screen whose top half
         // changes height as it loads makes everything below it jump, and the
         // title is the thing a reader is looking at while they wait.
         Box(
-            Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black),
+            // Fullscreen drops the 16:9 box and takes the whole screen. The
+            // surface letterboxes inside it, so a portrait video keeps its
+            // shape rather than being stretched to the landscape frame.
+            if (fullscreen) {
+                Modifier.fillMaxSize().background(Color.Black)
+            } else {
+                Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Color.Black)
+            },
             contentAlignment = Alignment.Center,
         ) {
             when (state) {
@@ -115,10 +132,17 @@ fun WatchContent(
                     if (state.playback.isBuffering) CircularProgressIndicator()
                     PlayerControls(
                         playback = state.playback,
+                        isLive = state.isLive,
+                        fullscreen = fullscreen,
                         onPlayPause = onPlayPause,
                         onSeek = onSeek,
                         onSkip = onSkip,
-                        onBack = onBack,
+                        // In fullscreen the back arrow leaves fullscreen rather
+                        // than the video. Somebody who filled the screen wants
+                        // out of *that* first, and taking the video away instead
+                        // is the reading nobody intends.
+                        onBack = { if (fullscreen) fullscreen = false else onBack() },
+                        onToggleFullscreen = { fullscreen = !fullscreen },
                     )
                 }
 
@@ -131,6 +155,8 @@ fun WatchContent(
                 else -> BackOnly(onBack, strings.back)
             }
         }
+
+        if (fullscreen) return@Column
 
         when (state) {
             is WatchState.Loading -> Unit

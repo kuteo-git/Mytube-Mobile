@@ -47,6 +47,20 @@ class HistoryViewModel(private val videos: VideoRepository) : ViewModel() {
         load(showLoading = !keeping, refreshing = keeping)
     }
 
+    fun toggleSaved(video: Video) {
+        val current = _state.value as? HistoryState.Ready ?: return
+        val next = !video.saved
+        _state.value = current.copy(
+            videos = current.videos.map { if (it.id == video.id) it.copy(saved = next) else it },
+        )
+        viewModelScope.launch {
+            runCatching { videos.setSaved(video.id, next) }.onFailure {
+                val now = _state.value
+                if (now is HistoryState.Ready) _state.value = now.copy(videos = current.videos)
+            }
+        }
+    }
+
     private fun load(showLoading: Boolean, refreshing: Boolean = false) {
         val previous = _state.value as? HistoryState.Ready
         if (showLoading) _state.value = HistoryState.Loading

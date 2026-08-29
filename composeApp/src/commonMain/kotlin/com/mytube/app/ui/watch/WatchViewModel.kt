@@ -91,6 +91,8 @@ sealed interface WatchState {
          */
         val narrating: Boolean = false,
         val narration: Narration = Narration.Empty,
+        /** A broadcast on air: no length, no end, and nothing to resume. */
+        val isLive: Boolean = false,
     ) : WatchState
 }
 
@@ -321,6 +323,10 @@ class WatchViewModel(
 
     private fun report(force: Boolean) {
         val current = _state.value as? WatchState.Playing ?: return
+        // Nothing to report about a broadcast. Its "fraction watched" is a
+        // position inside a sliding window, which means something different
+        // every minute and would put a nonsense figure in Continue watching.
+        if (current.isLive) return
         val playback = current.playback
         if (playback.durationSeconds <= 0) return
         // Pressing close reports and then disposal reports again, a moment
@@ -350,8 +356,13 @@ class WatchViewModel(
                         // Where the viewer left off. The server already knows —
                         // it is in the video's own user state — so the position
                         // is not something this app has to remember separately.
-                        val resumeAt = video.durationSeconds * video.watchedFraction
-                        lastReported = if (video.isInProgress) resumeAt else 0.0
+                        // A broadcast has no position to resume to — its zero is
+                        // an hour ago and its end is now — so it always opens at
+                        // the live edge, which is where the playlist starts.
+                        val resumeAt =
+                            if (stream.isLive) 0.0
+                            else video.durationSeconds * video.watchedFraction
+                        lastReported = resumeAt
                         player.load(
                             PlayingMedia(
                                 url = stream.url,
@@ -360,10 +371,10 @@ class WatchViewModel(
                                 artworkUrl = mediaBaseUrl.trimEnd('/') +
                                     "/media/" + video.thumbnailPath,
                             ),
-                            if (video.isInProgress) resumeAt else 0.0,
+                            if (!stream.isLive && video.isInProgress) resumeAt else 0.0,
                         )
                         player.play()
-                        WatchState.Playing(video, PlaybackState())
+                        WatchState.Playing(video, PlaybackState(), isLive = stream.isLive)
                     }
                     is Stream.Upcoming -> WatchState.Upcoming(video)
                     is Stream.Unavailable -> WatchState.Unavailable(video, stream.reason)

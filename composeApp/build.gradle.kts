@@ -65,6 +65,7 @@ kotlin {
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.core.ktx)
             implementation(libs.ktor.okhttp)
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.exoplayer.hls)

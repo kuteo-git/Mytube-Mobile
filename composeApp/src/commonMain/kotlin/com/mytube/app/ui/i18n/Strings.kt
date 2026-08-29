@@ -93,6 +93,12 @@ interface Strings {
     fun narrationPreparing(done: Int, total: Int): String
     val narrationFailed: String
 
+    /** Over a broadcast, in place of the two timestamps. */
+    val live: String
+    val fullscreen: String
+    val exitFullscreen: String
+    val notInterested: String
+
     // --- navigation --------------------------------------------------------
     val navHome: String
     val navSubscriptions: String
@@ -210,6 +216,13 @@ object EnglishStrings : Strings {
     override fun narrationPreparing(done: Int, total: Int) = "Preparing $done/$total"
     override val narrationFailed = "The voice could not be prepared"
 
+    // Kept in English in both dictionaries: it is what every player and every
+    // television calls a broadcast, the same reasoning as the Live chip.
+    override val live = "LIVE"
+    override val fullscreen = "Fullscreen"
+    override val exitFullscreen = "Exit fullscreen"
+    override val notInterested = "Not interested"
+
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
     override val navHistory = "History"
@@ -302,6 +315,11 @@ object VietnameseStrings : Strings {
     override val narration = "Thuyết minh"
     override fun narrationPreparing(done: Int, total: Int) = "Đang chuẩn bị $done/$total"
     override val narrationFailed = "Không chuẩn bị được giọng đọc"
+
+    override val live = "LIVE"
+    override val fullscreen = "Toàn màn hình"
+    override val exitFullscreen = "Thoát toàn màn hình"
+    override val notInterested = "Không quan tâm"
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"

@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -37,6 +38,7 @@ import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.ScreenTitle
+import com.mytube.app.ui.shell.TabRefreshIndicator
 import com.mytube.app.ui.shell.TabScaffold
 import com.mytube.app.ui.shell.tabContentPadding
 import com.mytube.app.ui.theme.MytubeTheme
@@ -93,11 +95,13 @@ fun SubscriptionsContent(
     ) {
         val ready = state as? SubscriptionsState.Ready ?: return@TabScaffold
 
+        val refreshState = rememberPullToRefreshState()
         PullToRefreshBox(
             isRefreshing = ready.refreshing,
             onRefresh = onRefresh,
+            state = refreshState,
             modifier = Modifier.fillMaxSize(),
-            indicator = {},
+            indicator = { TabRefreshIndicator(refreshState, ready.refreshing) },
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

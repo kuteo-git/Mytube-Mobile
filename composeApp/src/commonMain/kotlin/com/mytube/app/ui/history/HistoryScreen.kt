@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -16,6 +17,7 @@ import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.ScreenTitle
+import com.mytube.app.ui.shell.TabRefreshIndicator
 import com.mytube.app.ui.shell.TabScaffold
 import com.mytube.app.ui.shell.tabContentPadding
 import com.mytube.app.ui.theme.MytubeTheme
@@ -45,6 +47,7 @@ fun HistoryScreen(
         onOpenSettings = onOpenSettings,
         onOpenVideo = onOpenVideo,
         onRefresh = viewModel::refresh,
+        onSaveVideo = viewModel::toggleSaved,
     )
 }
 
@@ -56,6 +59,7 @@ fun HistoryContent(
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onRefresh: () -> Unit,
+    onSaveVideo: (Video) -> Unit = {},
 ) {
     val strings = LocalStrings.current
 
@@ -72,12 +76,13 @@ fun HistoryContent(
     ) {
         val ready = state as? HistoryState.Ready ?: return@TabScaffold
 
+        val refreshState = rememberPullToRefreshState()
         PullToRefreshBox(
             isRefreshing = ready.refreshing,
             onRefresh = onRefresh,
+            state = refreshState,
             modifier = Modifier.fillMaxSize(),
-            // The default indicator would land under the floating top bar.
-            indicator = {},
+            indicator = { TabRefreshIndicator(refreshState, ready.refreshing) },
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -92,7 +97,17 @@ fun HistoryContent(
                 }
 
                 items(ready.videos, key = { it.id }) { video ->
-                    VideoCard(video, mediaBaseUrl, strings, onClick = { onOpenVideo(video.id) })
+                    VideoCard(
+                        video = video,
+                        mediaBaseUrl = mediaBaseUrl,
+                        strings = strings,
+                        onClick = { onOpenVideo(video.id) },
+                        onSave = { onSaveVideo(video) },
+                        // No "not interested" here. History is a record of what
+                        // was watched, and telling the ranker off from a list of
+                        // things somebody chose to watch is the wrong signal in
+                        // the wrong place.
+                    )
                 }
             }
         }

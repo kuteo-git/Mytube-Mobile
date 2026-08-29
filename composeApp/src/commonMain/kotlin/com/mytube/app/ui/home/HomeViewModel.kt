@@ -93,6 +93,42 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         load(chip, showLoading = true)
     }
 
+    /**
+     * Keep this video's file against the eviction sweep, or stop keeping it.
+     *
+     * Drawn first and put back if refused, the same rule the watch screen's
+     * buttons follow — this is a statement about the viewer's own shelf, and a
+     * control that waits for a round trip feels broken.
+     */
+    fun toggleSaved(video: Video) {
+        val current = _state.value as? HomeState.Ready ?: return
+        val next = !video.saved
+        _state.value = current.copy(
+            videos = current.videos.map { if (it.id == video.id) it.copy(saved = next) else it },
+        )
+        viewModelScope.launch {
+            runCatching { videos.setSaved(video.id, next) }.onFailure {
+                val now = _state.value
+                if (now is HomeState.Ready) _state.value = now.copy(videos = current.videos)
+            }
+        }
+    }
+
+    /**
+     * Take it off the page, and tell the ranker.
+     *
+     * Removed from the list rather than greyed out. The action means "not this
+     * one", and leaving it on screen makes somebody press it twice to check it
+     * worked. It is not put back if the request fails: the row is gone from the
+     * viewer's page either way, and returning it a second later is the more
+     * confusing outcome — the next feed load is where the truth shows.
+     */
+    fun notInterested(video: Video) {
+        val current = _state.value as? HomeState.Ready ?: return
+        _state.value = current.copy(videos = current.videos.filterNot { it.id == video.id })
+        viewModelScope.launch { runCatching { videos.setNotInterested(video.id) } }
+    }
+
     fun loadMore() {
         val current = _state.value
         if (current !is HomeState.Ready || current.loadingMore || current.refreshing) return

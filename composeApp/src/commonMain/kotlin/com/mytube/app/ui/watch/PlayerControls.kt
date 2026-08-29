@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.domain.repository.PlaybackState
@@ -75,10 +76,22 @@ const val SKIP_SECONDS = 10.0
 @Composable
 fun PlayerControls(
     playback: PlaybackState,
+    /**
+     * A broadcast on air.
+     *
+     * It has no length, so there is nothing to divide by and nothing honest to
+     * draw in a bar. The charter records what happens when one is drawn anyway:
+     * `position / duration` on a stream 26 minutes into a live video is
+     * **155,700%** — a bar painted solid red from the first second, reading
+     * "25:57 / 0:00" beside it.
+     */
+    isLive: Boolean,
+    fullscreen: Boolean,
     onPlayPause: () -> Unit,
     onSeek: (Double) -> Unit,
     onSkip: (Double) -> Unit,
     onBack: () -> Unit,
+    onToggleFullscreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -150,27 +163,63 @@ fun PlayerControls(
                         .fillMaxWidth()
                         .padding(horizontal = Space.md, vertical = Space.sm),
                 ) {
-                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                        Text(
-                            formatDuration(playback.positionSeconds.toInt()),
-                            color = Color.White,
-                            fontSize = 12.sp,
-                        )
-                        Text(
-                            formatDuration(playback.durationSeconds.toInt()),
-                            color = Color.White,
-                            fontSize = 12.sp,
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        Arrangement.SpaceBetween,
+                        Alignment.CenterVertically,
+                    ) {
+                        if (isLive) {
+                            // A red dot and the word, in place of two numbers
+                            // that would both be wrong. What a viewer wants to
+                            // know here is whether this is happening now.
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier.size(8.dp).clip(CircleShape)
+                                        .background(Tokens.brand),
+                                )
+                                Spacer(Modifier.height(Space.xs))
+                                Text(
+                                    text = "  " + strings.live,
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        } else {
+                            Text(
+                                formatDuration(playback.positionSeconds.toInt()),
+                                color = Color.White,
+                                fontSize = 12.sp,
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (!isLive) {
+                                Text(
+                                    formatDuration(playback.durationSeconds.toInt()),
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            ControlButton(
+                                icon = if (fullscreen) ShrinkIcon else ExpandIcon,
+                                label = if (fullscreen) strings.exitFullscreen
+                                else strings.fullscreen,
+                                onClick = { onToggleFullscreen(); lastTouch++ },
+                                size = 22.dp,
+                            )
+                        }
+                    }
+                    if (!isLive) {
+                        Spacer(Modifier.height(Space.xs))
+                        SeekBar(
+                            progress = playback.progress,
+                            enabled = playback.durationSeconds > 0,
+                            onSeekFraction = {
+                                onSeek(it * playback.durationSeconds)
+                                lastTouch++
+                            },
                         )
                     }
-                    Spacer(Modifier.height(Space.xs))
-                    SeekBar(
-                        progress = playback.progress,
-                        enabled = playback.durationSeconds > 0,
-                        onSeekFraction = {
-                            onSeek(it * playback.durationSeconds)
-                            lastTouch++
-                        },
-                    )
                 }
             }
         }

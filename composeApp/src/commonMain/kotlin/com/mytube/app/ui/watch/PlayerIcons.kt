@@ -143,6 +143,26 @@ internal val CloseIcon: ImageVector by lazy {
     }
 }
 
+/** Four corners pushing outward: fill the screen. */
+internal val ExpandIcon: ImageVector by lazy {
+    stroke("Expand") {
+        moveTo(9f, 4f); lineTo(4f, 4f); lineTo(4f, 9f)
+        moveTo(15f, 4f); lineTo(20f, 4f); lineTo(20f, 9f)
+        moveTo(20f, 15f); lineTo(20f, 20f); lineTo(15f, 20f)
+        moveTo(9f, 20f); lineTo(4f, 20f); lineTo(4f, 15f)
+    }
+}
+
+/** The same corners pulled in: give the screen back. */
+internal val ShrinkIcon: ImageVector by lazy {
+    stroke("Shrink") {
+        moveTo(4f, 9f); lineTo(9f, 9f); lineTo(9f, 4f)
+        moveTo(20f, 9f); lineTo(15f, 9f); lineTo(15f, 4f)
+        moveTo(15f, 20f); lineTo(15f, 15f); lineTo(20f, 15f)
+        moveTo(4f, 15f); lineTo(9f, 15f); lineTo(9f, 20f)
+    }
+}
+
 /** A speaker with sound coming out of it: the Vietnamese voice. */
 internal val SpeakerIcon: ImageVector by lazy {
     stroke("Speaker") {
