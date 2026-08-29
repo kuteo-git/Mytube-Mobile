@@ -1,5 +1,6 @@
 package com.mytube.app.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +32,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -152,7 +155,7 @@ private fun Feed(
 @Composable
 private fun VideoCard(video: Video, mediaBaseUrl: String, strings: Strings) {
     Column(modifier = Modifier.fillMaxWidth().clickable { }.padding(bottom = 16.dp)) {
-        Box {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Tokens.surface)) {
             AsyncImage(
                 model = "$mediaBaseUrl/media/${video.thumbnailPath}",
                 contentDescription = video.title,
@@ -167,7 +170,12 @@ private fun VideoCard(video: Video, mediaBaseUrl: String, strings: Strings) {
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(8.dp)
-                        .clip(MaterialTheme.shapes.extraSmall)
+                        .clip(RoundedCornerShape(4.dp))
+                        // The background is the whole point of the badge, and it
+                        // was missing: white text alone is unreadable over a
+                        // bright thumbnail, which is most of them. Caught by
+                        // rendering the screen rather than by reading the code.
+                        .background(Color.Black.copy(alpha = 0.8f))
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                 )
             }
@@ -178,7 +186,9 @@ private fun VideoCard(video: Video, mediaBaseUrl: String, strings: Strings) {
                 model = "$mediaBaseUrl/media/${video.channel.avatarPath}",
                 contentDescription = video.channel.name,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(36.dp).clip(CircleShape),
+                // A circle of surface colour while it loads, so the title does
+                // not shift sideways when the avatar arrives.
+                modifier = Modifier.size(36.dp).clip(CircleShape).background(Tokens.surface),
             )
             Spacer(Modifier.size(12.dp))
             Column {
