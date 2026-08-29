@@ -285,3 +285,36 @@ Everything on the external volume; `source env.sh` before working.
 - **Never run on iOS.** It compiles for the device and the simulator; Xcode is
   not installed, so nothing has been launched there. Do not describe the iOS half
   as working.
+
+## The watch screen is a layer, and dragging it down reveals the tab (2026-08-29)
+
+The server charter says it plainly — *"On phones, the watch screen is a layer
+over the previous tab; pulling it down reveals the tab underneath"* — and the
+brief for this app named the gesture directly. Measured on the emulator: a drag
+of a fifth of the screen springs back with the video still running at 0:19, and
+a drag past the threshold lands on Home with that video at the head of Continue
+watching, its red bar drawn.
+
+- **Home is composed underneath, not rebuilt afterwards.** A drag reveals what is
+  behind it. Restoring the tab only once the layer is gone means the first half
+  of the gesture uncovers an empty background and the feed snaps in at the end,
+  which reads as a reload rather than a video moving out of the way. So Home and
+  Watch are one branch of the route, stacked in a Box.
+- **The threshold is a third of the screen, and distance only — no velocity.** A
+  flick is the same intent as a slow drag past the line, and reading velocity
+  means a quick short flick meant as a scroll can dismiss. That is the failure
+  people describe as an app closing on its own, and the cost of getting it wrong
+  is throwing away the video somebody was watching.
+- **A fraction, not a number of pixels.** A thumb's idea of "most of the way
+  down" scales with the phone; 240px is decisive on a small screen and a nudge on
+  a tablet.
+- **Zero height never dismisses.** `onSizeChanged` has not fired on the first
+  frame, and every comparison against a fraction of zero is true — without the
+  guard the first pixel of the first drag closes the screen.
+- **The drag is read above the content**, which is right while the watch screen
+  does not scroll and must be revisited the moment it does: a page with comments
+  needs the drag to start only at the top, or scrolling up closes the video.
+- **What is still missing is the miniplayer.** Dismissing keeps the sound going,
+  deliberately — `release()` lets go of the connection and does not stop the
+  service — but with no miniplayer the only way back to the video, or to stop it,
+  is the notification. The web app has one; this does not yet.
