@@ -1,5 +1,6 @@
 package com.mytube.app.data.remote
 
+import com.mytube.app.data.remote.dto.ChannelsDto
 import com.mytube.app.data.remote.dto.FeedDto
 import com.mytube.app.data.remote.dto.StreamDto
 import com.mytube.app.data.remote.dto.TopicsDto
@@ -8,6 +9,10 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
@@ -71,6 +76,18 @@ class GatewayDataSource(private val client: HttpClient) {
         }.orThrow().body()
 
     /**
+     * The channels this member follows.
+     *
+     * No page token, and the gateway offers none: the server charter reports one
+     * household member following 152 channels and another 8, which is a list to
+     * be read whole rather than paged.
+     */
+    suspend fun subscriptions(baseUrl: String, userId: String): ChannelsDto =
+        client.get("${baseUrl.trimEnd('/')}/api/subscriptions") {
+            identify(userId)
+        }.orThrow().body()
+
+    /**
      * How this video can be played right now.
      *
      * No `prefetch=1`: that flag means the viewer only hovered a card, and it
@@ -83,6 +100,70 @@ class GatewayDataSource(private val client: HttpClient) {
         client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/stream") {
             identify(userId)
         }.orThrow().body()
+
+    /**
+     * What to play after this one.
+     *
+     * A separate question from the feed, and the server answers it differently:
+     * per the charter, up-next damps taste to 0.35 so that *relatedness leads and
+     * taste only breaks ties*. Asking the feed for a rail beside a playing video
+     * would give a page of what somebody likes rather than of what follows.
+     */
+    suspend fun upNext(baseUrl: String, userId: String, videoId: String): FeedDto =
+        client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/up-next") {
+            identify(userId)
+        }.orThrow().body()
+
+    /**
+     * Where the viewer has got to.
+     *
+     * Fire and forget from the caller's point of view — nothing is returned, and
+     * a failure must not interrupt playback. What it feeds is Continue watching
+     * and the ranker's WATCH signal, both of which tolerate a missing report far
+     * better than a viewer tolerates a stutter.
+     */
+    suspend fun recordProgress(
+        baseUrl: String,
+        userId: String,
+        videoId: String,
+        positionSeconds: Double,
+        watchedFraction: Double,
+    ) {
+        client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/progress") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(ProgressBody(positionSeconds, watchedFraction))
+        }.orThrow()
+    }
+
+    suspend fun setReaction(baseUrl: String, userId: String, videoId: String, reaction: String) {
+        client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/reaction") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(ReactionBody(reaction))
+        }.orThrow()
+    }
+
+    suspend fun setSaved(baseUrl: String, userId: String, videoId: String, saved: Boolean) {
+        client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/pinned") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(PinnedBody(saved))
+        }.orThrow()
+    }
+
+    suspend fun setSubscribed(
+        baseUrl: String,
+        userId: String,
+        channelId: String,
+        subscribed: Boolean,
+    ) {
+        client.post("${baseUrl.trimEnd('/')}/api/channels/$channelId/subscription") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(SubscribedBody(subscribed))
+        }.orThrow()
+    }
 
     /**
      * Whether something that behaves like the gateway answers here.
@@ -120,6 +201,25 @@ private fun HttpResponse.orThrow(): HttpResponse {
     if (!status.isSuccess()) throw GatewayException(status.value, call.request.url.toString())
     return this
 }
+
+/**
+ * The bodies this app sends.
+ *
+ * Here rather than in `dto/` with the responses, because they are the shape of
+ * *requests* and nothing maps to or from them: they are built from arguments and
+ * written once.
+ */
+@kotlinx.serialization.Serializable
+private data class ProgressBody(val positionSeconds: Double, val watchedFraction: Double)
+
+@kotlinx.serialization.Serializable
+private data class ReactionBody(val reaction: String)
+
+@kotlinx.serialization.Serializable
+private data class PinnedBody(val pinned: Boolean)
+
+@kotlinx.serialization.Serializable
+private data class SubscribedBody(val subscribed: Boolean)
 
 class GatewayException(val status: Int, val url: String) :
     Exception("gateway answered $status for $url")

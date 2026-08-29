@@ -3,6 +3,7 @@ package com.mytube.app.ui.watch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mytube.app.data.repository.ServerNotConfigured
+import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Stream
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.PlaybackState
@@ -29,6 +30,16 @@ import kotlinx.coroutines.launch
  */
 const val PHONE_MAX_HEIGHT = 720
 
+/**
+ * How often the viewer's position is sent to the server, in seconds of playback.
+ *
+ * Ten. What it feeds is Continue watching and the ranker's WATCH signal, and the
+ * cost of being ten seconds stale in either is nothing a person would notice;
+ * the cost of reporting on every tick is four writes a second per viewer for a
+ * number that has moved by a quarter of a second.
+ */
+private const val PROGRESS_EVERY_SECONDS = 10.0
+
 sealed interface WatchState {
     data object Loading : WatchState
     data class Failed(val message: String) : WatchState
@@ -49,6 +60,14 @@ sealed interface WatchState {
     data class Playing(
         val video: Video,
         val playback: PlaybackState,
+        /**
+         * What to play next.
+         *
+         * Empty until it arrives, and its absence never delays the picture: it
+         * is fetched beside the stream rather than before it, because a rail is
+         * something the viewer reads after pressing play.
+         */
+        val upNext: List<Video> = emptyList(),
     ) : WatchState
 }
 
@@ -80,6 +99,9 @@ class WatchViewModel(
     private val _state = MutableStateFlow<WatchState>(WatchState.Loading)
     val state: StateFlow<WatchState> = _state.asStateFlow()
 
+    /** The position last sent to the server, so the next report can be spaced. */
+    private var lastReported = 0.0
+
     init {
         viewModelScope.launch {
             // The player's own state is folded into this screen's, so a
@@ -90,6 +112,7 @@ class WatchViewModel(
                     if (current is WatchState.Playing) current.copy(playback = playback)
                     else current
                 }
+                reportIfDue(playback)
             }
         }
         load()
@@ -104,8 +127,108 @@ class WatchViewModel(
 
     fun seekTo(seconds: Double) = player.seekTo(seconds)
 
+    /**
+     * Move by a number of seconds, clamped to the video.
+     *
+     * The clamp is not decoration: seeking past the end on a media playlist
+     * leaves some players buffering toward a position that will never arrive,
+     * which looks exactly like a stream that has died.
+     */
+    fun skip(bySeconds: Double) {
+        val playback = (_state.value as? WatchState.Playing)?.playback ?: return
+        val target = (playback.positionSeconds + bySeconds)
+            .coerceIn(0.0, maxOf(playback.durationSeconds - 1, 0.0))
+        player.seekTo(target)
+    }
+
+    /**
+     * Like, dislike, or take it back.
+     *
+     * Pressing the lit one clears it, which is what the control means: a like is
+     * a statement somebody is allowed to withdraw, and a button that can only be
+     * switched on is a button that punishes a mis-tap for ever.
+     */
+    fun react(to: Reaction) {
+        val current = _state.value as? WatchState.Playing ?: return
+        val next = if (current.video.reaction == to) Reaction.None else to
+        // Drawn first, sent second. This is a statement about the viewer's own
+        // opinion, and a control that waits for a round trip before lighting up
+        // feels broken on the one screen where the wifi is already busy.
+        _state.value = current.copy(video = current.video.copy(reaction = next))
+        viewModelScope.launch {
+            runCatching { videos.setReaction(current.video.id, next) }
+                .onFailure { revert(current) }
+        }
+    }
+
+    fun toggleSaved() {
+        val current = _state.value as? WatchState.Playing ?: return
+        val next = !current.video.saved
+        _state.value = current.copy(video = current.video.copy(saved = next))
+        viewModelScope.launch {
+            runCatching { videos.setSaved(current.video.id, next) }
+                .onFailure { revert(current) }
+        }
+    }
+
+    fun toggleSubscribed() {
+        val current = _state.value as? WatchState.Playing ?: return
+        val channel = current.video.channel
+        val next = !channel.subscribed
+        _state.value = current.copy(
+            video = current.video.copy(channel = channel.copy(subscribed = next)),
+        )
+        viewModelScope.launch {
+            runCatching { videos.setSubscribed(channel.id, next) }
+                .onFailure { revert(current) }
+        }
+    }
+
     override fun onCleared() {
+        // The last position, before the connection goes. Without this, closing
+        // the screen loses up to ten seconds of progress — and closing it is
+        // precisely when somebody stops watching, so it is the report that
+        // matters most.
+        report(force = true)
         player.release()
+    }
+
+    /**
+     * Put back what the server would not accept.
+     *
+     * The optimistic draw above is only honest if a refusal undoes it. Silently
+     * keeping a lit button over a like the server rejected is worse than never
+     * having lit it: the next screen that reads the truth appears to have lost
+     * it.
+     */
+    private fun revert(previous: WatchState.Playing) {
+        val now = _state.value
+        if (now is WatchState.Playing && now.video.id == previous.video.id) {
+            _state.value = now.copy(video = previous.video)
+        }
+    }
+
+    private fun reportIfDue(playback: PlaybackState) {
+        if (!playback.isPlaying) return
+        if (playback.positionSeconds - lastReported < PROGRESS_EVERY_SECONDS) return
+        report(force = false)
+    }
+
+    private fun report(force: Boolean) {
+        val current = _state.value as? WatchState.Playing ?: return
+        val playback = current.playback
+        if (playback.durationSeconds <= 0) return
+        if (!force && playback.positionSeconds - lastReported < PROGRESS_EVERY_SECONDS) return
+        lastReported = playback.positionSeconds
+
+        val position = playback.positionSeconds
+        val fraction = playback.progress.toDouble()
+        // Deliberately not awaited and deliberately swallowing failures: a
+        // report that does not arrive costs a stale Continue watching entry,
+        // and there is nothing a viewer could do about it if told.
+        viewModelScope.launch {
+            runCatching { videos.recordProgress(current.video.id, position, fraction) }
+        }
     }
 
     private fun load() {
@@ -119,6 +242,7 @@ class WatchViewModel(
                         // it is in the video's own user state — so the position
                         // is not something this app has to remember separately.
                         val resumeAt = video.durationSeconds * video.watchedFraction
+                        lastReported = if (video.isInProgress) resumeAt else 0.0
                         player.load(
                             PlayingMedia(
                                 url = stream.url,
@@ -140,6 +264,25 @@ class WatchViewModel(
                     is Stream.NothingPlayable -> WatchState.Unavailable(video, "no_tier")
                 }
             }.getOrElse(::asState)
+
+            loadUpNext()
+        }
+    }
+
+    /**
+     * The rail, fetched after the picture rather than beside it.
+     *
+     * It is a second round trip that nothing on screen waits for, and running it
+     * concurrently with the stream request would put it in front of the one call
+     * a viewer is actually waiting on. A rail that fails simply stays empty.
+     */
+    private fun loadUpNext() {
+        if (_state.value !is WatchState.Playing) return
+        viewModelScope.launch {
+            val rail = runCatching { videos.upNext(videoId) }.getOrDefault(emptyList())
+            _state.update { current ->
+                if (current is WatchState.Playing) current.copy(upNext = rail) else current
+            }
         }
     }
 

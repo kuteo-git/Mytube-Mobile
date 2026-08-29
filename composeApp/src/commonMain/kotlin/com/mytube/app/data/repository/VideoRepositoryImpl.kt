@@ -2,7 +2,9 @@ package com.mytube.app.data.repository
 
 import com.mytube.app.data.remote.GatewayDataSource
 import com.mytube.app.data.remote.dto.toDomain
+import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Topic
+import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.repository.ServerRepository
@@ -61,9 +63,46 @@ class VideoRepositoryImpl(
      * deeper read would be pages fetched to be thrown away. 24 is one page and
      * leaves room for the finished videos that get filtered out of it.
      */
-    override suspend fun history(): List<Video> =
-        gateway.history(requireBaseUrl(), server.profileId(), limit = 24)
+    override suspend fun history(limit: Int): List<Video> =
+        gateway.history(requireBaseUrl(), server.profileId(), limit = limit)
             .videos.map { it.toDomain() }
+
+    override suspend fun subscriptions(): List<Channel> =
+        gateway.subscriptions(requireBaseUrl(), server.profileId())
+            .channels.map { it.toDomain() }
+
+    override suspend fun upNext(videoId: String): List<Video> =
+        gateway.upNext(requireBaseUrl(), server.profileId(), videoId)
+            .videos.map { it.toDomain() }
+
+    override suspend fun recordProgress(
+        videoId: String,
+        positionSeconds: Double,
+        watchedFraction: Double,
+    ) = gateway.recordProgress(
+        requireBaseUrl(), server.profileId(), videoId, positionSeconds, watchedFraction,
+    )
+
+    override suspend fun setReaction(videoId: String, reaction: Reaction) =
+        gateway.setReaction(
+            requireBaseUrl(),
+            server.profileId(),
+            videoId,
+            // The server's own three words. Mapped here rather than by naming
+            // the enum constants after the wire, so a server rename touches this
+            // line and nothing else.
+            when (reaction) {
+                Reaction.Like -> "LIKE"
+                Reaction.Dislike -> "DISLIKE"
+                Reaction.None -> "NONE"
+            },
+        )
+
+    override suspend fun setSaved(videoId: String, saved: Boolean) =
+        gateway.setSaved(requireBaseUrl(), server.profileId(), videoId, saved)
+
+    override suspend fun setSubscribed(channelId: String, subscribed: Boolean) =
+        gateway.setSubscribed(requireBaseUrl(), server.profileId(), channelId, subscribed)
 
     /**
      * Refusing early, with a distinct type.

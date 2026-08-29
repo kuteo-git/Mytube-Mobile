@@ -1,6 +1,7 @@
 package com.mytube.app.data.remote.dto
 
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 import kotlinx.serialization.SerialName
@@ -52,11 +53,26 @@ data class ChannelDto(
     val handle: String = "",
     val avatarPath: String = "",
     val subscribed: Boolean = false,
+    val subscriberCount: Long = 0,
+)
+
+/**
+ * The answer to `GET /api/subscriptions`.
+ *
+ * Its own wrapper because the gateway answers `{"channels": [...]}` rather than
+ * a bare array — the same shape as the feed, and for the same reason: a top-level
+ * array leaves nowhere to add a page token later without breaking every reader.
+ */
+@Serializable
+data class ChannelsDto(
+    val channels: List<ChannelDto> = emptyList(),
 )
 
 @Serializable
 data class UserStateDto(
     @SerialName("watchProgress") val watchProgress: Double = 0.0,
+    /** "LIKE", "DISLIKE", or absent. */
+    val reaction: String = "",
 )
 
 /**
@@ -91,6 +107,14 @@ fun VideoDto.toDomain(): Video = Video(
     thumbnailPath = thumbnailPath,
     saved = pinned,
     watchedFraction = userState?.watchProgress ?: 0.0,
+    reaction = when (userState?.reaction) {
+        "LIKE" -> Reaction.Like
+        "DISLIKE" -> Reaction.Dislike
+        // Anything else — absent, empty, a word a later server release invents
+        // — is no reaction. A value this app does not recognise must not be
+        // drawn as a lit button.
+        else -> Reaction.None
+    },
 )
 
 fun ChannelDto.toDomain(): Channel = Channel(
@@ -99,4 +123,5 @@ fun ChannelDto.toDomain(): Channel = Channel(
     handle = handle,
     avatarPath = avatarPath,
     subscribed = subscribed,
+    subscriberCount = subscriberCount,
 )

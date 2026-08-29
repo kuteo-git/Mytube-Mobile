@@ -1,5 +1,7 @@
 package com.mytube.app.domain.repository
 
+import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 
@@ -73,7 +75,36 @@ interface VideoRepository {
      * because the two lists answer different questions and editing one to keep
      * the other honest is how a card stays on screen after being marked watched.
      */
-    suspend fun history(): List<Video>
+    suspend fun history(limit: Int = 24): List<Video>
+
+    /**
+     * The channels this member follows, by name.
+     *
+     * On the port that answers about videos rather than one of its own, because
+     * a repository is a boundary and not a table: splitting it would mean a
+     * second class with the same address, the same header rule and the same
+     * error handling, differing only in which two endpoints it reaches.
+     */
+    suspend fun subscriptions(): List<Channel>
+
+    /** What to play after this one. */
+    suspend fun upNext(videoId: String): List<Video>
+
+    /**
+     * Where the viewer has got to.
+     *
+     * Returns nothing and must not be waited on: what it feeds — Continue
+     * watching, and the ranker's WATCH signal — tolerates a missed report far
+     * better than a viewer tolerates a stutter.
+     */
+    suspend fun recordProgress(videoId: String, positionSeconds: Double, watchedFraction: Double)
+
+    suspend fun setReaction(videoId: String, reaction: Reaction)
+
+    /** Keep this file against the eviction sweep, or stop keeping it. */
+    suspend fun setSaved(videoId: String, saved: Boolean)
+
+    suspend fun setSubscribed(channelId: String, subscribed: Boolean)
 }
 
 data class FeedPage(

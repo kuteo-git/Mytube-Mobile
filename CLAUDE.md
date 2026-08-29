@@ -318,3 +318,76 @@ watching, its red bar drawn.
   deliberately — `release()` lets go of the connection and does not stop the
   service — but with no miniplayer the only way back to the video, or to stop it,
   is the notification. The web app has one; this does not yet.
+
+## The watch screen grew controls, opinions and a rail (2026-08-29)
+
+Measured on the emulator against the running library, one video (`gEWF0LL4IPA`,
+2:20):
+
+| | |
+|---|---|
+| tap the bar at 76% | **109.2s of 140s** |
+| drag to 37% | **50.9s** |
+| skip buttons | ±10s |
+| Save | `pinned: true` on the server |
+| Like, pressed twice | `LIKE` then `NONE` |
+| progress, unprompted | `watchProgress 0.0749`, `watchPositionSeconds 10` |
+
+- **A readout is not a control, and that was the whole gap.** The bar under the
+  picture displayed a position and could not be moved, so the only way to go
+  anywhere in a video was to reopen it. It is now over the picture and takes both
+  a drag and a tap — **two `pointerInput` modifiers, not one branch**: the
+  gestures are recognised separately, and deriving a tap from a drag that never
+  passed the slop threshold is how the tap silently stops working.
+- **A tap on the picture shows the controls; it does not play or pause.** The
+  server charter draws that line for touch, and the reason is that a finger has
+  no hover — a phone where tapping the picture pauses is a phone where checking
+  how far through you are stops the video. Play/pause is a button.
+- **A paused video keeps its controls.** Hiding them leaves a still frame with no
+  sign the app is running, and the thing somebody paused for is usually the
+  button to start again.
+- **The lit state had to be a change of shape.** `surface` and `surfaceHover` are
+  `0x212121` and `0x272727` — six units apart, which the design system uses for a
+  pointer hovering and which is invisible as a state. Measured: pressing Like set
+  the reaction on the server and *looked like nothing had happened*. The thumb
+  and the bookmark are now filled when on.
+- **The thumb is centred, and it was drawn in the wrong place for a release.**
+  The parent `Box` centres its children, so a box occupying the filled fraction
+  was centred in the bar rather than starting at its left edge: the thumb sat at
+  55% over a video twelve per cent through, with the red fill beside it
+  disagreeing. `align(CenterStart)` is load-bearing.
+- **Every action is drawn first and sent second, and put back if refused.** These
+  are statements about the viewer's own opinion; a control that waits for a round
+  trip before lighting up feels broken. Keeping a lit button over a like the
+  server rejected would be worse than never lighting it, so a failure reverts.
+- **Progress is reported every ten seconds of playback, and once more on the way
+  out.** Ten because what it feeds — Continue watching, and the ranker's WATCH
+  signal — cannot tell; the report in `onCleared` is the one that matters most,
+  because closing the screen is exactly when somebody stops watching.
+- **Up next is fetched after the stream, not beside it.** It is a second round
+  trip nothing on screen waits for, and running it concurrently would put it in
+  front of the one call a viewer is actually waiting on. A rail that fails stays
+  empty.
+- **The rail is inside the same `LazyColumn` as the details.** Twenty entries is
+  twenty thumbnails, and a `Column` would fetch every one before the viewer had
+  scrolled to any.
+- **Share is not drawn.** It needs a platform share sheet on each side, and §5
+  of the server charter forbids a button that does nothing outright.
+
+### `./gradlew check` cannot be green on this machine
+
+`check` includes `linkDebugTestIosSimulatorArm64`, and linking a Kotlin/Native
+binary needs **full Xcode** — this machine has only the Command Line Tools, so it
+fails with `MissingXcodeException` on `xcrun xcodebuild -version`. This is not a
+fault in the code and it is not fixed by a Gradle flag.
+
+The verification command until Xcode is installed is therefore:
+
+```sh
+./gradlew jvmTest :composeApp:compileDebugKotlinAndroid :composeApp:compileKotlinIosSimulatorArm64
+```
+
+which covers the unit tests, both guards, the Android build and the iOS
+*compile*. What it does not cover is iOS linking and `iosSimulatorArm64Test` —
+recorded as uncovered rather than quietly dropped, because iOS is where this app
+differs most.

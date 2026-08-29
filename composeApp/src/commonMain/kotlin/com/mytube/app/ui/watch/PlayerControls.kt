@@ -1,0 +1,274 @@
+package com.mytube.app.ui.watch
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.mytube.app.domain.repository.PlaybackState
+import com.mytube.app.ui.home.Space
+import com.mytube.app.ui.home.formatDuration
+import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.theme.Tokens
+
+/**
+ * How long the controls stay up after a touch, in milliseconds.
+ *
+ * Five seconds, from the server charter: *"Controls hide after 3s (mouse) / 5s
+ * (finger)."* A finger gets longer because there is no pointer to re-summon them
+ * with — on a mouse the controls come back the moment it moves, and on a phone
+ * they come back only when somebody taps, which costs a tap.
+ */
+private const val HIDE_AFTER_MILLIS = 5_000L
+
+/** How far the skip buttons jump. The number every player on the device uses. */
+const val SKIP_SECONDS = 10.0
+
+/**
+ * The controls over the picture.
+ *
+ * ## Why a tap shows them rather than playing or pausing
+ *
+ * The charter draws the line: *"Mouse click = play/pause; touch tap = show/hide
+ * controls."* A finger has no hover, so the tap has to do the job hovering does
+ * on a desktop — and a phone where tapping the picture pauses is a phone where
+ * every attempt to see how far through you are stops the video.
+ *
+ * ## Why the controls are drawn over the video rather than under it
+ *
+ * They were under it, as a static bar, and that is a different thing: a readout.
+ * A readout cannot be dragged, so there was no way to move within a video except
+ * to restart it. The bar here is the same shape but it takes a finger.
+ */
+@Composable
+fun PlayerControls(
+    playback: PlaybackState,
+    onPlayPause: () -> Unit,
+    onSeek: (Double) -> Unit,
+    onSkip: (Double) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val strings = LocalStrings.current
+    var visible by remember { mutableStateOf(true) }
+    // Bumped on every interaction. The timer keys on it, so touching anything
+    // restarts the countdown rather than letting the controls vanish under a
+    // finger that is still using them.
+    var lastTouch by remember { mutableStateOf(0) }
+
+    LaunchedEffect(visible, lastTouch, playback.isPlaying) {
+        // A paused video keeps its controls. Hiding them leaves a still frame
+        // with no sign the app is even running, and the one thing somebody
+        // paused for is usually the button to start again.
+        if (!visible || !playback.isPlaying) return@LaunchedEffect
+        kotlinx.coroutines.delay(HIDE_AFTER_MILLIS)
+        visible = false
+    }
+
+    Box(
+        modifier
+            .fillMaxSize()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+            ) {
+                visible = !visible
+                lastTouch++
+            },
+    ) {
+        AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
+            // A scrim, not a solid. White glyphs over a bright frame are
+            // unreadable, and darkening the whole picture to fix that is
+            // punishing the video for the controls.
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))) {
+
+                ControlButton(
+                    icon = BackIcon,
+                    label = strings.back,
+                    onClick = onBack,
+                    modifier = Modifier.align(Alignment.TopStart).padding(Space.sm),
+                )
+
+                Row(
+                    Modifier.align(Alignment.Center),
+                    horizontalArrangement = Arrangement.spacedBy(32.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ControlButton(
+                        icon = SkipBackIcon,
+                        label = strings.skipBack,
+                        onClick = { onSkip(-SKIP_SECONDS); lastTouch++ },
+                    )
+                    ControlButton(
+                        icon = if (playback.isPlaying) PauseIcon else PlayIcon,
+                        label = if (playback.isPlaying) strings.pause else strings.play,
+                        onClick = { onPlayPause(); lastTouch++ },
+                        size = 44.dp,
+                    )
+                    ControlButton(
+                        icon = SkipForwardIcon,
+                        label = strings.skipForward,
+                        onClick = { onSkip(SKIP_SECONDS); lastTouch++ },
+                    )
+                }
+
+                Column(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = Space.md, vertical = Space.sm),
+                ) {
+                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                        Text(
+                            formatDuration(playback.positionSeconds.toInt()),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                        )
+                        Text(
+                            formatDuration(playback.durationSeconds.toInt()),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                        )
+                    }
+                    Spacer(Modifier.height(Space.xs))
+                    SeekBar(
+                        progress = playback.progress,
+                        enabled = playback.durationSeconds > 0,
+                        onSeekFraction = {
+                            onSeek(it * playback.durationSeconds)
+                            lastTouch++
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The bar, and the only thing here that takes a drag.
+ *
+ * Disabled until the duration is known. A bar that can be dragged before the
+ * player knows how long the video is computes a target from zero, which is a
+ * seek to zero — the video restarting is what a viewer sees, and nothing
+ * explains it.
+ */
+@Composable
+private fun SeekBar(
+    progress: Float,
+    enabled: Boolean,
+    onSeekFraction: (Double) -> Unit,
+) {
+    var width by remember { mutableStateOf(1f) }
+    // What the finger is on while it is down. The player's own progress keeps
+    // arriving during a drag and would fight it — the thumb would jump back to
+    // wherever playback is between frames.
+    var dragging by remember { mutableStateOf(-1f) }
+    val shown = if (dragging >= 0f) dragging else progress
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            // A 3dp line is what the design system draws, and 3dp is nothing to
+            // aim at. The touch target is 24dp and the line is centred in it.
+            .height(24.dp)
+            .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
+            // Tapping the bar moves there. Its own pointerInput rather than a
+            // branch inside the drag detector: the two gestures are recognised
+            // separately, and combining them means a tap has to be re-derived
+            // from a drag that never passed the slop threshold.
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectTapGestures { offset ->
+                    onSeekFraction((offset.x / width).coerceIn(0f, 1f).toDouble())
+                }
+            }
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectHorizontalDragGestures(
+                    onDragStart = { dragging = (it.x / width).coerceIn(0f, 1f) },
+                    onDragEnd = {
+                        if (dragging >= 0f) onSeekFraction(dragging.toDouble())
+                        dragging = -1f
+                    },
+                    onDragCancel = { dragging = -1f },
+                    onHorizontalDrag = { change, _ ->
+                        dragging = (change.position.x / width).coerceIn(0f, 1f)
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.3f))) {
+            Box(Modifier.fillMaxWidth(shown).fillMaxHeight().background(Tokens.brand))
+        }
+        // The thumb, which is what says the bar can be moved at all.
+        //
+        // align(CenterStart) is not decoration. The parent centres its children,
+        // so a box occupying the filled fraction was centred in the bar rather
+        // than starting at its left edge — putting the thumb at 55% over a video
+        // twelve per cent through, with the red fill beside it disagreeing.
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .fillMaxWidth(shown)
+                .height(24.dp),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
+            Box(Modifier.size(12.dp).clip(CircleShape).background(Tokens.brand))
+        }
+    }
+}
+
+@Composable
+private fun ControlButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 32.dp,
+) {
+    Box(
+        modifier
+            // 48dp of target around whatever is drawn. Below that a moving
+            // thumb misses, and the picture underneath swallows the tap.
+            .size(48.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(size))
+    }
+}

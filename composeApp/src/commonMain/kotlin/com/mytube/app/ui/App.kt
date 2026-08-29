@@ -129,6 +129,7 @@ fun App(container: AppContainer) {
                                 },
                                 mediaBaseUrl = baseUrl,
                                 onBack = { route = Route.Home },
+                                onOpenVideo = { route = Route.Watch(it) },
                             )
                         }
                     }

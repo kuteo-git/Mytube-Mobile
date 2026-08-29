@@ -65,6 +65,18 @@ interface Strings {
     val upcomingTitle: String
     val upcomingDetail: String
     val unavailableTitle: String
+    val play: String
+    val pause: String
+    val back: String
+    val skipBack: String
+    val skipForward: String
+    val like: String
+    val dislike: String
+    val saveVideo: String
+    val savedVideo: String
+    val subscribe: String
+    val subscribed: String
+    val upNext: String
 
     // --- navigation --------------------------------------------------------
     val navHome: String
@@ -72,6 +84,26 @@ interface Strings {
     val navHistory: String
     val navSettings: String
     val search: String
+
+    // --- subscriptions -----------------------------------------------------
+    val subscriptionsTitle: String
+    /** Shown when this member follows nothing yet. */
+    val noSubscriptions: String
+    val noSubscriptionsDetail: String
+    /** "subscribers", after a count. */
+    val subscribers: String
+
+    // --- history -----------------------------------------------------------
+    val historyTitle: String
+    val noHistory: String
+    val noHistoryDetail: String
+
+    // --- settings ----------------------------------------------------------
+    val settingsServer: String
+    val settingsLanguage: String
+    /** The name of each language, always written in that language. */
+    val languageEnglish: String
+    val languageVietnamese: String
 
     // --- units -------------------------------------------------------------
     /** "views", after a count. */
@@ -139,12 +171,39 @@ object EnglishStrings : Strings {
     override val upcomingTitle = "Not started yet"
     override val upcomingDetail = "It will begin playing on its own."
     override val unavailableTitle = "YouTube will not hand this over"
+    override val play = "Play"
+    override val pause = "Pause"
+    override val back = "Back"
+    override val skipBack = "Back 10 seconds"
+    override val skipForward = "Forward 10 seconds"
+    override val like = "Like"
+    override val dislike = "Dislike"
+    override val saveVideo = "Save"
+    override val savedVideo = "Saved"
+    override val subscribe = "Subscribe"
+    override val subscribed = "Subscribed"
+    override val upNext = "Up next"
 
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
     override val navHistory = "History"
     override val navSettings = "Settings"
     override val search = "Search"
+
+    override val subscriptionsTitle = "Subscriptions"
+    override val noSubscriptions = "You do not follow any channels yet"
+    override val noSubscriptionsDetail =
+        "Channels you subscribe to on YouTube arrive here on the next account scan."
+    override val subscribers = "subscribers"
+
+    override val historyTitle = "Watch history"
+    override val noHistory = "Nothing watched yet"
+    override val noHistoryDetail = "Videos you play show up here, most recent first."
+
+    override val settingsServer = "Server address"
+    override val settingsLanguage = "Language"
+    override val languageEnglish = "English"
+    override val languageVietnamese = "Tiếng Việt"
 
     override val views = "views"
 
@@ -194,12 +253,42 @@ object VietnameseStrings : Strings {
     override val upcomingTitle = "Chưa bắt đầu"
     override val upcomingDetail = "Tới giờ nó sẽ tự phát."
     override val unavailableTitle = "YouTube không cho lấy video này"
+    override val play = "Phát"
+    override val pause = "Tạm dừng"
+    override val back = "Quay lại"
+    override val skipBack = "Lùi 10 giây"
+    override val skipForward = "Tới 10 giây"
+    override val like = "Thích"
+    override val dislike = "Không thích"
+    override val saveVideo = "Lưu"
+    override val savedVideo = "Đã lưu"
+    override val subscribe = "Đăng ký"
+    override val subscribed = "Đã đăng ký"
+    override val upNext = "Xem tiếp"
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"
     override val navHistory = "Đã xem"
     override val navSettings = "Cài đặt"
     override val search = "Tìm kiếm"
+
+    override val subscriptionsTitle = "Kênh đăng ký"
+    override val noSubscriptions = "Chưa theo dõi kênh nào"
+    override val noSubscriptionsDetail =
+        "Kênh bạn đăng ký trên YouTube sẽ về đây ở lần quét tài khoản kế tiếp."
+    override val subscribers = "người đăng ký"
+
+    override val historyTitle = "Đã xem"
+    override val noHistory = "Chưa xem gì"
+    override val noHistoryDetail = "Video bạn mở sẽ nằm ở đây, mới nhất lên trước."
+
+    override val settingsServer = "Địa chỉ máy chủ"
+    override val settingsLanguage = "Ngôn ngữ"
+    // Each language is named in its own words, always. Somebody who pressed the
+    // wrong row is looking at an interface they cannot read, and "English"
+    // written in English is the way back out.
+    override val languageEnglish = "English"
+    override val languageVietnamese = "Tiếng Việt"
 
     override val views = "lượt xem"
 

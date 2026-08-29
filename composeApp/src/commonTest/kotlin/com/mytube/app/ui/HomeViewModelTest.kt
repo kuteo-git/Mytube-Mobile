@@ -158,6 +158,19 @@ class HomeViewModelTest {
         // answer emptily: no topics, nothing on air, nothing half-watched.
         override suspend fun topics() = emptyList<com.mytube.app.domain.model.Topic>()
         override suspend fun live() = emptyList<Video>()
-        override suspend fun history() = emptyList<Video>()
+        override suspend fun history(limit: Int) = emptyList<Video>()
+        override suspend fun subscriptions() = emptyList<com.mytube.app.domain.model.Channel>()
+        override suspend fun upNext(videoId: String) = emptyList<Video>()
+        override suspend fun recordProgress(
+            videoId: String,
+            positionSeconds: Double,
+            watchedFraction: Double,
+        ) = Unit
+        override suspend fun setReaction(
+            videoId: String,
+            reaction: com.mytube.app.domain.model.Reaction,
+        ) = Unit
+        override suspend fun setSaved(videoId: String, saved: Boolean) = Unit
+        override suspend fun setSubscribed(channelId: String, subscribed: Boolean) = Unit
     }
 }
