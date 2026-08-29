@@ -24,7 +24,8 @@ import kotlinx.coroutines.launch
  *
  * The server charter describes exactly this and gives the reason: *"On phones,
  * the watch screen is a layer over the previous tab; pulling it down reveals the
- * tab underneath."* It is also the gesture named in this app's own brief, and it
+ * tab underneath."* What the drag ends in is the miniplayer, not a closed video:
+ * see [MiniPlayer] for why. It is also the gesture named in this app's own brief, and it
  * is the one interaction on a phone that cannot be replaced by a button — a back
  * arrow does the same job in one tap, and people still reach for the drag,
  * because it is what every video app on the device does.
@@ -47,7 +48,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun WatchLayer(
-    onDismiss: () -> Unit,
+    onMinimise: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     val offset = remember { Animatable(0f) }
@@ -70,7 +71,7 @@ fun WatchLayer(
                             // the tab underneath appears to have jumped.
                             scope.launch {
                                 offset.animateTo(height)
-                                onDismiss()
+                                onMinimise()
                             }
                         } else {
                             scope.launch { offset.animateTo(0f) }

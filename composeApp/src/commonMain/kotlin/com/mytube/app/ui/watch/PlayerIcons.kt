@@ -136,6 +136,13 @@ internal val ThumbFilledIcon: ImageVector by lazy {
     }
 }
 
+internal val CloseIcon: ImageVector by lazy {
+    stroke("Close") {
+        moveTo(6f, 6f); lineTo(18f, 18f)
+        moveTo(18f, 6f); lineTo(6f, 18f)
+    }
+}
+
 /** A bookmark: Save, which keeps the file against the eviction sweep. */
 internal val SaveFilledIcon: ImageVector by lazy {
     filled("SaveFilled") {

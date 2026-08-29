@@ -391,3 +391,65 @@ which covers the unit tests, both guards, the Android build and the iOS
 *compile*. What it does not cover is iOS linking and `iosSimulatorArm64Test` —
 recorded as uncovered rather than quietly dropped, because iOS is where this app
 differs most.
+
+## The miniplayer, and two things it uncovered (2026-08-29)
+
+Dragging the watch screen away already left the sound playing, and that was half
+a feature: the audio carried on with nothing on screen to say so, and the only
+way back to the video — or to stop it — was the notification. So the watch screen
+is now **collapsed, not dismissed**.
+
+Measured on the emulator, one 2:20 video: drag down → the bar appears above the
+tab bar with the picture still running, `state=PLAYING`; tap the bar → full
+screen again; press X → `state=NONE(0)` and the server holds `56s / 0.399`, the
+position the playhead was at.
+
+- **`Route.Watch` is gone; a `WatchSession` sits beside the route.** A route is
+  somewhere you are, and this is something that keeps playing while you go
+  elsewhere. Modelling it as a destination is what made *leaving the screen* and
+  *stopping the video* the same act.
+- **The picture keeps playing in the bar** — the same `VideoSurface` pointed at
+  the same player, because `PlayerView` rebinds on update and the connection
+  never drops. A still thumbnail would be cheaper and would show a paused video
+  as though it were playing.
+- **`stop()` had to become its own thing, separate from `release()`.** That
+  separation *is* the miniplayer: release hands back this app's connection while
+  the sound carries on, which is what leaving the screen means; stop ends the
+  playback, which is what the close button means. Measured before it existed:
+  pressing close removed the bar and left the video playing with nothing on
+  screen at all — worse than the fault the miniplayer was written to fix.
+  - **Disposal must not stop.** Opening another video composes the new ViewModel
+    — which loads and plays — *before* the old one's `onDispose` runs, so a stop
+    there would kill the video that had just started.
+  - On Android, `stop()` alone leaves the item loaded and Media3 keeps the
+    session and its notification alive over a player with nothing to play;
+    clearing the queue is what ends it. On iOS the equivalent is replacing the
+    item with null, or Now Playing keeps showing a closed video.
+
+### `viewModel()` was leaking a player per video
+
+`androidx.lifecycle.viewmodel.compose.viewModel()` stores the instance in the
+**activity's** `ViewModelStore`, where it outlives the screen entirely — so every
+video opened left another `WatchViewModel` behind, each holding a live connection
+to the playback service, and `onCleared` never ran on any of them. The final
+progress report lived in `onCleared`, so it never ran either.
+
+The watch screen now uses `remember(videoId)` with a `DisposableEffect` calling
+an explicit `close()`. That is only correct because the activity declares
+`configChanges` for rotation and is never recreated under it; without that line
+in the manifest this would restart the video on every turn of the phone.
+
+### A report that could never succeed, swallowed as though it might
+
+The gateway declares `positionSeconds` as an **int32**. The app sent a Double, so
+Go refused the whole body with 400 — and `recordProgress` is deliberately fire
+and forget, swallowing failures on the reasoning that a missed report costs a
+stale Continue watching entry. That reasoning is right for a network blip and
+wrong for a request that can never work: measured, after forty-five seconds of
+playback the server still held the position from before the app was opened, and
+nothing anywhere said why.
+
+`wholeSeconds` rounds at the edge and refuses negatives — a player reports a
+position before it has loaded, and on some that is negative, which is not a place
+in a video. It is a named function rather than an expression inside the request
+builder so `ProgressBodyTest` can assert it without a network.

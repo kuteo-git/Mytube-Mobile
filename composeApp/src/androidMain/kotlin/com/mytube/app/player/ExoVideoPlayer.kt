@@ -138,6 +138,19 @@ class ExoVideoPlayer(context: Context) : VideoPlayer {
         _state.update { it.copy(positionSeconds = seconds) }
     }
 
+    override fun stop() {
+        // Both, in this order. `stop()` alone leaves the item loaded, so Media3
+        // keeps the session — and its notification — alive over a player with
+        // nothing to play; clearing the queue is what tells the service the
+        // session is over.
+        controller?.stop()
+        controller?.clearMediaItems()
+        // A load that never got a connection must not arrive after this and
+        // start the video again.
+        pending = null
+        _state.update { PlaybackState() }
+    }
+
     /**
      * Lets go of the connection, and deliberately does **not** stop the player.
      *

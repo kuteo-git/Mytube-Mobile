@@ -49,6 +49,21 @@ interface VideoPlayer {
     fun seekTo(seconds: Double)
 
     /**
+     * Stop playing and let go of the media, ending the session.
+     *
+     * Distinct from [release], and the distinction is the whole of what a
+     * miniplayer means. `release` hands back this app's *connection* while the
+     * sound carries on — that is what leaving the watch screen does. This ends
+     * the playback itself, and it is what the miniplayer's close button and the
+     * lock-screen notification mean.
+     *
+     * Measured on the emulator before it existed: pressing the close button
+     * removed the bar and left the video playing with nothing on screen at all,
+     * which is worse than the fault the miniplayer was written to fix.
+     */
+    fun stop()
+
+    /**
      * Give up the decoder and the audio focus.
      *
      * Not optional, and not something a garbage collector will do: both

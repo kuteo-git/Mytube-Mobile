@@ -1,8 +1,18 @@
 package com.mytube.app.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.mytube.app.ui.home.Size
+import com.mytube.app.ui.watch.MiniPlayer
+import com.mytube.app.ui.watch.WatchState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -43,8 +53,16 @@ private sealed interface Route {
     data object Deciding : Route
     data object Setup : Route
     data object Home : Route
-    data class Watch(val videoId: String) : Route
 }
+
+/**
+ * The video being watched, and whether it is collapsed to the miniplayer.
+ *
+ * Not a route. A route is somewhere you are, and this is something that keeps
+ * playing while you go elsewhere — modelling it as a destination is what made
+ * leaving the screen the same act as stopping the video.
+ */
+private data class WatchSession(val videoId: String, val minimised: Boolean = false)
 
 /**
  * The root.
@@ -64,6 +82,10 @@ fun App(container: AppContainer) {
         MytubeTheme {
             var route: Route by remember { mutableStateOf(Route.Deciding) }
             var baseUrl by remember { mutableStateOf("") }
+            // Null when nothing is playing. Held above the routes so that
+            // changing tab, or stepping into settings, does not take the video
+            // with it.
+            var watching: WatchSession? by remember { mutableStateOf(null) }
 
             // Which screen opens is a question for the settings store, and that
             // cannot be answered during composition. Nothing is drawn until it is:
@@ -84,11 +106,11 @@ fun App(container: AppContainer) {
                     onDone = { route = Route.Home },
                 )
 
-                // Home and Watch are one branch, not two. The watch screen is
-                // a layer *over* the tab, so the tab has to be composed
-                // underneath it — otherwise dragging down reveals an empty
-                // background and the feed snaps in at the end.
-                is Route.Home, is Route.Watch -> Box(Modifier.fillMaxSize()) {
+                // Home and the watch screen are one branch, not two. The watch
+                // screen is a layer *over* the tab, so the tab has to be
+                // composed underneath it — otherwise dragging down reveals an
+                // empty background and the feed snaps in at the end.
+                is Route.Home -> Box(Modifier.fillMaxSize()) {
                     AppShell(
                         current = Tab.Home,
                         // The other three tabs are screens that do not exist
@@ -107,30 +129,71 @@ fun App(container: AppContainer) {
                             },
                             mediaBaseUrl = baseUrl,
                             onOpenSettings = { route = Route.Setup },
-                            onOpenVideo = { route = Route.Watch(it) },
+                            onOpenVideo = { watching = WatchSession(it) },
                         )
                     }
 
-                    if (current is Route.Watch) {
-                        WatchLayer(onDismiss = { route = Route.Home }) {
-                            WatchScreen(
-                                // Keyed on the video: opening another one builds
-                                // a new ViewModel, because the old one owns a
-                                // player pointed at the previous stream — and
-                                // releases it when it is cleared.
-                                viewModel = viewModel(key = "watch-${current.videoId}") {
-                                    WatchViewModel(
-                                        videoId = current.videoId,
-                                        mediaBaseUrl = baseUrl,
-                                        videos = container.videoRepository,
-                                        streams = container.streamRepository,
-                                        playerFactory = container.playerFactory,
-                                    )
-                                },
+                    val session = watching
+                    if (session != null) {
+                        // `remember` and a DisposableEffect, not `viewModel()`.
+                        // That helper stores a ViewModel in the *activity's*
+                        // store, where it outlives the screen entirely: every
+                        // video opened would leave another instance behind, each
+                        // holding a live connection to the playback service, and
+                        // none of them would ever run `close()`. This is only
+                        // correct because the activity declares `configChanges`
+                        // for rotation and so is never recreated under it.
+                        val watch = remember(session.videoId) {
+                            WatchViewModel(
+                                videoId = session.videoId,
                                 mediaBaseUrl = baseUrl,
-                                onBack = { route = Route.Home },
-                                onOpenVideo = { route = Route.Watch(it) },
+                                videos = container.videoRepository,
+                                streams = container.streamRepository,
+                                playerFactory = container.playerFactory,
                             )
+                        }
+                        DisposableEffect(watch) { onDispose { watch.close() } }
+
+                        if (session.minimised) {
+                            val state by watch.state.collectAsStateWithLifecycle()
+                            val playing = state as? WatchState.Playing
+                            MiniPlayer(
+                                player = watch.player,
+                                title = playing?.video?.title.orEmpty(),
+                                channel = playing?.video?.channel?.name.orEmpty(),
+                                progress = playing?.playback?.progress ?: 0f,
+                                isPlaying = playing?.playback?.isPlaying == true,
+                                onExpand = { watching = session.copy(minimised = false) },
+                                onPlayPause = watch::playPause,
+                                onClose = {
+                                    // Stop first, then let go. The disposal that
+                                    // follows only releases the connection.
+                                    watch.stop()
+                                    watching = null
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    // It sits *on* the tab bar, not over it. The
+                                    // bar is how somebody leaves for another tab
+                                    // while this keeps playing, which is the
+                                    // whole point of a miniplayer.
+                                    .padding(
+                                        bottom = WindowInsets.navigationBars
+                                            .asPaddingValues()
+                                            .calculateBottomPadding() + Size.topBar,
+                                    ),
+                            )
+                        } else {
+                            WatchLayer(
+                                onMinimise = { watching = session.copy(minimised = true) },
+                            ) {
+                                WatchScreen(
+                                    viewModel = watch,
+                                    mediaBaseUrl = baseUrl,
+                                    onBack = { watching = session.copy(minimised = true) },
+                                    onOpenVideo = { watching = WatchSession(it) },
+                                )
+                            }
                         }
                     }
                 }

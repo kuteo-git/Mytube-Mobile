@@ -184,7 +184,36 @@ class WatchViewModel(
         }
     }
 
-    override fun onCleared() {
+    /**
+     * End the playback, not just this screen's hold on it.
+     *
+     * Separate from [close] because the two happen at different moments and mean
+     * different things. Disposal must **not** stop: opening another video
+     * composes the new ViewModel — which loads and plays — *before* the old
+     * one's `onDispose` runs, so a stop there would kill the video that had just
+     * started. Only somebody pressing the close button means stop.
+     */
+    fun stop() {
+        report(force = true)
+        player.stop()
+    }
+
+    /**
+     * Give the player back, and file the last position first.
+     *
+     * Public, and called by whoever created this rather than left to
+     * `onCleared`. The watch screen is not held by `viewModel()`: that stores a
+     * ViewModel in the **activity's** store, where it survives leaving the
+     * screen entirely — so every video opened would leave another instance
+     * behind, each holding a live connection to the playback service, and none
+     * of them would ever run this. The caller uses `remember` and a
+     * `DisposableEffect`, which is only correct because the activity declares
+     * `configChanges` for rotation and so is never recreated under it.
+     *
+     * Idempotent: pressing close reports and then disposal calls this, and the
+     * second report is refused because the playhead has not moved.
+     */
+    fun close() {
         // The last position, before the connection goes. Without this, closing
         // the screen loses up to ten seconds of progress — and closing it is
         // precisely when somebody stops watching, so it is the report that
@@ -192,6 +221,8 @@ class WatchViewModel(
         report(force = true)
         player.release()
     }
+
+    override fun onCleared() = close()
 
     /**
      * Put back what the server would not accept.
@@ -218,6 +249,10 @@ class WatchViewModel(
         val current = _state.value as? WatchState.Playing ?: return
         val playback = current.playback
         if (playback.durationSeconds <= 0) return
+        // Pressing close reports and then disposal reports again, a moment
+        // apart, with the playhead in the same place. The second is the same
+        // fact and is not sent.
+        if (playback.positionSeconds == lastReported) return
         if (!force && playback.positionSeconds - lastReported < PROGRESS_EVERY_SECONDS) return
         lastReported = playback.positionSeconds
 

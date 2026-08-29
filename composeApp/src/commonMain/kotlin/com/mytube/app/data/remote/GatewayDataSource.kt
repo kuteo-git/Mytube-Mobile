@@ -132,7 +132,7 @@ class GatewayDataSource(private val client: HttpClient) {
         client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/progress") {
             identify(userId)
             contentType(ContentType.Application.Json)
-            setBody(ProgressBody(positionSeconds, watchedFraction))
+            setBody(ProgressBody(wholeSeconds(positionSeconds), watchedFraction))
         }.orThrow()
     }
 
@@ -210,7 +210,24 @@ private fun HttpResponse.orThrow(): HttpResponse {
  * written once.
  */
 @kotlinx.serialization.Serializable
-private data class ProgressBody(val positionSeconds: Double, val watchedFraction: Double)
+private data class ProgressBody(val positionSeconds: Long, val watchedFraction: Double)
+
+/**
+ * The position, as a whole number of seconds.
+ *
+ * The gateway declares `positionSeconds` as an **int32**, so a fractional value
+ * is not a rounding difference — Go refuses the whole body with 400, and this
+ * app was swallowing that. Measured: after forty-five seconds of playback the
+ * server still held the position it had before the app was opened, and nothing
+ * anywhere said why.
+ *
+ * Kept out of the request builder and given a name so a test can assert it
+ * without a network. A player legitimately reports a small negative position
+ * before it has loaded, and a negative position is not a thing the catalogue
+ * should be asked to store.
+ */
+internal fun wholeSeconds(value: Double): Long =
+    if (value <= 0) 0 else kotlin.math.round(value).toLong()
 
 @kotlinx.serialization.Serializable
 private data class ReactionBody(val reaction: String)

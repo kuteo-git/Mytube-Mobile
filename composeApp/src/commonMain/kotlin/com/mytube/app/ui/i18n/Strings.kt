@@ -77,6 +77,7 @@ interface Strings {
     val subscribe: String
     val subscribed: String
     val upNext: String
+    val close: String
 
     // --- navigation --------------------------------------------------------
     val navHome: String
@@ -183,6 +184,7 @@ object EnglishStrings : Strings {
     override val subscribe = "Subscribe"
     override val subscribed = "Subscribed"
     override val upNext = "Up next"
+    override val close = "Close"
 
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
@@ -265,6 +267,7 @@ object VietnameseStrings : Strings {
     override val subscribe = "Đăng ký"
     override val subscribed = "Đã đăng ký"
     override val upNext = "Xem tiếp"
+    override val close = "Đóng"
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"

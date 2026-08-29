@@ -104,6 +104,15 @@ class AvVideoPlayer : VideoPlayer {
         _state.update { it.copy(positionSeconds = seconds) }
     }
 
+    override fun stop() {
+        av.pause()
+        // Replacing the item with nothing is what clears the Now Playing entry
+        // and the lock-screen controls. Pausing alone leaves the session showing
+        // a video the viewer has closed.
+        av.replaceCurrentItemWithPlayerItem(null)
+        _state.update { PlaybackState() }
+    }
+
     override fun release() {
         observer?.let { av.removeTimeObserver(it) }
         observer = null
