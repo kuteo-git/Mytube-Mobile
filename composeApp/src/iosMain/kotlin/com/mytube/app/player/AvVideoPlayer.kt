@@ -206,6 +206,13 @@ class AvVideoPlayer : VideoPlayer {
             // Read from this tick rather than through KVO — the observer is
             // already running, and one source of truth for "how is playback
             // getting on" is better than two that can disagree.
+            // A live broadcast declares an indefinite duration, which
+            // `CMTimeGetSeconds` reports as NaN — so asking for a real number
+            // first is what stops every broadcast being called finished the
+            // moment it opens. Half a second of slack because the last sample
+            // rarely lands exactly on the declared length.
+            val ended = duration > 0 && !duration.isNaN() &&
+                CMTimeGetSeconds(time) >= duration - 0.5
             val failure = if (item?.status == AVPlayerItemStatusFailed) {
                 item.error?.localizedDescription ?: "playback failed"
             } else {
@@ -213,6 +220,7 @@ class AvVideoPlayer : VideoPlayer {
             }
             _state.update {
                 it.copy(
+                    hasEnded = ended,
                     error = failure ?: it.error,
                     positionSeconds = CMTimeGetSeconds(time),
                     // NaN is what AVPlayer reports before it knows, and it must

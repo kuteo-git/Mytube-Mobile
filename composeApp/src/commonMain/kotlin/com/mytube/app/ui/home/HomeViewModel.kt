@@ -103,7 +103,33 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         if (current is HomeState.Ready && current.selected == chip) return
 
         if (current is HomeState.Ready) {
-            // The chips and their scroll position stay; only the videos go.
+            // What is on screen now goes back in the drawer before anything is
+            // taken off it.
+            remember(current)
+
+            val seen = cache[chip.key]
+            if (seen != null) {
+                // Straight back to what was there, then refreshed underneath.
+                //
+                // A chip already visited used to clear its videos and show the
+                // skeleton again, so stepping to Live and back to All cost a
+                // round trip and threw away the reading position. The list is
+                // still good; it is only possibly stale, and stale is a reason
+                // to reload quietly, not a reason to show nothing.
+                _state.value = current.copy(
+                    selected = chip,
+                    videos = seen.videos,
+                    continueWatching = seen.continueWatching,
+                    nextPageToken = seen.nextPageToken,
+                    switching = false,
+                )
+                // `showLoading = false` and no refreshing flag: this is meant to
+                // be invisible. When it lands the list is replaced in place.
+                load(chip, showLoading = false)
+                return
+            }
+
+            // Never seen: the skeleton is honest, there is nothing to show.
             _state.value = current.copy(
                 selected = chip,
                 videos = emptyList(),
@@ -115,6 +141,31 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
             return
         }
         load(chip, showLoading = true)
+    }
+
+    /**
+     * What each chip was showing, so going back to one is instant.
+     *
+     * In the ViewModel rather than the screen because it is fetched data, and it
+     * dies with the ViewModel — which is keyed on the server address, so
+     * pointing the app at another machine cannot show that machine's feed under
+     * this one's chips.
+     */
+    private data class CachedChip(
+        val videos: List<Video>,
+        val continueWatching: List<Video>,
+        val nextPageToken: String,
+    )
+
+    private val cache = mutableMapOf<String, CachedChip>()
+
+    private fun remember(ready: HomeState.Ready) {
+        if (ready.videos.isEmpty()) return
+        cache[ready.selected.key] = CachedChip(
+            videos = ready.videos,
+            continueWatching = ready.continueWatching,
+            nextPageToken = ready.nextPageToken,
+        )
     }
 
     /**

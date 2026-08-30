@@ -330,6 +330,15 @@ object Size {
     val avatar = 36.dp
     val iconButton = 40.dp
     val topBar = 56.dp
+
+    /**
+     * The miniplayer bar's height, which lists must leave room for.
+     *
+     * Here rather than beside the composable that draws it, because the thing
+     * that has to know is every scrolling screen — and a constant defined next
+     * to its only *reader* is one nobody finds when they add the next screen.
+     */
+    val miniPlayer = 66.dp
     val chip = 32.dp
 
     /**

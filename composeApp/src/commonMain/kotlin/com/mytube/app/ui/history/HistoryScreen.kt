@@ -2,6 +2,8 @@ package com.mytube.app.ui.history
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -34,6 +36,8 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
  */
 @Composable
 fun HistoryScreen(
+    /** Hoisted so the position survives a visit to another tab. */
+    listState: LazyListState,
     viewModel: HistoryViewModel,
     mediaBaseUrl: String,
     onOpenSettings: () -> Unit,
@@ -42,6 +46,7 @@ fun HistoryScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     HistoryContent(
+        listState = listState,
         state = state,
         mediaBaseUrl = mediaBaseUrl,
         onOpenSettings = onOpenSettings,
@@ -54,6 +59,7 @@ fun HistoryScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryContent(
+    listState: LazyListState = rememberLazyListState(),
     state: HistoryState,
     mediaBaseUrl: String,
     onOpenSettings: () -> Unit,
@@ -85,6 +91,7 @@ fun HistoryContent(
             indicator = { TabRefreshIndicator(refreshState, ready.refreshing) },
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = tabContentPadding(),
             ) {

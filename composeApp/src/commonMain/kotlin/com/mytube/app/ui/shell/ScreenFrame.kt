@@ -37,6 +37,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -58,11 +59,29 @@ import com.mytube.app.ui.theme.Tokens
  * The server charter records the web app learning the same thing the hard way:
  * *"this is the fourth thing to learn that the top bar's height belongs in
  * exactly one place."*
+ *
+ * The miniplayer is read from a composition local rather than passed in. It is
+ * an ambient fact about the whole shell — the bar is there or it is not — and
+ * threading a boolean through seven screen signatures to say so is how one of
+ * them gets forgotten and its last row stays hidden underneath it.
  */
 @Composable
-fun tabContentPadding(): PaddingValues = PaddingValues(
+fun tabContentPadding(): PaddingValues = tabContentPadding(LocalMiniPlayerShowing.current)
+
+/** Whether the miniplayer bar is on screen, for the padding above to read. */
+val LocalMiniPlayerShowing = staticCompositionLocalOf { false }
+
+@Composable
+private fun tabContentPadding(miniPlayer: Boolean): PaddingValues = PaddingValues(
     top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + Size.topBar,
-    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + Size.topBar,
+    // The tab bar, and the miniplayer sitting on it when there is one.
+    //
+    // Without the second term the bar covers whatever is last in the list, and
+    // the last row of a feed is the one nobody can scroll past to reach. It is
+    // a padding rather than a margin on the bar for the reason every list here
+    // uses one: the content scrolls *under* the bar and stops clear of it.
+    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+        Size.topBar + (if (miniPlayer) Size.miniPlayer else 0.dp),
 )
 
 /** A heading over a tab's list, at the size the design system gives a section. */

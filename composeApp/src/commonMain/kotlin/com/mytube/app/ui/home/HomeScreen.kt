@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +39,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -72,6 +75,15 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 fun HomeScreen(
     viewModel: HomeViewModel,
     mediaBaseUrl: String,
+    /**
+     * Hoisted, so the position survives a visit to another tab.
+     *
+     * `rememberLazyListState()` lives and dies with the composable, and a tab
+     * that is not showing is not composed — so every trip to Subscriptions and
+     * back put Home at the top again. The state belongs to the *tab*, which
+     * outlives the screen, so it is owned where the tabs are.
+     */
+    listState: LazyListState,
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
@@ -81,6 +93,7 @@ fun HomeScreen(
     HomeContent(
         state = state,
         mediaBaseUrl = mediaBaseUrl,
+        listState = listState,
         onOpenSettings = onOpenSettings,
         onOpenVideo = onOpenVideo,
         onSelectChip = viewModel::select,
@@ -112,6 +125,9 @@ fun HomeContent(
     onNotInterested: (Video) -> Unit = {},
     onMarkWatched: (Video) -> Unit = {},
     onOpenChannel: (String) -> Unit = {},
+    // Last, and with a default, so the previews below can keep calling this
+    // positionally without caring that a tab's scroll position is hoisted.
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val strings = LocalStrings.current
 
@@ -142,7 +158,7 @@ fun HomeContent(
             }
 
             is HomeState.Ready -> Feed(
-                current, mediaBaseUrl, strings,
+                current, listState, mediaBaseUrl, strings,
                 onSelectChip, onOpenVideo, onRetry, onLoadMore,
                 onSaveVideo, onNotInterested, onMarkWatched, onOpenChannel,
             )
@@ -154,6 +170,7 @@ fun HomeContent(
 @Composable
 private fun Feed(
     state: HomeState.Ready,
+    listState: LazyListState,
     mediaBaseUrl: String,
     strings: Strings,
     onSelectChip: (Chip) -> Unit,
@@ -165,7 +182,6 @@ private fun Feed(
     onMarkWatched: (Video) -> Unit,
     onOpenChannel: (String) -> Unit,
 ) {
-    val listState = rememberLazyListState()
 
     // Asked when the end comes into view, not when the last item is composed.
     //
@@ -179,6 +195,25 @@ private fun Feed(
     // two, and then could never go false again — and `snapshotFlow` only emits
     // on a change, so the third page was never asked for. The feed stopped at
     // 48 videos, silently, which is what "no infinite scroll" looked like.
+    // One reading position per chip.
+    //
+    // The list state belongs to the Home *tab*, so all the chips share it — and
+    // sharing it means stepping to Live and back left All wherever the short
+    // Live list had ended up. The videos are restored from the ViewModel's own
+    // cache; this restores where in them the viewer was.
+    val offsets = remember { mutableMapOf<String, Pair<Int, Int>>() }
+    var shownChip by remember { mutableStateOf(state.selected.key) }
+    LaunchedEffect(state.selected.key) {
+        val leaving = shownChip
+        if (leaving != state.selected.key) {
+            offsets[leaving] =
+                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+            val (index, offset) = offsets[state.selected.key] ?: (0 to 0)
+            listState.scrollToItem(index, offset)
+            shownChip = state.selected.key
+        }
+    }
+
     val atEnd by remember(listState) {
         derivedStateOf {
             val info = listState.layoutInfo

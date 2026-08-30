@@ -243,7 +243,13 @@ fun WatchContent(
         // is being changed.
         if (state is WatchState.Playing) {
             PlayerSettingsPanel(
-                visible = settingsOpen && !fullscreen,
+                // Shown in fullscreen too. It was suppressed there, which left
+                // the gear on the control bar doing nothing at all once the
+                // video filled the screen — a dead button, and the one thing
+                // §5 of the server charter forbids outright. A sheet portals to
+                // the window, so it sits over the picture rather than inside
+                // the layout that fullscreen has taken over.
+                visible = settingsOpen,
                 subtitles = state.video.subtitles,
                 subtitleLanguage = state.subtitleLanguage,
                 onSelectSubtitles = onSelectSubtitles,

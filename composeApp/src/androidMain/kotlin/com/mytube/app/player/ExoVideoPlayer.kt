@@ -104,6 +104,9 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
                 it.copy(
                     isBuffering = playbackState == Player.STATE_BUFFERING,
                     durationSeconds = durationOrZero(),
+                    // Media3 says so outright, so nothing here has to compare a
+                    // position with a duration and guess.
+                    hasEnded = playbackState == Player.STATE_ENDED,
                 )
             }
         }

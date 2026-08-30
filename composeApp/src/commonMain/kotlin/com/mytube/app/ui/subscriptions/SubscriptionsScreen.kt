@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,6 +57,8 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
  */
 @Composable
 fun SubscriptionsScreen(
+    /** Hoisted so the position survives a visit to another tab. */
+    listState: LazyListState,
     viewModel: SubscriptionsViewModel,
     mediaBaseUrl: String,
     onOpenSettings: () -> Unit,
@@ -63,6 +67,7 @@ fun SubscriptionsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     SubscriptionsContent(
+        listState = listState,
         state = state,
         mediaBaseUrl = mediaBaseUrl,
         onOpenSettings = onOpenSettings,
@@ -74,6 +79,7 @@ fun SubscriptionsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubscriptionsContent(
+    listState: LazyListState = rememberLazyListState(),
     state: SubscriptionsState,
     mediaBaseUrl: String,
     onOpenSettings: () -> Unit,
@@ -104,6 +110,7 @@ fun SubscriptionsContent(
             indicator = { TabRefreshIndicator(refreshState, ready.refreshing) },
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = tabContentPadding(),
             ) {

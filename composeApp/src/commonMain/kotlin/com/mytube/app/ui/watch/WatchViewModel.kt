@@ -183,6 +183,9 @@ class WatchViewModel(
     /** The poll watching the server's narration pass, cancelled when it ends. */
     private var narrationPoll: Job? = null
 
+    /** The end is reported on every tick; this makes the advance happen once. */
+    private var advanced = false
+
     init {
         viewModelScope.launch {
             // The player's own state is folded into this screen's, so a
@@ -194,9 +197,32 @@ class WatchViewModel(
                     else current
                 }
                 reportIfDue(playback)
+                advanceIfFinished(playback)
             }
         }
         load()
+    }
+
+    /**
+     * The end of a video is where autoplay happens.
+     *
+     * Nothing called `onFinished` before this: the callback was declared, the
+     * switch was drawn, the preference was stored, and no code anywhere noticed
+     * a video ending. Autoplay was a dead control on both platforms.
+     *
+     * Guarded by `advanced` rather than by the state alone, because the end is
+     * reported on every tick once it arrives — without it the rail's first
+     * entry would be opened four times a second.
+     */
+    private fun advanceIfFinished(playback: PlaybackState) {
+        if (!playback.hasEnded || advanced) return
+        val current = _state.value as? WatchState.Playing ?: return
+        if (!current.autoplay) return
+        // A broadcast has no end to reach, and nothing sensible to advance to.
+        if (current.isLive) return
+        val next = current.upNext.firstOrNull() ?: return
+        advanced = true
+        onFinished(next.id)
     }
 
     fun retry() = load()

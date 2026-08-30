@@ -146,6 +146,15 @@ data class PlaybackState(
      * empty means fine.
      */
     val error: String = "",
+    /**
+     * The video reached its end.
+     *
+     * Its own field rather than `position >= duration`: those are both zero
+     * before anything loads, and a broadcast has no duration at all, so the
+     * comparison says "finished" for every live video the moment it opens.
+     * Only the player knows, and both platforms are told by their own APIs.
+     */
+    val hasEnded: Boolean = false,
 ) {
     val hasError: Boolean get() = error.isNotEmpty()
 

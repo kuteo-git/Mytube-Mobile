@@ -1,6 +1,7 @@
 package com.mytube.app.ui.watch
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.interop.UIKitView
@@ -15,6 +16,10 @@ import platform.AVFoundation.AVPlayerLayer
 import platform.CoreGraphics.CGRect
 import platform.CoreGraphics.CGRectMake
 import platform.CoreGraphics.CGRectZero
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSOperationQueue
+import platform.UIKit.UIApplicationDidEnterBackgroundNotification
+import platform.UIKit.UIApplicationWillEnterForegroundNotification
 import platform.UIKit.UIColor
 import platform.UIKit.UIView
 
@@ -79,6 +84,39 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier) {
             // off. The server publishes both.
             videoGravity = AVLayerVideoGravityResizeAspect
             backgroundColor = UIColor.blackColor.CGColor
+        }
+    }
+
+    // Detach the layer while the app is in the background, and put it back on
+    // the way in.
+    //
+    // This is what "the video pauses when the screen goes off" was. iOS stops
+    // playback of a player whose video is attached to a layer that is no longer
+    // on screen — the audio session being `Playback` is necessary and not
+    // sufficient. With the layer let go, the same player keeps going as an
+    // audio stream, which is exactly what the lock screen is for and the whole
+    // reason this app exists (server charter, risk 4).
+    //
+    // Android needs none of this: Media3's foreground service holds playback,
+    // and nothing there ties the decoder to a visible view.
+    DisposableEffect(playerLayer, av) {
+        val centre = NSNotificationCenter.defaultCenter
+        val background = centre.addObserverForName(
+            name = UIApplicationDidEnterBackgroundNotification,
+            `object` = null,
+            queue = NSOperationQueue.mainQueue,
+        ) { playerLayer.player = null }
+        val foreground = centre.addObserverForName(
+            name = UIApplicationWillEnterForegroundNotification,
+            `object` = null,
+            queue = NSOperationQueue.mainQueue,
+        ) { playerLayer.player = av }
+        onDispose {
+            centre.removeObserver(background)
+            centre.removeObserver(foreground)
+            // Reattached on the way out, or a screen left while backgrounded
+            // would leave the layer holding nothing when it is next shown.
+            playerLayer.player = av
         }
     }
 

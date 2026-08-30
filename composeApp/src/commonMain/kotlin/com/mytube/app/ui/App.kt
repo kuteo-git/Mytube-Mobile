@@ -17,6 +17,7 @@ import com.mytube.app.ui.watch.WatchState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +28,7 @@ import com.mytube.app.AppContainer
 import com.mytube.app.ui.home.HomeScreen
 import com.mytube.app.ui.home.HomeViewModel
 import com.mytube.app.ui.shell.AppShell
+import com.mytube.app.ui.shell.LocalMiniPlayerShowing
 import com.mytube.app.ui.shell.Tab
 import com.mytube.app.ui.watch.WatchLayer
 import com.mytube.app.ui.watch.WatchScreen
@@ -133,6 +135,11 @@ fun App(container: AppContainer) {
             // means previous in this sitting, and offering to go back to
             // something watched last week is not what the button says.
             val trail = remember { mutableStateListOf<String>() }
+            // One scroll position per tab, owned here because a tab that is not
+            // showing is not composed — and a `rememberLazyListState` inside a
+            // screen dies with it, which is why every trip to another tab and
+            // back put the feed at the top again.
+            val tabScroll = Tab.entries.associateWith { rememberLazyListState() }
             val scope = rememberCoroutineScope()
             // Null until the server answers. Read once for the process: it is
             // one setting for the household and nothing else in the app changes
@@ -198,6 +205,12 @@ fun App(container: AppContainer) {
             // screen is showing. It is the miniplayer that needs this, not the
             // watch screen: the video keeps playing while somebody searches or
             // opens a channel, and the bar has to be reachable from there.
+            // Every scrolling screen has to leave room for the miniplayer, and
+            // it is an ambient fact rather than something to thread through
+            // seven signatures. See `tabContentPadding`.
+            CompositionLocalProvider(
+                LocalMiniPlayerShowing provides (watching?.minimised == true),
+            ) {
             Box(Modifier.fillMaxSize()) {
                 when (val current = route) {
                     is Route.Deciding -> Unit
@@ -215,11 +228,25 @@ fun App(container: AppContainer) {
                     // sits on the tab bar while somebody browses another tab.
                     is Route.Home -> AppShell(
                         current = tab,
-                        onSelect = { tab = it },
+                        onSelect = { picked ->
+                            // Pressing the tab you are already on goes back to
+                            // the top. Every phone app does this, and without it
+                            // the only way back up a long feed is to swipe until
+                            // your thumb aches. Deliberately *not* a refresh:
+                            // pull-to-refresh already means that, and one
+                            // gesture must not mean two things.
+                            if (picked == tab) {
+                                scope.launch {
+                                    tabScroll.getValue(picked).animateScrollToItem(0)
+                                }
+                            }
+                            tab = picked
+                        },
                         onSearch = { route = Route.Search },
                     ) {
                             when (tab) {
                                 Tab.Home -> HomeScreen(
+                                    listState = tabScroll.getValue(Tab.Home),
                                     // Keyed on the address: changing it builds a new
                                     // HomeViewModel, because the old one holds a
                                     // feed fetched from somewhere else.
@@ -233,6 +260,7 @@ fun App(container: AppContainer) {
                                 )
 
                                 Tab.Subscriptions -> SubscriptionsScreen(
+                                    listState = tabScroll.getValue(Tab.Subscriptions),
                                     viewModel = viewModel(key = "subs-$baseUrl") {
                                         SubscriptionsViewModel(container.videoRepository)
                                     },
@@ -247,6 +275,7 @@ fun App(container: AppContainer) {
                                 )
 
                                 Tab.History -> HistoryScreen(
+                                    listState = tabScroll.getValue(Tab.History),
                                     viewModel = viewModel(key = "history-$baseUrl") {
                                         HistoryViewModel(container.videoRepository)
                                     },
@@ -409,6 +438,7 @@ fun App(container: AppContainer) {
                         )
                     }
                 }
+            }
             }
 
         }
