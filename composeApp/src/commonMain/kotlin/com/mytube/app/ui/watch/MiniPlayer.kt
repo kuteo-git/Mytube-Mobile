@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.domain.repository.VideoPlayer
@@ -82,6 +80,20 @@ fun MiniPlayer(
     onExpand: () -> Unit,
     onPlayPause: () -> Unit,
     onClose: () -> Unit,
+    /**
+     * Space kept clear under the row, inside the bar's own glass.
+     *
+     * The navigation inset when there is no tab bar beneath this, and **zero
+     * when there is** — the tab bar keeps clear of the home indicator itself,
+     * and adding it here as well made the bar 34dp taller than it looked. That
+     * extra height was drawn with the backdrop and sat exactly over the tab
+     * bar's icon row, which is why the icons disappeared and the player looked
+     * like it was covering the bar.
+     *
+     * It is the caller's to compute because only the app knows whether there is
+     * a tab bar under this and how far it has scrolled away.
+     */
+    bottomInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -99,18 +111,7 @@ fun MiniPlayer(
     // surface that happens to be the same colour.
     BarBackdrop(Modifier.matchParentSize(), fromTop = false, tint = TINT_PANEL)
 
-    // The navigation inset belongs inside the bar, under the backdrop above —
-    // so the glass runs to the bottom edge of the screen while the row keeps
-    // clear of the home indicator. Outside, it was a see-through strip beneath
-    // the player.
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(
-                bottom = WindowInsets.navigationBars.asPaddingValues()
-                    .calculateBottomPadding(),
-            ),
-    ) {
+    Column(Modifier.fillMaxWidth().padding(bottom = bottomInset)) {
         // A line, not a bar. It says how far through without asking for any of
         // the 64dp the row needs, and it is the only thing here that moves.
         Box(Modifier.fillMaxWidth().height(2.dp).background(Tokens.line)) {

@@ -36,12 +36,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.ui.home.Size
@@ -49,6 +49,7 @@ import com.mytube.app.ui.home.avatarColourFor
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.theme.Tokens
+import kotlin.math.roundToInt
 import dev.chrisbanes.haze.hazeSource
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.graphics.Color
@@ -202,7 +203,15 @@ private fun TopBar(
         modifier
             .fillMaxWidth()
             .onSizeChanged { height = it.height.toFloat() }
-            .graphicsLayer { translationY = -hidden * height }
+            // `offset`, not `graphicsLayer { translationY }`.
+            //
+            // Haze samples from the node's **layout** position and knows nothing
+            // about a draw-time transform, so a translated surface drew its
+            // glass at the place it would have been — which on a moving
+            // bar meant no background at all, and the tab bar showing
+            // straight through it. `offset` moves the node at placement, so the
+            // position Haze reads is the position it is drawn at.
+            .offset { IntOffset(0, (-hidden * height).roundToInt()) }
             .consumeTaps(),
     ) {
         // Behind everything in the bar, and only inside it. See [BarBackdrop]:
@@ -348,7 +357,7 @@ private fun BottomBar(
     Box(
         modifier
             .fillMaxWidth()
-            .graphicsLayer { translationY = hidden * height }
+            .offset { IntOffset(0, (hidden * height).roundToInt()) }
             .consumeTaps(),
     ) {
         BarBackdrop(Modifier.matchParentSize(), fromTop = false)

@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,7 +32,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.backhandler.BackHandler
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -51,6 +51,7 @@ import com.mytube.app.ui.shell.AppShell
 import com.mytube.app.ui.shell.LocalHaze
 import com.mytube.app.ui.shell.LocalMiniPlayerShowing
 import com.mytube.app.ui.shell.edgeBack
+import kotlin.math.roundToInt
 import com.mytube.app.ui.shell.rememberBarsVisible
 import com.mytube.app.ui.shell.ProfileSheet
 import com.mytube.app.ui.shell.Tab
@@ -62,6 +63,7 @@ import com.mytube.app.ui.settings.ServerSetupScreen
 import com.mytube.app.ui.settings.ServerSetupViewModel
 import androidx.compose.runtime.CompositionLocalProvider
 import com.mytube.app.ui.i18n.LocalStrings
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.mytube.app.ui.channel.ChannelScreen
 import com.mytube.app.ui.channel.ChannelViewModel
@@ -631,9 +633,9 @@ fun App(container: AppContainer) {
             // gesture and the bar itself must be built from the same numbers, or
             // the video lands somewhere the bar is not.
             val density = LocalDensity.current
-            val navigationInsetPx = with(density) {
-                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().toPx()
-            }
+            val navigationInset =
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val navigationInsetPx = with(density) { navigationInset.toPx() }
             val statusInsetPx = with(density) {
                 WindowInsets.statusBars.asPaddingValues().calculateTopPadding().toPx()
             }
@@ -701,6 +703,10 @@ fun App(container: AppContainer) {
                         isPlaying = playing?.playback?.isPlaying == true,
                         onExpand = { watching = session.copy(minimised = false) },
                         onPlayPause = watch::playPause,
+                        // Nothing while the tab bar is under it; the full
+                        // navigation inset once that bar has gone, so the glass
+                        // still reaches the bottom of the screen.
+                        bottomInset = navigationInset * barsHidden,
                         onClose = {
                             // Stop first, then let go. The disposal that follows
                             // only releases the connection.
@@ -713,26 +719,47 @@ fun App(container: AppContainer) {
                             // below reserves the bar's height; when the bar is
                             // gone that reservation is a gap, and the player was
                             // left hanging in the middle of the feed.
-                            .graphicsLayer {
-                                translationY = if (route is Route.Home) {
-                                    barsHidden * tabBarPx
-                                } else {
-                                    0f
-                                }
+                            //
+            // `offset`, not `graphicsLayer { translationY }`.
+            //
+            // Haze samples from the node's **layout** position and knows nothing
+            // about a draw-time transform, so a translated surface drew its
+            // glass at the place it would have been — which on a moving
+            // miniplayer meant no background at all, and the tab bar showing
+            // straight through it. `offset` moves the node at placement, so the
+            // position Haze reads is the position it is drawn at.
+                            .offset {
+                                IntOffset(
+                                    x = 0,
+                                    // The tab bar's *whole* height, inset
+                                    // included — that is what slides away, and
+                                    // matching only the 56dp row left the player
+                                    // hanging 34dp short of the screen edge.
+                                    y = if (route is Route.Home) {
+                                        (barsHidden * (tabBarPx + navigationInsetPx))
+                                            .roundToInt()
+                                    } else {
+                                        0
+                                    },
+                                )
                             }
                             // It sits *on* the tab bar, not over it — the bar is
                             // how somebody leaves for another tab while this
                             // keeps playing. Search and the channel page have no
                             // tab bar, so there is nothing to clear there.
                             //
-                            // The navigation inset is **not** here: it is inside
-                            // the bar, so the glass reaches the bottom of the
-                            // screen. As an outer padding it was a transparent
-                            // strip under the player, and once the tab bar
-                            // scrolled away that strip was the feed showing
-                            // through a gap the bar looked like it should cover.
+                            // The navigation inset **and** the tab bar's row.
+                            //
+                            // Both, because the tab bar's own row sits *above*
+                            // the inset: it runs from 34dp to 90dp off the
+                            // bottom of a phone with a home indicator. Resting
+                            // the player at 56dp put it straight over that row's
+                            // icons, which is why they vanished and the bar
+                            // looked covered. It rests on top of the whole
+                            // thing, and slides down by the whole thing.
                             .padding(
-                                bottom = if (route is Route.Home) Size.topBar else 0.dp,
+                                bottom = navigationInset +
+                                    if (route is Route.Home) Size.topBar else 0.dp,
                             ),
                     )
                 } else {
@@ -763,10 +790,10 @@ fun App(container: AppContainer) {
                         // same three terms its padding and its translation are
                         // built from, so the picture arrives at the bar rather
                         // than past it.
-                        landingFromBottomPx = navigationInsetPx +
-                            tabBarReservedPx -
-                            barsHidden * tabBarPx +
-                            miniPlayerPx,
+                        landingFromBottomPx =
+                            (navigationInsetPx + tabBarReservedPx) * (1f - barsHidden) +
+                                miniPlayerPx +
+                                navigationInsetPx * barsHidden,
                         topInsetPx = statusInsetPx,
                     ) {
                         WatchScreen(
