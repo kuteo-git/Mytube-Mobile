@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.mohamedrejeb.calf.ui.gesture.adaptiveClickable
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.i18n.Strings
 import com.mytube.app.ui.theme.Tokens
@@ -118,7 +119,12 @@ fun VideoCard(
                 scaleX = scale
                 scaleY = scale
             }
-            .clickable(
+            // Calf's, not Compose's. On iOS it replaces the ripple with the
+            // scale UIKit applies to a pressed cell, which is what the
+            // hand-rolled 0.98 spring below was reaching for — that stays,
+            // because Android gets nothing from this and still needs to say the
+            // touch landed.
+            .adaptiveClickable(
                 interactionSource = press,
                 indication = null,
                 onClick = onClick,

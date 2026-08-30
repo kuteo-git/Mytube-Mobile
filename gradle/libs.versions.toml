@@ -66,6 +66,9 @@ androidxActivity = "1.13.0"
 lifecycle = "2.10.0"
 # Coil 3 is the multiplatform line; Coil 2 is Android only.
 coil = "3.4.0"
+# Adaptive controls, so iOS gets UIKit's switch, slider, buttons and sheet
+# rather than Material ones drawn on an iPhone.
+calf = "0.8.0"
 # Backdrop blur for the floating bars. See BarBackdrop for why nothing in
 # Compose Multiplatform itself can do this.
 # 1.7.0 rather than 1.7.3: the newer AAR declares `minCompileSdk=37`, and this
@@ -106,6 +109,7 @@ compose-backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", vers
 lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+calf-ui = { module = "com.mohamedrejeb.calf:calf-ui", version.ref = "calf" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-materials = { module = "dev.chrisbanes.haze:haze-materials", version.ref = "haze" }
 # Coil does not bring its own networking; it is told which engine to use, and

@@ -13,9 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,14 +63,14 @@ fun ProfileSheet(
     onDismiss: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    val sheetState = rememberModalBottomSheetState()
-
+    // Material's, blurred — see [SheetBackdrop].
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = Tokens.surface,
+        containerColor = Color.Transparent,
         dragHandle = null,
     ) {
+        Box {
+        SheetBackdrop(Modifier.matchParentSize())
         Column(Modifier.fillMaxWidth().padding(bottom = Space.xxl)) {
             Text(
                 text = strings.profileTitle,
@@ -87,6 +86,7 @@ fun ProfileSheet(
                     onClick = { onPick(profile) },
                 )
             }
+        }
         }
     }
 }

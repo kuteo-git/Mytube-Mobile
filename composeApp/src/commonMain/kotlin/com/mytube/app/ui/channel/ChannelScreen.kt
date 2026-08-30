@@ -22,7 +22,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import com.mohamedrejeb.calf.ui.progress.AdaptiveCircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -181,7 +181,7 @@ fun ChannelContent(
             if (ready.loadingMore) {
                 item(key = "more") {
                     Box(Modifier.fillMaxWidth().padding(Space.lg), Alignment.Center) {
-                        CircularProgressIndicator()
+                        AdaptiveCircularProgressIndicator()
                     }
                 }
             }

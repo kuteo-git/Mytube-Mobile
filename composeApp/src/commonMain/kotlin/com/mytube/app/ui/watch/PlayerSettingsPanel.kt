@@ -16,9 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.ModalBottomSheet
+import com.mohamedrejeb.calf.ui.toggle.AdaptiveSwitch
+import com.mytube.app.ui.shell.SheetBackdrop
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -85,15 +86,21 @@ fun PlayerSettingsPanel(
 
     if (!visible) return
 
+    // Material's sheet on both platforms, blurred by [SheetBackdrop] — see there
+    // for why Calf's native iOS sheet was tried and reverted.
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Tokens.bg,
+        // Transparent, so [SheetBackdrop] below is what the sheet is made of.
+        // A container colour here would paint over the material.
+        containerColor = Color.Transparent,
         // No scrim over the picture. The default dims the whole window, which
         // would grey out the video these settings are about.
         scrimColor = Color.Transparent,
         dragHandle = { BottomSheetDefaults.DragHandle(color = Tokens.text2) },
         modifier = modifier,
     ) {
+        Box {
+        SheetBackdrop(Modifier.matchParentSize())
         Column(
             Modifier
                 .fillMaxWidth()
@@ -192,6 +199,7 @@ fun PlayerSettingsPanel(
                 Text(strings.narrationFailed, color = Tokens.brand, fontSize = 12.sp)
             }
         }
+        }
     }
 }
 
@@ -251,7 +259,10 @@ private fun SwitchRow(label: String, checked: Boolean, onToggle: () -> Unit) {
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
         )
-        Switch(
+        // UIKit's switch on iOS, Material's on Android. A Material toggle on an
+        // iPhone is the single most obvious tell that an app is not native, and
+        // this one sits beside the two words a viewer reads most often.
+        AdaptiveSwitch(
             checked = checked,
             onCheckedChange = { onToggle() },
             colors = SwitchDefaults.colors(

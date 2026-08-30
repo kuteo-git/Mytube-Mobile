@@ -203,6 +203,11 @@ private fun LevelRow(label: String, value: Float, onChange: (Float) -> Unit) {
             Text(label, color = Tokens.text, fontSize = 14.sp)
             Text("${(value * 100).roundToInt()}%", color = Tokens.text2, fontSize = 13.sp)
         }
+        // Material's slider on both. `AdaptiveSlider` exists on Calf's main
+        // branch and is **not in the published 0.8.0** — checked by compiling
+        // against it, not by reading the docs, which list it. The switch and the
+        // sheet are there and are used; this one waits for a release that
+        // carries it.
         Slider(
             value = value,
             onValueChange = onChange,

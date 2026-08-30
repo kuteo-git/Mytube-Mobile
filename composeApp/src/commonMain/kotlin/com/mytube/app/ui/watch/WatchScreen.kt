@@ -25,7 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import com.mohamedrejeb.calf.ui.progress.AdaptiveCircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -626,7 +626,7 @@ private fun BufferingBadge(label: String) {
             .padding(horizontal = Space.md, vertical = Space.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CircularProgressIndicator(
+        AdaptiveCircularProgressIndicator(
             color = Color.White,
             strokeWidth = 2.dp,
             modifier = Modifier.size(16.dp),
