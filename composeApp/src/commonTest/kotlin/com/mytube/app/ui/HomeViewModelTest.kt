@@ -2,6 +2,7 @@ package com.mytube.app.ui
 
 import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.repository.VideoRepository
@@ -176,6 +177,8 @@ class HomeViewModelTest {
         override suspend fun setSaved(videoId: String, saved: Boolean) = Unit
         override suspend fun setSubscribed(channelId: String, subscribed: Boolean) = Unit
         override suspend fun setNotInterested(videoId: String) = Unit
+        override suspend fun subtitleCues(url: String) = emptyList<SubtitleCue>()
+
         override suspend fun comments(videoId: String) =
             emptyList<com.mytube.app.domain.model.Comment>()
         override suspend fun importComments(videoId: String) = Unit

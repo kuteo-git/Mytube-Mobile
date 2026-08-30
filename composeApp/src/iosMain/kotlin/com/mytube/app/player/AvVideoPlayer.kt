@@ -123,13 +123,16 @@ class AvVideoPlayer : VideoPlayer {
     override fun narrate(clips: List<NarrationClip>) = Unit
 
     /**
-     * Not implemented, and saying so.
+     * The language wanted, kept for the screen to read.
      *
-     * AVPlayer side-loads captions through `AVMutableComposition` or an
-     * `AVAssetResourceLoader`, neither of which can be built and run without an
-     * Xcode project. The menu is drawn on both platforms because the panel's
-     * shape is the same; on iOS choosing a track does nothing yet.
+     * AVPlayer cannot be handed a caption file that is not in the HLS manifest,
+     * and this server's manifest carries none — the captions are separate `.vtt`
+     * files on disk. So nothing is selected in the player: the watch screen
+     * fetches the file, parses it, and draws the words over the picture. The
+     * player says so through `rendersSubtitles`.
      */
+    override val rendersSubtitles: Boolean = false
+
     override fun showSubtitles(language: String) = Unit
 
     override fun play() = av.play()

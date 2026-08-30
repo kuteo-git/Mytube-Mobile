@@ -79,6 +79,21 @@ interface VideoPlayer {
     fun showSubtitles(language: String)
 
     /**
+     * Whether this player puts the captions on the picture itself.
+     *
+     * True on Android, where ExoPlayer is handed the `.vtt` files at load and
+     * draws the cues. False on iOS: AVPlayer will not take a caption file that
+     * is not in the HLS manifest, and this server's manifest carries none — so
+     * the watch screen parses the file and draws the words over the video.
+     *
+     * A property on the player rather than a platform check in the UI, because
+     * it is a fact about *this player*. Asking the object that knows is what
+     * stops both from drawing at once, and two sets of captions on one picture
+     * is a worse failure than none.
+     */
+    val rendersSubtitles: Boolean
+
+    /**
      * Stop playing and let go of the media, ending the session.
      *
      * Distinct from [release], and the distinction is the whole of what a

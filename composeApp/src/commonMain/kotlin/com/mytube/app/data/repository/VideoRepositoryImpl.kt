@@ -5,6 +5,8 @@ import com.mytube.app.data.remote.dto.toDomain
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Comment
+import com.mytube.app.domain.model.SubtitleCue
+import com.mytube.app.domain.model.parseWebVtt
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
@@ -118,6 +120,9 @@ class VideoRepositoryImpl(
             discoveryPercent = mix.discoveryPercent,
         ),
     )
+
+    override suspend fun subtitleCues(url: String): List<SubtitleCue> =
+        parseWebVtt(gateway.subtitleFile(url))
 
     override suspend fun comments(videoId: String): List<Comment> =
         gateway.comments(requireBaseUrl(), server.profileId(), videoId)

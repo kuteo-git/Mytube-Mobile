@@ -3,6 +3,7 @@ package com.mytube.app.domain.repository
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.Reaction
+import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 
@@ -94,6 +95,19 @@ interface VideoRepository {
      * error handling, differing only in which two endpoints it reaches.
      */
     suspend fun subscriptions(): List<Channel>
+
+    /**
+     * A caption file, fetched and parsed.
+     *
+     * Takes a full URL because that is what the video already carries — the
+     * captions are files under `/media`, not an endpoint keyed by video id, and
+     * rebuilding the path here would be a second place that has to agree with
+     * the server about where they live.
+     *
+     * Only iOS asks: Android hands the URL to ExoPlayer, which fetches and
+     * draws the cues itself. See `VideoPlayer.rendersSubtitles`.
+     */
+    suspend fun subtitleCues(url: String): List<SubtitleCue>
 
     suspend fun comments(videoId: String): List<Comment>
 

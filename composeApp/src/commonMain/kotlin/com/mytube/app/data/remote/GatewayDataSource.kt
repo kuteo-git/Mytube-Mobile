@@ -13,6 +13,7 @@ import com.mytube.app.data.remote.dto.VideoDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -194,6 +195,20 @@ class GatewayDataSource(private val client: HttpClient) {
      * never reaches YouTube, which is a thing worth building deliberately rather
      * than by putting a text field on a screen.
      */
+    /**
+     * A caption file, as text.
+     *
+     * No `identify(userId)`: these are served from `/media`, which the charter
+     * leaves unprotected on purpose, and sending a profile header to a static
+     * file would imply the answer depends on who is asking.
+     */
+    suspend fun subtitleFile(url: String): String =
+        // `bodyAsText`, not `body<String>()`. The client installs JSON content
+        // negotiation and this file is served as `text/vtt`, so going through
+        // the negotiator asks it to deserialize a caption file — which fails,
+        // and the caller was swallowing that failure as "no captures found".
+        client.get(url).orThrow().bodyAsText()
+
     suspend fun comments(baseUrl: String, userId: String, videoId: String): CommentsDto =
         client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/comments") {
             identify(userId)

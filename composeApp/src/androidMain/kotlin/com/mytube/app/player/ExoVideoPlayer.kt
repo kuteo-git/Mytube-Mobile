@@ -201,6 +201,9 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
         controller = null
     }
 
+    /** ExoPlayer is given the .vtt files at load and draws the cues itself. */
+    override val rendersSubtitles: Boolean = true
+
     override fun showSubtitles(language: String) {
         val player = controller ?: return
         player.trackSelectionParameters = player.trackSelectionParameters

@@ -184,6 +184,14 @@ fun WatchContent(
             when (state) {
                 is WatchState.Playing -> if (player != null) {
                     VideoSurface(player, Modifier.fillMaxSize())
+                    // Between the picture and the control bar: the bar covers
+                    // the bottom of the frame, which is where captions go, and
+                    // it wins the overlap for the few seconds it is visible.
+                    SubtitleOverlay(
+                        cues = state.subtitleCues,
+                        positionSeconds = state.playback.positionSeconds,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
                     if (state.playback.isBuffering) CircularProgressIndicator()
                     PlayerControls(
                         playback = state.playback,

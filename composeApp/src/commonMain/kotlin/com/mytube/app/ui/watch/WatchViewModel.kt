@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.Narration
+import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Stream
 import com.mytube.app.domain.model.Video
@@ -105,6 +106,15 @@ sealed interface WatchState {
         val railChannelOnly: Boolean = false,
         /** The track being shown, or empty for none. */
         val subtitleLanguage: String = "",
+        /**
+         * The cues of that track, when this player does not draw them itself.
+         *
+         * Empty on Android, always: ExoPlayer is handed the file and renders
+         * the captions on the picture. On iOS AVPlayer will not take a caption
+         * file outside the HLS manifest, so the words are drawn by the screen —
+         * see `VideoPlayer.rendersSubtitles`.
+         */
+        val subtitleCues: List<SubtitleCue> = emptyList(),
         /**
          * Whether reaching the end should advance to the next video.
          *
@@ -217,9 +227,39 @@ class WatchViewModel(
     fun selectSubtitles(language: String) {
         val current = _state.value as? WatchState.Playing ?: return
         val next = if (current.subtitleLanguage == language) "" else language
-        _state.value = current.copy(subtitleLanguage = next)
+        _state.value = current.copy(subtitleLanguage = next, subtitleCues = emptyList())
         player.showSubtitles(next)
+        loadCues(next)
         viewModelScope.launch { runCatching { preferences.setSubtitleLanguage(next) } }
+    }
+
+    /**
+     * Fetch and parse the chosen track, for players that do not draw captions.
+     *
+     * A failure is swallowed on purpose: captions are the one thing on this
+     * screen that nothing else depends on, and a video that plays with no
+     * subtitles is a far better outcome than an error over a working picture.
+     * The menu still shows the track as chosen, which is honest — it is chosen,
+     * and the file did not arrive.
+     */
+    private fun loadCues(language: String) {
+        if (player.rendersSubtitles) return
+        val current = _state.value as? WatchState.Playing ?: return
+        val track = current.video.subtitles.firstOrNull { it.language == language }
+        if (language.isEmpty() || track == null) return
+        viewModelScope.launch {
+            val cues = runCatching {
+                videos.subtitleCues(mediaBaseUrl.trimEnd('/') + track.url)
+            }.getOrDefault(emptyList())
+            // Re-read rather than closing over `current`: the video may have
+            // been changed, or the track switched off, while this was in
+            // flight, and writing then would put one video's captions over
+            // another's picture.
+            val now = _state.value as? WatchState.Playing ?: return@launch
+            if (now.subtitleLanguage == language && now.video.id == current.video.id) {
+                _state.value = now.copy(subtitleCues = cues)
+            }
+        }
     }
 
     fun toggleAutoplay() {
@@ -537,6 +577,10 @@ class WatchViewModel(
 
             loadUpNext("")
             loadComments()
+            // After the state exists, not beside the track selection above:
+            // `loadCues` reads the current Playing state to find the track's
+            // URL, and at that point there is not one yet.
+            (_state.value as? WatchState.Playing)?.let { loadCues(it.subtitleLanguage) }
             // A broadcast is never narrated: the pass reads a caption file, and
             // one that is still being spoken has none.
             if (preferences.narration() && _state.value.let {
