@@ -112,7 +112,6 @@ fun SearchContent(
             Spacer(
                 Modifier
                     .fillMaxWidth()
-                    .background(Tokens.statusBar)
                     .windowInsetsTopHeight(WindowInsets.statusBars),
             )
             SearchBar(query, onBack, onType, onClear)

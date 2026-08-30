@@ -1089,3 +1089,45 @@ system closes the app as every other app does.
 Reached from Settings, with no tab bar of its own. Same back arrow as the channel
 page, drawn over every state — a shelf that would not load was otherwise a dead
 end, and iOS has no system back at all.
+
+## The card takes YouTube's shape, and the white strip moves to one place (2026-08-30)
+
+### The feed card
+
+The reference for Home and History changed from the web app to the **YouTube
+app**, with screenshots. Measured off them (iPhone, 1170px wide) rather than
+eyeballed:
+
+| | web card (before) | YouTube app (now) |
+|---|---|---|
+| thumbnail | 12dp radius, side margin | **edge to edge, square** |
+| meta | two grey lines | **one**: `channel · views · age` |
+| pressed | ripple over the card | `#272727` on the **meta row only**, full width |
+
+- **Edge to edge is what makes a feed read as a column of pictures** rather than
+  a list of tiles. Measured: the thumbnail reaches x=0 and x=1169.
+- **One meta line, because two is four lines of text per card** under a two-line
+  title, and on a narrow screen that turns the column of pictures into a wall of
+  writing.
+- **The pressed fill is on the row, not the card.** Measured by diffing the two
+  screenshots: `#0F0F0F` → `#272727` across the whole meta band, with the
+  thumbnail unchanged. A ripple over a photograph is invisible anyway.
+- The bottom padding moved *inside* the meta row, because the fill has to reach
+  the bottom of it — space between cards would leave a gap the highlight stops
+  short of.
+
+### One place paints the status bar
+
+Painting it per screen was wrong twice in one sitting.
+
+- **Three screens painted it and three did not.** Channel, Saved and Setup only
+  *reserved* the height. That was invisible until the system glyphs were told to
+  draw dark, and then the clock vanished on exactly those three — measured,
+  `#0F0F0F` under dark ink.
+- **Then it was painted at the root, above the watch overlay** — and the watch
+  layer draws over the tabs with its own background, so the clock went
+  dark-on-dark again the moment a video was open. It is now the **last child of
+  the root Box**.
+
+Sized from `WindowInsets.statusBars`, which is zero while the bar is hidden, so
+fullscreen gets no white band without a condition saying so.

@@ -105,7 +105,6 @@ private fun TopBar(profileInitial: String, onSearch: () -> Unit, modifier: Modif
         Spacer(
             Modifier
                 .fillMaxWidth()
-                .background(Tokens.statusBar)
                 .windowInsetsTopHeight(WindowInsets.statusBars),
         )
         Row(

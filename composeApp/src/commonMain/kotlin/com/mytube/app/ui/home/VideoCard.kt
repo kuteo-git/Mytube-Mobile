@@ -19,6 +19,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,13 +84,32 @@ fun VideoCard(
     onOpenChannel: (() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    Column(modifier = modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    // Pressed state, read here rather than left to the default ripple.
+    //
+    // Measured off the YouTube app: pressing a card fills the **meta row** with
+    // `#272727`, edge to edge, and leaves the thumbnail alone. A ripple spreading
+    // over a photograph is invisible anyway, and one spreading over the whole
+    // card is a different shape from what is being copied.
+    val press = remember { MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = press,
+                indication = null,
+                onClick = onClick,
+            ),
+    ) {
         Box(
             Modifier
-                .padding(horizontal = Space.lg)
+                // Edge to edge, square. The design system's 12dp radius and side
+                // margin describe the *web* card; on the phone app the picture
+                // runs into both edges of the screen, which is what makes a feed
+                // read as a column of pictures rather than a list of tiles.
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(Radius.thumbnail))
                 .background(Tokens.surface),
         ) {
             AsyncImage(
@@ -136,11 +157,18 @@ fun VideoCard(
         }
 
         Row(
-            modifier = Modifier.padding(
-                start = Space.lg,
-                end = Space.sm,
-                top = Space.md,
-            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                // The pressed fill goes on the row, edge to edge, before the
+                // padding — so it reaches the screen's edges rather than stopping
+                // where the text starts.
+                .background(if (pressed) Tokens.surfaceHover else Color.Transparent)
+                .padding(
+                    start = Space.lg,
+                    end = Space.sm,
+                    top = Space.md,
+                    bottom = Space.md,
+                ),
             verticalAlignment = Alignment.Top,
         ) {
             AsyncImage(
@@ -169,20 +197,18 @@ fun VideoCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(4.dp))
+                // Channel, views and age on **one** line, joined by "·".
+                //
+                // Two lines is what the web card does and what this drew until
+                // now. The phone app puts all three together, and the reason is
+                // visible on a narrow screen: two grey lines under a two-line
+                // title is four lines of text per card, which turns a column of
+                // pictures into a wall of writing.
                 Text(
-                    text = video.channel.name,
-                    color = Tokens.text2,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                // Views and age on their own line, which is what the card
-                // specification says and what the web draws. The first version
-                // put the channel and the views on one line, which fits but
-                // reads as a different app.
-                Text(
-                    text = metaLine(video, strings),
+                    text = listOfNotNull(
+                        video.channel.name.takeIf { it.isNotEmpty() },
+                        metaLine(video, strings).takeIf { it.isNotEmpty() },
+                    ).joinToString(" · "),
                     color = Tokens.text2,
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
@@ -197,9 +223,11 @@ fun VideoCard(
             VideoCardMenu(video, strings, onSave, onNotInterested)
         }
 
-        // 40px between cards, from the grid's vertical gap. It is what makes a
-        // feed read as a list of separate things rather than a wall.
-        Spacer(Modifier.height(Space.xxl))
+        // The gap between cards. Smaller than the web's 40px because the meta
+        // row now carries its own bottom padding — the pressed fill has to reach
+        // the bottom of the row, so the space below the text belongs *inside*
+        // it rather than between the cards.
+        Spacer(Modifier.height(Space.md))
     }
 }
 
