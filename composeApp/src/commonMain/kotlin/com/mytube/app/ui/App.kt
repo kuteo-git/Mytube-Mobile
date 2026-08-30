@@ -724,11 +724,15 @@ fun App(container: AppContainer) {
                             // how somebody leaves for another tab while this
                             // keeps playing. Search and the channel page have no
                             // tab bar, so there is nothing to clear there.
+                            //
+                            // The navigation inset is **not** here: it is inside
+                            // the bar, so the glass reaches the bottom of the
+                            // screen. As an outer padding it was a transparent
+                            // strip under the player, and once the tab bar
+                            // scrolled away that strip was the feed showing
+                            // through a gap the bar looked like it should cover.
                             .padding(
-                                bottom = WindowInsets.navigationBars
-                                    .asPaddingValues()
-                                    .calculateBottomPadding() +
-                                    if (route is Route.Home) Size.topBar else 0.dp,
+                                bottom = if (route is Route.Home) Size.topBar else 0.dp,
                             ),
                     )
                 } else {

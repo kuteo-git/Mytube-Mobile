@@ -1,6 +1,7 @@
 package com.mytube.app.ui.watch
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -110,6 +111,13 @@ fun PlayerControls(
     // restarts the countdown rather than letting the controls vanish under a
     // finger that is still using them.
     var lastTouch by remember { mutableStateOf(0) }
+    // Where the finger is on the bar while it is down, as a fraction, or -1.
+    //
+    // Hoisted out of the bar because the whole screen answers to it: the
+    // controls step out of the way, and the time being aimed at is drawn in the
+    // middle of the picture rather than in the corner where the clock lives.
+    var scrub by remember { mutableStateOf(-1f) }
+    val scrubbing = scrub >= 0f
 
     LaunchedEffect(visible, lastTouch, playback.isPlaying) {
         // A paused video keeps its controls. Hiding them leaves a still frame
@@ -131,7 +139,11 @@ fun PlayerControls(
                 lastTouch++
             },
     ) {
-        AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut()) {
+        // Out of the way while scrubbing. YouTube does this and the reason is
+        // plain on a phone: the transport discs sit in the middle of the frame,
+        // which is the half of the picture somebody dragging the bar is trying
+        // to see.
+        AnimatedVisibility(visible && !scrubbing, enter = fadeIn(), exit = fadeOut()) {
             // A scrim, not a solid. White glyphs over a bright frame are
             // unreadable, and darkening the whole picture to fix that is
             // punishing the video for the controls.
@@ -228,28 +240,6 @@ fun PlayerControls(
                     )
                 }
 
-                // The seek bar first, so the row below is composed *after* it
-                // and wins the overlap.
-                //
-                // This ordering is the whole of bug "the buttons are hard to
-                // press". The bar is full width with a 32dp touch target along
-                // the bottom edge, and it used to be drawn last — so it lay on
-                // top of the fullscreen button and the clock, and a tap meant
-                // for fullscreen was read as a seek to 94%. Nothing about the
-                // button was too small; it was underneath something invisible.
-                if (!isLive) {
-                    SeekBar(
-                        progress = playback.progress,
-                        enabled = playback.durationSeconds > 0,
-                        onSeekFraction = {
-                            onSeek(it * playback.durationSeconds)
-                            lastTouch++
-                        },
-                        onInteract = { lastTouch++ },
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                }
-
                 // The clock as a pill at the bottom left, fullscreen opposite.
                 //
                 // The bottom padding clears the seek bar's 32dp target rather
@@ -299,6 +289,54 @@ fun PlayerControls(
                 }
             }
         }
+
+        // The bar lives outside the scrim, so it is there whether or not the
+        // controls are.
+        //
+        // That is what the platform does and it is the whole shape of this
+        // control: at rest it is a hairline along the very bottom edge saying
+        // how far through the video is; touched, it grows and takes a finger.
+        // It used to appear and disappear with the controls, which meant a video
+        // playing with the controls faded had nothing on screen to say how far
+        // through it was.
+        if (!isLive) {
+            SeekBar(
+                progress = playback.progress,
+                enabled = playback.durationSeconds > 0,
+                expanded = visible,
+                scrub = scrub,
+                onScrub = { scrub = it },
+                onSeekFraction = {
+                    onSeek(it * playback.durationSeconds)
+                    lastTouch++
+                },
+                onInteract = { lastTouch++ },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+
+        // The time being aimed at, in the middle of the picture.
+        //
+        // In the middle because that is where the eye already is — the corner
+        // pill is a readout of where playback *is*, and while a finger is on the
+        // bar the question is where it is going. Only while scrubbing: two
+        // clocks disagreeing by a minute is the state this replaces.
+        if (scrubbing) {
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .padding(horizontal = Space.lg, vertical = Space.sm),
+            ) {
+                Text(
+                    text = formatDuration((scrub * playback.durationSeconds).toInt()),
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
@@ -337,15 +375,40 @@ private fun DiscButton(
 /**
  * The bar, and the only thing here that takes a drag.
  *
- * Disabled until the duration is known. A bar that can be dragged before the
- * player knows how long the video is computes a target from zero, which is a
- * seek to zero — the video restarting is what a viewer sees, and nothing
- * explains it.
+ * ## Three states, one control
+ *
+ * - **At rest**: a hairline along the very bottom edge of the picture. No thumb.
+ *   It is a readout, and a thumb on a line nobody is touching is an invitation
+ *   to a gesture that is already available anywhere along it.
+ * - **Controls up**: the same line, with a small knob, so it reads as something
+ *   that can be taken hold of.
+ * - **Under a finger**: the track thickens and the knob grows, which is the only
+ *   feedback a seek has before the picture catches up — and the picture does not
+ *   catch up until the finger lifts.
+ *
+ * ## Why it is not disabled before the duration is known
+ *
+ * It is. A bar that can be dragged before the player knows how long the video is
+ * computes a target from zero, which is a seek to zero — the video restarting is
+ * what a viewer sees, and nothing explains it.
+ *
+ * ## The notches
+ *
+ * A tick of haptic feedback every hundredth of the bar. Not every second: on a
+ * three-hour video a finger sweeping the width would cross ten thousand of them,
+ * and a continuous buzz is not feedback. A hundred notches feels the same on a
+ * two-minute clip and on a film, which is what makes the control feel like one
+ * control.
  */
 @Composable
 private fun SeekBar(
     progress: Float,
     enabled: Boolean,
+    /** The controls are up, so the bar shows it can be grabbed. */
+    expanded: Boolean,
+    /** Where the finger is, 0..1, or -1 when nothing is touching it. */
+    scrub: Float,
+    onScrub: (Float) -> Unit,
     onSeekFraction: (Double) -> Unit,
     /**
      * Called on every movement of the finger.
@@ -359,19 +422,49 @@ private fun SeekBar(
     modifier: Modifier = Modifier,
 ) {
     var width by remember { mutableStateOf(1f) }
-    // What the finger is on while it is down. The player's own progress keeps
-    // arriving during a drag and would fight it — the thumb would jump back to
-    // wherever playback is between frames.
-    var dragging by remember { mutableStateOf(-1f) }
-    val shown = if (dragging >= 0f) dragging else progress
+    val dragging = scrub >= 0f
+    // The player's own progress keeps arriving during a drag and would fight it,
+    // so the finger wins while it is down.
+    val shown = if (dragging) scrub else progress
+
+    val tick = rememberSeekTick()
+    // The notch last reported, so one is felt per crossing rather than per frame.
+    var lastNotch by remember { mutableStateOf(-1) }
+
+    fun move(x: Float) {
+        val fraction = (x / width).coerceIn(0f, 1f)
+        onScrub(fraction)
+        onInteract()
+        val notch = (fraction * NOTCHES).toInt()
+        if (notch != lastNotch) {
+            lastNotch = notch
+            tick()
+        }
+    }
+
+    val track by animateDpAsState(
+        targetValue = when {
+            dragging -> TRACK_DRAGGING
+            expanded -> TRACK_EXPANDED
+            else -> TRACK_RESTING
+        },
+        label = "seek-track",
+    )
+    val knob by animateDpAsState(
+        targetValue = when {
+            dragging -> KNOB_DRAGGING
+            expanded -> KNOB_EXPANDED
+            else -> 0.dp
+        },
+        label = "seek-knob",
+    )
 
     Box(
         modifier
             .fillMaxWidth()
-            // A 3dp line is what the design system draws, and 3dp is nothing to
-            // aim at. The target is 32dp with the line centred in it — 24 was
-            // the number before, and on a moving video with a thumb arriving at
-            // an angle it was measurably missable.
+            // A 3dp line is nothing to aim at. The target is 32dp with the line
+            // along its bottom edge — 24 was the number before, and on a moving
+            // video with a thumb arriving at an angle it was measurably missable.
             .height(32.dp)
             .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
             // Tapping the bar moves there. Its own pointerInput rather than a
@@ -387,51 +480,61 @@ private fun SeekBar(
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
                 detectHorizontalDragGestures(
-                    onDragStart = {
-                        dragging = (it.x / width).coerceIn(0f, 1f)
-                        onInteract()
-                    },
+                    onDragStart = { move(it.x) },
                     onDragEnd = {
-                        if (dragging >= 0f) onSeekFraction(dragging.toDouble())
-                        dragging = -1f
+                        if (scrub >= 0f) onSeekFraction(scrub.toDouble())
+                        onScrub(-1f)
+                        lastNotch = -1
                     },
-                    onDragCancel = { dragging = -1f },
-                    onHorizontalDrag = { change, _ ->
-                        dragging = (change.position.x / width).coerceIn(0f, 1f)
-                        onInteract()
+                    onDragCancel = {
+                        onScrub(-1f)
+                        lastNotch = -1
                     },
+                    onHorizontalDrag = { change, _ -> move(change.position.x) },
                 )
             },
-        contentAlignment = Alignment.Center,
+        // Along the bottom edge, not centred in the target. At rest the line is
+        // the boundary of the picture, which is where every player draws it.
+        contentAlignment = Alignment.BottomCenter,
     ) {
-        Box(Modifier.fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.3f))) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(track)
+                .background(Color.White.copy(alpha = 0.3f)),
+        ) {
             Box(Modifier.fillMaxWidth(shown).fillMaxHeight().background(Tokens.brand))
         }
-        // The thumb, which is what says the bar can be moved at all.
+
+        // The knob rides the filled portion's right edge.
         //
         // align(CenterStart) is not decoration. The parent centres its children,
         // so a box occupying the filled fraction was centred in the bar rather
         // than starting at its left edge — putting the thumb at 55% over a video
         // twelve per cent through, with the red fill beside it disagreeing.
-        Box(
-            Modifier
-                .align(Alignment.CenterStart)
-                .fillMaxWidth(shown)
-                .height(32.dp),
-            contentAlignment = Alignment.CenterEnd,
-        ) {
-            // Bigger while a finger is on it. A thumb the size of the one it is
-            // under says the bar has been grabbed, which is the only feedback a
-            // seek gives before the picture catches up.
+        if (knob > 0.dp) {
             Box(
                 Modifier
-                    .size(if (dragging >= 0f) 18.dp else 12.dp)
-                    .clip(CircleShape)
-                    .background(Tokens.brand),
-            )
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth(shown)
+                    .height(knob),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Box(Modifier.size(knob).clip(CircleShape).background(Tokens.brand))
+            }
         }
     }
 }
+
+/** A hairline at rest; a line to grab when the controls are up; a bar under a finger. */
+private val TRACK_RESTING = 3.dp
+private val TRACK_EXPANDED = 3.dp
+private val TRACK_DRAGGING = 6.dp
+private val KNOB_EXPANDED = 12.dp
+private val KNOB_DRAGGING = 22.dp
+
+/** How many notches the width is divided into, for the feedback. */
+private const val NOTCHES = 100
 
 @Composable
 private fun ControlButton(

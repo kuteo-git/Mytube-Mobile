@@ -77,6 +77,15 @@ fun BarBackdrop(
      * the thin end under the text and the solid end against nothing.
      */
     fromTop: Boolean = true,
+    /**
+     * How much of the app's own colour sits over the blur.
+     *
+     * The default is chrome that content passes under. The miniplayer asks for
+     * more: it is a *panel* rather than an edge, it carries two lines of text,
+     * and at the chrome level it read as a smear of whatever thumbnail happened
+     * to be behind it rather than as a surface.
+     */
+    tint: Float = TINT_CHROME,
 ) {
     // 0.94 against 0.72. Wide enough for the movement under it to be visible,
     // and the solid end is where every glyph sits — the tab labels are 10sp, and
@@ -85,16 +94,18 @@ fun BarBackdrop(
     if (haze != null) {
         Box(
             modifier.hazeEffect(state = haze) {
-                // 24dp: enough that a headline passing underneath is texture
-                // rather than words — a backdrop that can still be read is a
-                // distraction, not a background.
-                blurRadius = 24.dp
+                // 16dp, down from 24. Wider than this and a thumbnail passing
+                // under the bar stops being a suggestion of content and becomes
+                // a field of colour — which is what a screenshot of the tab bar
+                // over a bright card showed, and what "blur the miniplayer, not
+                // the whole screen" was describing: the blur was the right size
+                // and the wrong strength.
+                blurRadius = 16.dp
                 // A tint over the blur, as every system that does this applies
                 // one. The blur says the content continues underneath; the tint
-                // is what keeps a 10sp tab label legible over whatever happens
-                // to be passing. Lighter than the wash below, because the blur
-                // is already doing most of that work.
-                tints = listOf(HazeTint(Tokens.bg.copy(alpha = 0.55f)))
+                // is what keeps a 10sp tab label legible over whatever is
+                // passing, and what stops the bar reading as a window.
+                tints = listOf(HazeTint(Tokens.bg.copy(alpha = tint)))
             },
         )
         return
@@ -116,3 +127,9 @@ fun BarBackdrop(
  * how the next one to pin something forgets.
  */
 val LocalHaze = compositionLocalOf<HazeState?> { null }
+
+/** Chrome that content passes under: the two bars and the chip row. */
+const val TINT_CHROME = 0.74f
+
+/** A panel that sits on the chrome: the miniplayer, which carries text. */
+const val TINT_PANEL = 0.86f

@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +32,7 @@ import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.BarBackdrop
+import com.mytube.app.ui.shell.TINT_PANEL
 import com.mytube.app.ui.theme.Tokens
 
 /** The bar's height, which is what the picture inside it is sized from. */
@@ -93,9 +97,20 @@ fun MiniPlayer(
     // on the tab bar and inherits that bar's job of letting the feed show
     // through — a solid strip between two frosted ones reads as a different
     // surface that happens to be the same colour.
-    BarBackdrop(Modifier.matchParentSize(), fromTop = false)
+    BarBackdrop(Modifier.matchParentSize(), fromTop = false, tint = TINT_PANEL)
 
-    Column(Modifier.fillMaxWidth()) {
+    // The navigation inset belongs inside the bar, under the backdrop above —
+    // so the glass runs to the bottom edge of the screen while the row keeps
+    // clear of the home indicator. Outside, it was a see-through strip beneath
+    // the player.
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(
+                bottom = WindowInsets.navigationBars.asPaddingValues()
+                    .calculateBottomPadding(),
+            ),
+    ) {
         // A line, not a bar. It says how far through without asking for any of
         // the 64dp the row needs, and it is the only thing here that moves.
         Box(Modifier.fillMaxWidth().height(2.dp).background(Tokens.line)) {
