@@ -43,16 +43,14 @@ class MainActivity : ComponentActivity() {
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // `light` means a light *background*, so the system draws its clock,
-        // battery and signal in dark ink. That is not decoration: the strip
-        // behind them is white (`Tokens.statusBar`), and the default white
-        // glyphs would be invisible on it. The two settings are one decision and
-        // must move together.
+        // These names describe the *background*, not the ink: `dark` means the
+        // strip behind the clock, battery and signal is dark, so the system
+        // draws them in white. That is what is wanted here — the bar is
+        // transparent and every screen behind it is `Tokens.bg` (#0F0F0F), on
+        // which the dark glyphs `light` produces are invisible. Measured: that
+        // is exactly what shipped for one build.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT,
-            ),
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         askForNotifications()
         val container = MytubeApp.container(applicationContext)
