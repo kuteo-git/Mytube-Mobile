@@ -15,6 +15,9 @@ import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.AVFAudio.setActive
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
+import platform.AVFoundation.AVPlayerItemStatusFailed
+import platform.AVFoundation.status
+import platform.AVFoundation.error
 import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
 import platform.AVFoundation.addPeriodicTimeObserverForInterval
 import platform.AVFoundation.removeTimeObserver
@@ -176,9 +179,21 @@ class AvVideoPlayer : VideoPlayer {
             interval = CMTimeMakeWithSeconds(0.25, 600),
             queue = dispatch_get_main_queue(),
         ) { time ->
-            val duration = av.currentItem?.duration?.let { CMTimeGetSeconds(it) } ?: 0.0
+            val item = av.currentItem
+            val duration = item?.duration?.let { CMTimeGetSeconds(it) } ?: 0.0
+            // A failed item is otherwise completely silent: the picture stays
+            // black, the clock stays at zero, and nothing anywhere says why.
+            // Read from this tick rather than through KVO — the observer is
+            // already running, and one source of truth for "how is playback
+            // getting on" is better than two that can disagree.
+            val failure = if (item?.status == AVPlayerItemStatusFailed) {
+                item.error?.localizedDescription ?: "playback failed"
+            } else {
+                null
+            }
             _state.update {
                 it.copy(
+                    error = failure ?: it.error,
                     positionSeconds = CMTimeGetSeconds(time),
                     // NaN is what AVPlayer reports before it knows, and it must
                     // not reach a progress bar: NaN/NaN draws as nothing at all.
