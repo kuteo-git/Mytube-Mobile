@@ -1,5 +1,7 @@
 package com.mytube.app.player
 
+import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
+import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
@@ -81,6 +83,16 @@ class AvVideoPlayer : VideoPlayer {
     private var narrator: Narrator? = null
 
     /**
+     * The viewer's two levels, held here because the narrator is built lazily.
+     *
+     * Levels set before the first line is spoken would otherwise be lost, and
+     * that is the ordinary case: they are read from the device when the video
+     * opens, minutes before the server's first clip is ready.
+     */
+    private var voiceLevel: Float = DEFAULT_VOICE_LEVEL
+    private var duckLevel: Float = DEFAULT_DUCK_LEVEL
+
+    /**
      * The lock screen's entry.
      *
      * Built here rather than by the ViewModel: the commands it registers are
@@ -132,7 +144,14 @@ class AvVideoPlayer : VideoPlayer {
             return
         }
         val live = narrator ?: Narrator(IosNarrationHost(av)).also { narrator = it }
+        live.setLevels(voiceLevel, duckLevel)
         live.setClips(clips)
+    }
+
+    override fun setNarrationLevels(voice: Float, duck: Float) {
+        voiceLevel = voice
+        duckLevel = duck
+        narrator?.setLevels(voice, duck)
     }
 
     /**

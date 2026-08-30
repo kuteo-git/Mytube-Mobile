@@ -35,6 +35,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,8 +44,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.ui.home.Space
+import com.mytube.app.ui.home.ChannelAvatar
 import com.mytube.app.ui.home.VideoCard
 import com.mytube.app.ui.home.formatCount
 import com.mytube.app.ui.home.imageModel
@@ -65,7 +68,17 @@ fun ChannelScreen(
     mediaBaseUrl: String,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenVideo: (String) -> Unit,
+    /**
+     * Open a video, and hand over the list it came from.
+     *
+     * The second argument is what makes this a playlist rather than a page of
+     * links: the ids in the order the page is showing them, so pressing next
+     * inside the video stays in *this* channel in *this* order. The web app
+     * carries the same thing in the URL as `?list=channel:…&sort=…`, and the
+     * reasoning it wrote down applies here — a sorted list you can only leave by
+     * playing something is not a sorted list, it is a way of finding one video.
+     */
+    onOpenVideo: (String, List<String>) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -79,6 +92,7 @@ fun ChannelScreen(
         onSelectSort = viewModel::selectSort,
         onToggleSubscribed = viewModel::toggleSubscribed,
         onLoadMore = viewModel::loadMore,
+        onSaveVideo = viewModel::toggleSaved,
     )
 }
 
@@ -88,11 +102,12 @@ fun ChannelContent(
     mediaBaseUrl: String,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenVideo: (String) -> Unit,
+    onOpenVideo: (String, List<String>) -> Unit,
     onRetry: () -> Unit,
     onSelectSort: (SortOption) -> Unit,
     onToggleSubscribed: () -> Unit,
     onLoadMore: () -> Unit,
+    onSaveVideo: (Video) -> Unit = {},
 ) {
     val strings = LocalStrings.current
 
@@ -121,9 +136,20 @@ fun ChannelContent(
             snapshotFlow { atEnd }.collect { if (it) onLoadMore() }
         }
 
+        // The ids in the order shown, computed once per page rather than per
+        // card: it is the same list for every row, and rebuilding it inside
+        // `items` would allocate one per visible thumbnail on every scroll frame.
+        val queue = remember(ready.videos) { ready.videos.map { it.id } }
+
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                // Dimmed while a different order is on its way. It says the
+                // press was heard without taking the page away — which is what
+                // dropping to a full-screen skeleton did, and why re-sorting
+                // read as the channel reloading from scratch.
+                .graphicsLayer { alpha = if (ready.sorting) 0.45f else 1f },
             contentPadding = tabContentPadding(),
         ) {
             item(key = "header") {
@@ -143,7 +169,13 @@ fun ChannelContent(
             }
 
             items(ready.videos, key = { it.id }) { video ->
-                VideoCard(video, mediaBaseUrl, strings, onClick = { onOpenVideo(video.id) })
+                VideoCard(
+                    video = video,
+                    mediaBaseUrl = mediaBaseUrl,
+                    strings = strings,
+                    onClick = { onOpenVideo(video.id, queue) },
+                    onSave = { onSaveVideo(video) },
+                )
             }
 
             if (ready.loadingMore) {
@@ -199,11 +231,11 @@ private fun Header(
         Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        AsyncImage(
-            model = imageModel(mediaBaseUrl, channel.avatarPath),
-            contentDescription = channel.name,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(72.dp).clip(CircleShape).background(Tokens.surface),
+        ChannelAvatar(
+            name = channel.name,
+            mediaBaseUrl = mediaBaseUrl,
+            path = channel.avatarPath,
+            size = 72.dp,
         )
         Spacer(Modifier.height(Space.md))
         Text(
@@ -316,7 +348,7 @@ private fun preview(state: ChannelState) {
             mediaBaseUrl = "",
             onBack = {},
             onOpenSettings = {},
-            onOpenVideo = {},
+            onOpenVideo = { _, _ -> },
             onRetry = {},
             onSelectSort = {},
             onToggleSubscribed = {},

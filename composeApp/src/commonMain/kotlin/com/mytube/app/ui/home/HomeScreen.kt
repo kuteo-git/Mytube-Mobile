@@ -29,6 +29,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import com.mytube.app.ui.shell.BarBackdrop
+import com.mytube.app.ui.shell.LocalBarsHidden
 import com.mytube.app.ui.shell.FeedSkeleton
 import com.mytube.app.ui.shell.TabRefreshIndicator
 import com.mytube.app.ui.shell.tabContentPadding
@@ -45,6 +47,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -248,19 +252,15 @@ private fun Feed(
         // a header — and it is wrong here: the chips are the feed's *filter*,
         // and a filter that scrolls away means changing your mind costs a
         // journey back to the top. The web app pins it and so does this.
-        ChipRow(
-            chips = state.chips,
-            selected = state.selected,
-            onSelect = onSelectChip,
-            modifier = Modifier
-                .zIndex(1f)
-                .background(Tokens.bg)
-                .padding(
-                    top = WindowInsets.statusBars.asPaddingValues()
-                        .calculateTopPadding() + Size.topBar,
-                    bottom = Space.md,
-                ),
-        )
+        // No chip row here.
+        //
+        // It is drawn by the shell, inside the top bar, through `underTopBar` —
+        // see `AppShell`. It lived here, pinned at a fixed offset below the bar,
+        // and being a separate floating surface made it wrong twice: it stayed
+        // put when the bars slid away on scroll, and it carried its own backdrop
+        // so a frosted bar sat on an opaque strip of the same colour. The list's
+        // top padding below still allows for it, because the bar it now belongs
+        // to is that much taller.
 
         LazyColumn(
             state = listState,

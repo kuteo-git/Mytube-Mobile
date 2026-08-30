@@ -37,9 +37,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
@@ -70,6 +79,20 @@ fun tabContentPadding(): PaddingValues = tabContentPadding(LocalMiniPlayerShowin
 
 /** Whether the miniplayer bar is on screen, for the padding above to read. */
 val LocalMiniPlayerShowing = staticCompositionLocalOf { false }
+
+/**
+ * How far the floating bars have slid out of the way: 0 down, 1 gone.
+ *
+ * Read by anything else pinned to the top of a tab — today that is the feed's
+ * chip row. It was pinned at a *fixed* offset below the top bar, so scrolling
+ * down took both bars away and left the chips floating alone under a band of
+ * empty black. The chips are chrome too; they leave with the chrome.
+ *
+ * A local rather than a parameter for the reason `LocalMiniPlayerShowing` is
+ * one: it is an ambient fact about the shell, and threading a float through
+ * every screen signature is how the next screen to pin something forgets.
+ */
+val LocalBarsHidden = compositionLocalOf { 0f }
 
 @Composable
 private fun tabContentPadding(miniPlayer: Boolean): PaddingValues = PaddingValues(
@@ -201,6 +224,21 @@ private fun Centered(content: @Composable () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoxScope.TabRefreshIndicator(state: PullToRefreshState, isRefreshing: Boolean) {
+    // `offset`, not `padding`.
+    //
+    // Padding puts the indicator inside a smaller box, and the indicator draws
+    // itself *above* its own origin while the finger is pulling — so the top of
+    // the disc was clipped by the padding box for the whole of the gesture, and
+    // what a reader saw was a spinner with its head cut off. An offset moves
+    // where it draws without changing what may be drawn.
+    //
+    // The distance is the same arithmetic as [tabContentPadding], and for the
+    // same reason: the bar is 56dp *plus* the status bar, and it floats over the
+    // list. A little more, so the disc clears the bar rather than touching it.
+    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
+        Size.topBar + Space.sm
+    val offsetPx = with(LocalDensity.current) { top.roundToPx() }
+
     PullToRefreshDefaults.Indicator(
         state = state,
         isRefreshing = isRefreshing,
@@ -208,10 +246,7 @@ fun BoxScope.TabRefreshIndicator(state: PullToRefreshState, isRefreshing: Boolea
         color = Tokens.text,
         modifier = Modifier
             .align(Alignment.TopCenter)
-            .padding(
-                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
-                    Size.topBar,
-            ),
+            .offset { IntOffset(0, offsetPx) },
     )
 }
 
@@ -227,6 +262,51 @@ fun BoxScope.TabRefreshIndicator(state: PullToRefreshState, isRefreshing: Boolea
  * is a second animation to keep at 60fps on a television; a fade between two
  * greys says the same thing and costs one alpha.
  */
+@Composable
+fun skeletonShade(): Color {
+    val pulse = rememberInfiniteTransition(label = "skeleton")
+    val alpha by pulse.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "skeleton-alpha",
+    )
+    return Tokens.surface.copy(alpha = alpha)
+}
+
+/**
+ * The watch screen while it is loading.
+ *
+ * Every other screen showed a pulsing outline of what was coming and this one
+ * showed a spinner, which says "something is happening" where the others say
+ * "this is what is arriving". A spinner over a black rectangle is also the same
+ * picture as a video that failed, and telling those apart is the whole reason
+ * this app draws skeletons at all.
+ */
+@Composable
+fun WatchSkeleton(modifier: Modifier = Modifier) {
+    val shade = skeletonShade()
+    Column(modifier.fillMaxWidth()) {
+        // The picture keeps its 16:9 box in every state, so nothing below it
+        // moves when the video arrives.
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(shade))
+        Column(Modifier.padding(Space.lg)) {
+            Box(Modifier.fillMaxWidth(0.9f).height(20.dp).clip(RoundedCornerShape(4.dp)).background(shade))
+            Spacer(Modifier.height(Space.sm))
+            Box(Modifier.fillMaxWidth(0.6f).height(20.dp).clip(RoundedCornerShape(4.dp)).background(shade))
+            Spacer(Modifier.height(Space.lg))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(Size.avatar).clip(CircleShape).background(shade))
+                Spacer(Modifier.width(Space.md))
+                Box(Modifier.fillMaxWidth(0.45f).height(16.dp).clip(RoundedCornerShape(4.dp)).background(shade))
+            }
+        }
+    }
+}
+
 @Composable
 fun FeedSkeleton(modifier: Modifier = Modifier, cards: Int = 3) {
     val pulse = rememberInfiniteTransition(label = "skeleton")
@@ -280,4 +360,31 @@ fun FeedSkeleton(modifier: Modifier = Modifier, cards: Int = 3) {
             }
         }
     }
+}
+
+
+/**
+ * Whether the floating bars should be on screen, given how a list is moving.
+ *
+ * Reading direction rather than position: hiding below a fixed scroll depth is
+ * the rule that makes the bars vanish while somebody is reading half way down a
+ * feed and stay gone while they scroll *back*, which is exactly when the tabs are
+ * wanted. `lastScrolledForward` is the list's own answer to "which way did the
+ * last movement go", so the bars leave on the way down and return on the way up.
+ *
+ * Always shown at the very top. A feed that opens with no top bar looks like a
+ * screen that failed to draw its chrome.
+ *
+ * `derivedStateOf` because these three read from the scroll on every frame of
+ * every fling, and without it the whole shell recomposes at 60fps to answer a
+ * boolean that changes twice a minute.
+ */
+@Composable
+fun rememberBarsVisible(listState: LazyListState): Boolean {
+    val visible by remember(listState) {
+        derivedStateOf {
+            !listState.canScrollBackward || !listState.lastScrolledForward
+        }
+    }
+    return visible
 }

@@ -19,6 +19,8 @@ package com.mytube.app.domain.repository
  * be known before any other request can be made, so they are one port rather
  * than two.
  */
+import com.mytube.app.domain.model.Profile
+
 interface ServerRepository {
 
     /** The base URL, or empty when nobody has set one up yet. */
@@ -37,6 +39,15 @@ interface ServerRepository {
     suspend fun profileId(): String
 
     suspend fun setProfileId(id: String)
+
+    /**
+     * Everyone this server knows about.
+     *
+     * Empty when the server cannot be reached, rather than an error: the picker
+     * is opened from the avatar while the app is working, and a household of
+     * one has nothing to choose anyway.
+     */
+    suspend fun profiles(): List<Profile>
 
     /**
      * The language tag this device reads in, or empty to follow the device.
@@ -62,4 +73,21 @@ interface ServerRepository {
      * speech and proxy tests follow.
      */
     suspend fun reachable(url: String): Boolean
+
+    /**
+     * The voice the household's speech service is asked for, or empty.
+     *
+     * On this port rather than `PreferencesRepository` because it is not a fact
+     * about *this device*: it lives on the server and every screen in the house
+     * hears the change. That difference is the whole reason those two ports are
+     * separate, and putting it in the wrong one would make the name of one of
+     * them false.
+     *
+     * Empty when the server cannot be reached, like [profiles]: the field then
+     * shows nothing rather than an error, and a voice nobody typed is exactly
+     * what "no answer" means.
+     */
+    suspend fun ttsVoice(): String
+
+    suspend fun setTtsVoice(voice: String)
 }

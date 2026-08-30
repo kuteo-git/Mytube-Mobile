@@ -18,7 +18,7 @@ import platform.Foundation.NSURL
 /**
  * AVFoundation behind [NarrationHost].
  *
- * Six calls and no decisions: when a line is due, how far the video ducks and
+ * Seven calls and no decisions: when a line is due, how far the video ducks and
  * what a pause means are all in the common `Narrator`, so this and its Android
  * counterpart cannot behave differently.
  *
@@ -50,6 +50,8 @@ class IosNarrationHost(private val video: AVPlayer) : NarrationHost {
         speaker.setVolume(volume)
         speaker.play()
     }
+
+    override fun setSpeechVolume(level: Float) = speaker.setVolume(level)
 
     override fun silence() {
         speaker.pause()

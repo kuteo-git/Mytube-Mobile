@@ -65,6 +65,8 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.lifecycle.viewmodel.compose)
             implementation(libs.coil.compose)
+            implementation(libs.haze)
+            implementation(libs.haze.materials)
             implementation(libs.coil.network.ktor)
         }
         commonTest.dependencies {

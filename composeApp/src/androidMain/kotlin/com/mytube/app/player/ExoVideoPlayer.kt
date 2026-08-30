@@ -13,6 +13,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
+import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
+import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.player.Narrator
 import com.mytube.app.domain.repository.PlaybackState
@@ -90,6 +92,17 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
     /** Clips that arrived before the narrator did, replayed on connection. */
     private var pendingClips: List<NarrationClip> = emptyList()
 
+    /**
+     * The viewer's two levels, held here rather than in the narrator.
+     *
+     * The narrator does not exist until the service connection lands, and the
+     * levels are read from the device the moment a video opens — so without a
+     * home outside it, every launch would play its first video at the defaults
+     * whatever the sliders said.
+     */
+    private var voiceLevel: Float = DEFAULT_VOICE_LEVEL
+    private var duckLevel: Float = DEFAULT_DUCK_LEVEL
+
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _state.update { it.copy(isPlaying = isPlaying) }
@@ -128,6 +141,7 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
                 val host = AndroidNarrationHost(context, connected)
                 narrationHost = host
                 narrator = Narrator(host).also {
+                    it.setLevels(voiceLevel, duckLevel)
                     if (pendingClips.isNotEmpty()) it.setClips(pendingClips)
                 }
                 pendingClips = emptyList()
@@ -160,6 +174,13 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
             return
         }
         live.setClips(clips)
+        live.setLevels(voiceLevel, duckLevel)
+    }
+
+    override fun setNarrationLevels(voice: Float, duck: Float) {
+        voiceLevel = voice
+        duckLevel = duck
+        narrator?.setLevels(voice, duck)
     }
 
     override fun play() {

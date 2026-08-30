@@ -26,6 +26,17 @@ sealed interface ChannelState {
         val sortToken: String,
         val nextPageToken: String,
         val loadingMore: Boolean = false,
+        /**
+         * A different order is on its way.
+         *
+         * Its own flag rather than dropping back to [Loading], because that is
+         * what pressing Popular used to do: the header, the sort row and every
+         * card vanished behind a full-page skeleton, so the control that had
+         * just been pressed was no longer on screen — and when the page came
+         * back it read as having reloaded rather than reordered. The list stays
+         * up, dimmed, with the pressed segment lit.
+         */
+        val sorting: Boolean = false,
     ) : ChannelState
 }
 
@@ -56,7 +67,35 @@ class ChannelViewModel(
     fun selectSort(option: SortOption) {
         val current = _state.value as? ChannelState.Ready ?: return
         if (current.sortToken == option.token) return
-        load(option.token)
+        // Lit immediately, and the token recorded now rather than when the
+        // answer lands. Without this the row stayed on the old segment for the
+        // length of a round trip to YouTube, so a second press on the same
+        // option started a second request — which is most of why the page
+        // appeared to keep coming back sorted by Latest.
+        _state.value = current.copy(sortToken = option.token, sorting = true)
+        load(option.token, keep = current)
+    }
+
+    /**
+     * Save a video, or take it off the shelf.
+     *
+     * The same optimistic rule the feed and the history follow. It was missing
+     * here entirely — the channel's cards were built without the overflow menu,
+     * so the one page where somebody browses a back catalogue was the one page
+     * with no way to keep anything from it.
+     */
+    fun toggleSaved(video: Video) {
+        val current = _state.value as? ChannelState.Ready ?: return
+        val next = !video.saved
+        _state.value = current.copy(
+            videos = current.videos.map { if (it.id == video.id) it.copy(saved = next) else it },
+        )
+        viewModelScope.launch {
+            runCatching { videos.setSaved(video.id, next) }.onFailure {
+                val now = _state.value
+                if (now is ChannelState.Ready) _state.value = now.copy(videos = current.videos)
+            }
+        }
     }
 
     fun toggleSubscribed() {
@@ -97,8 +136,16 @@ class ChannelViewModel(
         }
     }
 
-    private fun load(sortToken: String) {
-        _state.value = ChannelState.Loading
+    /**
+     * Fetch a page in this order.
+     *
+     * `keep` is what to leave on screen while it runs. Null on the first load —
+     * there is nothing to keep, and the skeleton is right there — and the
+     * current page when re-sorting, which is what stops the whole screen
+     * blanking to change the order of a list already on it.
+     */
+    private fun load(sortToken: String, keep: ChannelState.Ready? = null) {
+        if (keep == null) _state.value = ChannelState.Loading
         viewModelScope.launch {
             _state.value = runCatching { videos.channelPage(channelId, sortToken) }.fold(
                 onSuccess = {
@@ -111,7 +158,12 @@ class ChannelViewModel(
                         nextPageToken = it.nextPageToken,
                     )
                 },
-                onFailure = ::asState,
+                // A re-sort that fails keeps the page it had, with the segment
+                // put back. Replacing a working list with an error message
+                // because a *reordering* failed takes away what was being read.
+                onFailure = { error ->
+                    if (keep != null) keep.copy(sorting = false) else asState(error)
+                },
             )
         }
     }

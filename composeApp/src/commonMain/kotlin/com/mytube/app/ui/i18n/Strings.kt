@@ -65,6 +65,30 @@ interface Strings {
     val upcomingTitle: String
     val upcomingDetail: String
     val unavailableTitle: String
+
+    /**
+     * Why YouTube refused, in words rather than in a wire token.
+     *
+     * The reason arrives as `members_only`, `private`, `removed` or something
+     * else, and it was being printed raw under the title — a viewer reading
+     * "members_only" learns that something went wrong and nothing about what.
+     * These are the web app's own four sentences, carried across rather than
+     * rewritten, so a household that has read the explanation once on a laptop
+     * meets the same explanation on a phone.
+     */
+    val unavailableMembersOnly: String
+    val unavailablePrivate: String
+    val unavailableRemoved: String
+    val unavailableGeneric: String
+
+    /** Over the picture while the first bytes are still arriving. */
+    val loadingVideo: String
+
+    /** The two levels and the voice, in the player's settings sheet. */
+    val voiceLevel: String
+    val videoLevelWhileSpeaking: String
+    val voiceName: String
+    val voiceNameHint: String
     val play: String
     val pause: String
     val back: String
@@ -120,6 +144,12 @@ interface Strings {
     val newBadge: String
     val playNext: String
     val playPrevious: String
+    /** The heading over the household's members, on the avatar's sheet. */
+    val profileTitle: String
+
+    /** Marks the member this device is currently watching as. */
+    val profileCurrent: String
+
     val savedTitle: String
     val noSaved: String
     val noSavedDetail: String
@@ -222,6 +252,20 @@ object EnglishStrings : Strings {
     override val upcomingTitle = "Not started yet"
     override val upcomingDetail = "It will begin playing on its own."
     override val unavailableTitle = "YouTube will not hand this over"
+    override val unavailableMembersOnly =
+        "This video is members-only on YouTube. Join the channel there to watch " +
+            "it — it cannot be fetched into the library."
+    override val unavailablePrivate =
+        "This video is private on YouTube, so it cannot be fetched."
+    override val unavailableRemoved =
+        "This video has been removed from YouTube, so it cannot be fetched."
+    override val unavailableGeneric =
+        "YouTube will not hand this video over, so it cannot be fetched."
+    override val loadingVideo = "Loading video…"
+    override val voiceLevel = "Voice volume"
+    override val videoLevelWhileSpeaking = "Video volume while speaking"
+    override val voiceName = "Voice"
+    override val voiceNameHint = "The name your speech service uses"
     override val play = "Play"
     override val pause = "Pause"
     override val back = "Back"
@@ -277,6 +321,8 @@ object EnglishStrings : Strings {
     override val newBadge = "New"
     override val playNext = "Next video"
     override val playPrevious = "Previous video"
+    override val profileTitle = "Who is watching?"
+    override val profileCurrent = "This device"
     override val savedTitle = "Saved"
     override val noSaved = "Nothing saved yet"
     override val noSavedDetail =
@@ -357,6 +403,17 @@ object VietnameseStrings : Strings {
     override val upcomingTitle = "Chưa bắt đầu"
     override val upcomingDetail = "Tới giờ nó sẽ tự phát."
     override val unavailableTitle = "YouTube không cho lấy video này"
+    override val unavailableMembersOnly =
+        "Video này chỉ dành cho thành viên trên YouTube. Muốn xem thì tham gia " +
+            "kênh bên đó — không tải về thư viện được."
+    override val unavailablePrivate = "Video này để riêng tư trên YouTube nên không tải được."
+    override val unavailableRemoved = "Video này đã bị gỡ khỏi YouTube nên không tải được."
+    override val unavailableGeneric = "YouTube không cho lấy video này nên không tải được."
+    override val loadingVideo = "Đang tải video…"
+    override val voiceLevel = "Âm lượng giọng đọc"
+    override val videoLevelWhileSpeaking = "Âm lượng video khi đang đọc"
+    override val voiceName = "Giọng đọc"
+    override val voiceNameHint = "Tên giọng mà dịch vụ đọc của bạn dùng"
     override val play = "Phát"
     override val pause = "Tạm dừng"
     override val back = "Quay lại"
@@ -406,6 +463,8 @@ object VietnameseStrings : Strings {
     override val newBadge = "Mới"
     override val playNext = "Video kế tiếp"
     override val playPrevious = "Video trước"
+    override val profileTitle = "Ai đang xem?"
+    override val profileCurrent = "Thiết bị này"
     override val savedTitle = "Đã lưu"
     override val noSaved = "Chưa lưu video nào"
     override val noSavedDetail = "Lưu một video là giữ file của nó lại khi ổ đĩa đầy."

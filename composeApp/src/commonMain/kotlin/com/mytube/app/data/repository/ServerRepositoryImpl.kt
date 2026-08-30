@@ -3,6 +3,8 @@ package com.mytube.app.data.repository
 import com.mytube.app.data.local.SettingsDataSource
 import com.mytube.app.data.local.SettingsKeys
 import com.mytube.app.data.remote.GatewayDataSource
+import com.mytube.app.domain.model.Profile
+import com.mytube.app.data.remote.dto.toDomain
 import com.mytube.app.domain.repository.ServerRepository
 
 /**
@@ -26,6 +28,10 @@ class ServerRepositoryImpl(
 
     override suspend fun profileId(): String = settings.get(SettingsKeys.PROFILE_ID).orEmpty()
 
+    override suspend fun profiles(): List<Profile> =
+        runCatching { gateway.profiles(baseUrl()).profiles.map { it.toDomain() } }
+            .getOrDefault(emptyList())
+
     override suspend fun setProfileId(id: String) = settings.set(SettingsKeys.PROFILE_ID, id)
 
     override suspend fun language(): String =
@@ -35,6 +41,16 @@ class ServerRepositoryImpl(
         settings.set(SettingsKeys.LANGUAGE, tag)
 
     override suspend fun reachable(url: String): Boolean = gateway.reachable(normalise(url))
+
+    override suspend fun ttsVoice(): String =
+        runCatching { gateway.ttsConfig(baseUrl(), profileId()).voice }.getOrDefault("")
+
+    override suspend fun setTtsVoice(voice: String) {
+        // Swallowed like the read above. A voice that would not save is worth
+        // nothing to shout about on the screen the video is playing on, and the
+        // field shows what the server said the next time it is opened.
+        runCatching { gateway.setTtsVoice(baseUrl(), profileId(), voice) }
+    }
 
     private fun normalise(url: String) = normaliseBaseUrl(url)
 }

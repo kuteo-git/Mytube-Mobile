@@ -38,4 +38,7 @@ object SettingsKeys {
     const val NARRATION = "player.narration"
     const val AUTOPLAY = "player.autoplay"
     const val SUBTITLE_LANGUAGE = "player.subtitleLanguage"
+    const val VOICE_LEVEL = "player.voiceLevel"
+    const val DUCK_LEVEL = "player.duckLevel"
+    const val LAST_VIDEO = "player.lastVideoId"
 }

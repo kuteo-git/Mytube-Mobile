@@ -30,7 +30,15 @@ class NarratorTest {
 
         override fun videoVolume() = volume
         override fun setVideoVolume(level: Float) { volume = level }
-        override fun speak(url: String, volume: Float) { spoken.add(url) }
+        /** The level each line started at, so the sliders can be asserted. */
+        val spokenAt = mutableListOf<Float>()
+        override fun speak(url: String, volume: Float) {
+            spoken.add(url)
+            spokenAt.add(volume)
+            voiceAt = volume
+        }
+        var voiceAt = 0f
+        override fun setSpeechVolume(level: Float) { voiceAt = level }
         override fun silence() { silenced++ }
     }
 
@@ -146,6 +154,50 @@ class NarratorTest {
         advanceTimeBy(300)
         assertEquals(listOf("a.wav", "b.wav"), host.spoken)
 
+        narrator.release()
+    }
+
+    /**
+     * The two levels take effect on the line already speaking.
+     *
+     * The obvious implementation — call `speak` again at the new level — would
+     * restart the sentence, so dragging the slider would make the current line
+     * begin again on every frame of the drag. This asserts the clip was started
+     * once and that both levels still moved.
+     */
+    @Test
+    fun `changing the levels does not restart the line being spoken`() = runTest {
+        val host = FakeHost()
+        val narrator = Narrator(host, TestScope(testScheduler))
+
+        narrator.setClips(listOf(clip(1.0, 30.0, "a.wav")))
+        host.videoPositionSeconds = 2.0
+        advanceTimeBy(300)
+        assertEquals(listOf("a.wav"), host.spoken)
+
+        narrator.setLevels(voice = 1.5f, duck = 0.05f)
+
+        assertEquals(listOf("a.wav"), host.spoken)
+        assertEquals(1.5f, host.voiceAt)
+        assertEquals(0.05f, host.volume)
+
+        // The ticker never stops on its own, and `runTest` drains the scheduler
+        // when the body returns — so a narrator left running spins virtual time
+        // for ever and the whole test task hangs with no failure to read.
+        // Measured: it did, for four minutes, before this line.
+        narrator.release()
+    }
+
+    /** Nothing is speaking, so there is nothing to re-level and nothing to start. */
+    @Test
+    fun `setting the levels while silent speaks nothing`() = runTest {
+        val host = FakeHost()
+        val narrator = Narrator(host, TestScope(testScheduler))
+
+        narrator.setLevels(voice = 1.5f, duck = 0.05f)
+
+        assertEquals(emptyList(), host.spoken)
+        assertEquals(1f, host.volume)
         narrator.release()
     }
 }

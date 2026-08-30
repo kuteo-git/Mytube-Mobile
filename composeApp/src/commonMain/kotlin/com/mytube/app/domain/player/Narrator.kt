@@ -1,6 +1,8 @@
 package com.mytube.app.domain.player
 
 import com.mytube.app.domain.model.NarrationClip
+import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
+import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.clipAt
 import com.mytube.app.domain.model.levelsFor
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +34,16 @@ interface NarrationHost {
 
     /** Begin one clip. Anything already speaking is replaced. */
     fun speak(url: String, volume: Float)
+
+    /**
+     * Change the level of the clip already speaking.
+     *
+     * Separate from [speak] because the obvious alternative — calling `speak`
+     * again with the new level — restarts the clip, so dragging the voice slider
+     * would make the current sentence begin again on every frame of the drag.
+     * Does nothing when nothing is speaking.
+     */
+    fun setSpeechVolume(level: Float)
 
     /** Stop speaking and let go of the clip. */
     fun silence()
@@ -73,6 +85,35 @@ class Narrator(
 
     /** The video's own level, remembered so the ducking can be undone exactly. */
     private var master: Float = 1f
+
+    /** The viewer's two levels. Defaults until the stored ones are read. */
+    private var voiceLevel: Float = DEFAULT_VOICE_LEVEL
+    private var duckLevel: Float = DEFAULT_DUCK_LEVEL
+
+    /**
+     * Set how loud the voice is and how far the video ducks under it.
+     *
+     * Applied to the line already speaking rather than only to the next one.
+     * A volume control that takes effect at the *next* sentence is a control
+     * somebody drags, hears nothing, and drags further — and then the next line
+     * arrives at the level they overshot to.
+     */
+    fun setLevels(voice: Float, duck: Float) {
+        voiceLevel = voice
+        duckLevel = duck
+        if (speaking == null) return
+        val levels = levels()
+        host.setVideoVolume(levels.video)
+        host.setSpeechVolume(levels.narration)
+    }
+
+    private fun levels() = levelsFor(
+        master = master,
+        muted = false,
+        narrating = true,
+        narrationLevel = voiceLevel,
+        duckLevel = duckLevel,
+    )
 
     /**
      * Replace the list.
@@ -129,7 +170,7 @@ class Narrator(
         }
         if (due == speaking) return
 
-        val levels = levelsFor(master = master, muted = false, narrating = true)
+        val levels = levels()
         host.setVideoVolume(levels.video)
         speaking = due
         host.speak(due.clipUrl, levels.narration)

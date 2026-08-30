@@ -6,16 +6,33 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
+import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.watch.MiniPlayer
 import com.mytube.app.ui.watch.WatchState
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.mutableStateListOf
@@ -26,11 +43,19 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mytube.app.AppContainer
 import com.mytube.app.ui.home.HomeScreen
+import com.mytube.app.ui.home.ChipRow
+import com.mytube.app.ui.home.HomeState
 import com.mytube.app.ui.home.HomeViewModel
+import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.shell.AppShell
+import com.mytube.app.ui.shell.LocalHaze
 import com.mytube.app.ui.shell.LocalMiniPlayerShowing
+import com.mytube.app.ui.shell.edgeBack
+import com.mytube.app.ui.shell.rememberBarsVisible
+import com.mytube.app.ui.shell.ProfileSheet
 import com.mytube.app.ui.shell.Tab
 import com.mytube.app.ui.watch.WatchLayer
+import dev.chrisbanes.haze.rememberHazeState
 import com.mytube.app.ui.watch.WatchScreen
 import com.mytube.app.ui.watch.WatchViewModel
 import com.mytube.app.ui.settings.ServerSetupScreen
@@ -44,6 +69,7 @@ import com.mytube.app.ui.history.HistoryScreen
 import com.mytube.app.ui.history.HistoryViewModel
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.deviceLanguage
+import com.mytube.app.domain.model.Profile
 import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.ui.saved.SavedScreen
 import com.mytube.app.ui.saved.SavedViewModel
@@ -91,7 +117,47 @@ private data class WatchSession(
     val minimised: Boolean = false,
     /** Arrived at by pressing next, so it opens at zero rather than resuming. */
     val startAtBeginning: Boolean = false,
+    /**
+     * Whether opening this session should start the sound.
+     *
+     * True everywhere except the video restored from the last run of the app —
+     * see `WatchViewModel.autoPlay`.
+     */
+    val autoPlay: Boolean = true,
+    /**
+     * The ordered list this video was opened from, or empty.
+     *
+     * Carried through the whole run of videos rather than looked up again:
+     * pressing next builds the following session from this one, so a channel
+     * page sorted by Popular stays in that order for as long as it is being
+     * played through. The web app carries the same thing in the URL; here there
+     * is no URL, and the session is the equivalent.
+     */
+    val queue: List<String> = emptyList(),
 )
+
+/**
+ * How long a screen takes to arrive, in milliseconds.
+ *
+ * 260, inside the 150–300ms band where movement is read as movement rather than
+ * as a wait. Below it the slide is a flicker that says nothing; above it the app
+ * feels like it is thinking.
+ */
+private const val ROUTE_MILLIS = 260
+
+/**
+ * How deep a route sits, which is all the transition needs to know.
+ *
+ * Home is the ground. Everything opened from it is one level in, so it slides in
+ * from the right and back out to the right — the direction every phone uses to
+ * mean "this is on top of what you were looking at". Setup is the ground too:
+ * it is where the app starts before there is a library, not somewhere you step
+ * into from one.
+ */
+private fun depth(route: Route): Int = when (route) {
+    is Route.Deciding, is Route.Setup, is Route.Home -> 0
+    is Route.Search, is Route.Saved, is Route.Channel -> 1
+}
 
 /**
  * The root.
@@ -140,12 +206,96 @@ fun App(container: AppContainer) {
             // screen dies with it, which is why every trip to another tab and
             // back put the feed at the top again.
             val tabScroll = Tab.entries.associateWith { rememberLazyListState() }
+            // How far the shell's bars have slid away, animated here rather than
+            // inside the shell.
+            //
+            // The miniplayer is a *sibling* of the shell, not a child of it, and
+            // it sits on the tab bar — so when the bar leaves, the bar's height
+            // is no longer there to sit on and the player has to come down with
+            // it. Animating this inside AppShell left the two disagreeing: the
+            // bar slid away and the miniplayer stayed where the bar had been,
+            // floating in the middle of the feed.
+            //
+            // 220ms: inside the 150–300ms band where motion reads as movement
+            // rather than as a delay.
+            val barsShowing = rememberBarsVisible(tabScroll.getValue(tab))
+            val barsHidden by animateFloatAsState(
+                targetValue = if (barsShowing) 0f else 1f,
+                animationSpec = tween(220),
+                label = "bars",
+            )
             val scope = rememberCoroutineScope()
             // Null until the server answers. Read once for the process: it is
             // one setting for the household and nothing else in the app changes
             // it, so re-reading on every visit to Settings would be a request
             // for an answer already held.
             var feedMix: FeedMix? by remember { mutableStateOf(null) }
+            // The household, and who this device is. Read once the address is
+            // known; an empty list is the honest answer for a server that is not
+            // answering, and for a house of one there is nothing to pick.
+            // How the Vietnamese voice sounds. Held here rather than inside the
+            // watch screen because Settings is where it is now edited and the
+            // watch screen is where it takes effect — two tabs apart, so the
+            // value has to live above both of them.
+            //
+            // The two levels are this device's; the voice is the household's and
+            // lives on the server.
+            var voiceLevel by remember { mutableStateOf(DEFAULT_VOICE_LEVEL) }
+            var duckLevel by remember { mutableStateOf(DEFAULT_DUCK_LEVEL) }
+            var voice by remember { mutableStateOf("") }
+            // What was open when the app was last closed, put back as the
+            // miniplayer.
+            //
+            // Restored **stopped**, and only once: `Unit` rather than `baseUrl`,
+            // because this must not reach back for a video every time the
+            // address is re-read — somebody who closed the bar deliberately
+            // would find it back a moment later.
+            LaunchedEffect(Unit) {
+                val last = container.preferencesRepository.lastVideoId()
+                if (last.isNotEmpty()) {
+                    watching = WatchSession(last, minimised = true, autoPlay = false)
+                }
+            }
+            // Written whenever what is open changes, and cleared when the
+            // miniplayer's X is pressed. Closing is a statement — "I am done
+            // with this" — and an app that puts it back on the next launch has
+            // not listened.
+            LaunchedEffect(watching?.videoId) {
+                runCatching {
+                    container.preferencesRepository
+                        .setLastVideoId(watching?.videoId.orEmpty())
+                }
+            }
+            LaunchedEffect(baseUrl) {
+                voiceLevel = container.preferencesRepository.voiceLevel()
+                duckLevel = container.preferencesRepository.duckLevel()
+                if (baseUrl.isNotBlank()) voice = container.serverRepository.ttsVoice()
+            }
+            var profiles: List<Profile> by remember { mutableStateOf(emptyList()) }
+            var profileId by remember { mutableStateOf("") }
+            var profilesOpen by remember { mutableStateOf(false) }
+            LaunchedEffect(baseUrl) {
+                if (baseUrl.isNotBlank()) {
+                    profiles = container.serverRepository.profiles()
+                    profileId = container.serverRepository.profileId()
+                }
+            }
+            // Who this device actually is, which is not always who it has
+            // *chosen* to be.
+            //
+            // Nobody has chosen on a fresh install, so `profileId` is empty —
+            // and empty must stay empty on the wire, because the gateway falls
+            // back to its own default when `X-User-Id` is absent and that
+            // fallback is what makes a new install work at all. But it means the
+            // avatar had no name to draw and sat as an empty grey disc in the
+            // most-looked-at corner of the app, for ever.
+            //
+            // The fallback here is not a guess: `router.go` answers an
+            // unidentified request as `devUserID`, and `profiles.go` lists that
+            // account first. The first profile *is* who the server thinks this
+            // device is.
+            val currentProfile = profiles.firstOrNull { it.id == profileId }
+                ?: profiles.firstOrNull()
             LaunchedEffect(baseUrl) {
                 if (baseUrl.isNotBlank()) {
                     feedMix = runCatching { container.videoRepository.feedMix() }.getOrNull()
@@ -205,14 +355,82 @@ fun App(container: AppContainer) {
             // screen is showing. It is the miniplayer that needs this, not the
             // watch screen: the video keeps playing while somebody searches or
             // opens a channel, and the bar has to be reachable from there.
+            if (profilesOpen) {
+                ProfileSheet(
+                    profiles = profiles,
+                    currentId = currentProfile?.id.orEmpty(),
+                    onDismiss = { profilesOpen = false },
+                    onPick = { picked ->
+                        profilesOpen = false
+                        if (picked.id != profileId) {
+                            profileId = picked.id
+                            // Everything playing belongs to the person who was
+                            // watching. Their history, their rail, their saved
+                            // shelf — leaving the video up would be one member's
+                            // evening carried into another's.
+                            watching = null
+                            trail.clear()
+                            tab = Tab.Home
+                            scope.launch { container.serverRepository.setProfileId(picked.id) }
+                        }
+                    },
+                )
+            }
+
             // Every scrolling screen has to leave room for the miniplayer, and
             // it is an ambient fact rather than something to thread through
             // seven signatures. See `tabContentPadding`.
+            // The blur every floating surface reads: the two bars, the feed's
+            // chip row and the miniplayer. Owned here because the miniplayer is
+            // drawn beside the shell rather than inside it, so a state created
+            // in the shell would not reach it.
+            val haze = rememberHazeState()
+
             CompositionLocalProvider(
                 LocalMiniPlayerShowing provides (watching?.minimised == true),
+                LocalHaze provides haze,
             ) {
             Box(Modifier.fillMaxSize()) {
-                when (val current = route) {
+                // Screens arrive and leave the way they do on the platforms this
+                // runs on: a page pushed on slides in from the right over the one
+                // it covers, and the one underneath drifts a little to the left
+                // rather than sitting still — the parallax that says the two are
+                // stacked. Going back reverses it.
+                //
+                // There was no transition at all before this: the whole window
+                // was replaced between frames, which reads as the app having
+                // jumped rather than moved, and leaves nothing to say *where*
+                // the screen that was there has gone.
+                //
+                // `depth` rather than a boolean about which route is which: the
+                // direction is a fact about the pair, and asking "is this deeper
+                // than that" is one comparison instead of a matrix that grows
+                // with every route added.
+                AnimatedContent(
+                    targetState = route,
+                    transitionSpec = {
+                        val forward = depth(targetState) >= depth(initialState)
+                        val enter = slideInHorizontally(tween(ROUTE_MILLIS)) { width ->
+                            if (forward) width else -width / 4
+                        } + fadeIn(tween(ROUTE_MILLIS))
+                        val exit = slideOutHorizontally(tween(ROUTE_MILLIS)) { width ->
+                            if (forward) -width / 4 else width
+                        } + fadeOut(tween(ROUTE_MILLIS))
+                        enter togetherWith exit
+                    },
+                    label = "route",
+                ) { current ->
+                // Only the screens that *have* a back. On Home the strip would
+                // be a gesture that does nothing, which is worse than none: a
+                // reader who finds it once expects it everywhere.
+                Box(
+                    if (depth(current) > 0) {
+                        Modifier.fillMaxSize().edgeBack { route = Route.Home }
+                    } else {
+                        Modifier.fillMaxSize()
+                    },
+                ) {
+                when (current) {
                     is Route.Deciding -> Unit
 
                     is Route.Setup -> ServerSetupScreen(
@@ -226,8 +444,35 @@ fun App(container: AppContainer) {
                     // empty background and the feed snaps in at the end. The
                     // miniplayer needs the same thing for a different reason: it
                     // sits on the tab bar while somebody browses another tab.
-                    is Route.Home -> AppShell(
+                    is Route.Home -> {
+                    // Hoisted out of the HomeScreen call so the shell can draw
+                    // this tab's chips inside the top bar. Same key, same
+                    // lifetime — `viewModel()` returns the one instance either
+                    // way, so nothing about the feed changed by moving where it
+                    // is asked for.
+                    val home = viewModel(key = "home-$baseUrl-$profileId") {
+                        HomeViewModel(container.videoRepository)
+                    }
+                    val homeState by home.state.collectAsStateWithLifecycle()
+
+                    AppShell(
                         current = tab,
+                        barsHidden = barsHidden,
+                        // Only the Home tab has anything to pin under the bar.
+                        // The others pass nothing and the bar is its ordinary
+                        // height, which is why the shell measures it rather than
+                        // assuming.
+                        underTopBar = {
+                            val ready = homeState as? HomeState.Ready
+                            if (tab == Tab.Home && ready != null) {
+                                ChipRow(
+                                    chips = ready.chips,
+                                    selected = ready.selected,
+                                    onSelect = home::select,
+                                    modifier = Modifier.padding(bottom = Space.md),
+                                )
+                            }
+                        },
                         onSelect = { picked ->
                             // Pressing the tab you are already on goes back to
                             // the top. Every phone app does this, and without it
@@ -243,16 +488,16 @@ fun App(container: AppContainer) {
                             tab = picked
                         },
                         onSearch = { route = Route.Search },
+                        // Never passed at all before this: AppShell had the
+                        // parameter and a default, and a default is exactly what
+                        // hides a missing argument.
+                        profileInitial = currentProfile?.name.orEmpty(),
+                        onOpenProfiles = { if (profiles.size > 1) profilesOpen = true },
                     ) {
                             when (tab) {
                                 Tab.Home -> HomeScreen(
                                     listState = tabScroll.getValue(Tab.Home),
-                                    // Keyed on the address: changing it builds a new
-                                    // HomeViewModel, because the old one holds a
-                                    // feed fetched from somewhere else.
-                                    viewModel = viewModel(key = "home-$baseUrl") {
-                                        HomeViewModel(container.videoRepository)
-                                    },
+                                    viewModel = home,
                                     mediaBaseUrl = baseUrl,
                                     onOpenSettings = { tab = Tab.Settings },
                                     onOpenVideo = { watching = WatchSession(it) },
@@ -261,7 +506,7 @@ fun App(container: AppContainer) {
 
                                 Tab.Subscriptions -> SubscriptionsScreen(
                                     listState = tabScroll.getValue(Tab.Subscriptions),
-                                    viewModel = viewModel(key = "subs-$baseUrl") {
+                                    viewModel = viewModel(key = "subs-$baseUrl-$profileId") {
                                         SubscriptionsViewModel(container.videoRepository)
                                     },
                                     mediaBaseUrl = baseUrl,
@@ -276,7 +521,7 @@ fun App(container: AppContainer) {
 
                                 Tab.History -> HistoryScreen(
                                     listState = tabScroll.getValue(Tab.History),
-                                    viewModel = viewModel(key = "history-$baseUrl") {
+                                    viewModel = viewModel(key = "history-$baseUrl-$profileId") {
                                         HistoryViewModel(container.videoRepository)
                                     },
                                     mediaBaseUrl = baseUrl,
@@ -301,6 +546,39 @@ fun App(container: AppContainer) {
                                             }
                                         }
                                     },
+                                    voiceLevel = voiceLevel,
+                                    duckLevel = duckLevel,
+                                    voice = voice,
+                                    // Drawn immediately, written after — the
+                                    // same rule the feed mix follows. A slider
+                                    // that waits for a write before it moves is
+                                    // one somebody drags twice.
+                                    onVoiceLevel = { level ->
+                                        voiceLevel = level
+                                        scope.launch {
+                                            runCatching {
+                                                container.preferencesRepository
+                                                    .setVoiceLevel(level)
+                                            }
+                                        }
+                                    },
+                                    onDuckLevel = { level ->
+                                        duckLevel = level
+                                        scope.launch {
+                                            runCatching {
+                                                container.preferencesRepository
+                                                    .setDuckLevel(level)
+                                            }
+                                        }
+                                    },
+                                    onVoice = { name ->
+                                        voice = name
+                                        scope.launch {
+                                            runCatching {
+                                                container.serverRepository.setTtsVoice(name)
+                                            }
+                                        }
+                                    },
                                     onPickLanguage = { picked ->
                                         language = picked
                                         scope.launch {
@@ -310,9 +588,10 @@ fun App(container: AppContainer) {
                                 )
                             }
                         }
+                    }
 
                     is Route.Saved -> SavedScreen(
-                    viewModel = viewModel(key = "saved-$baseUrl") {
+                    viewModel = viewModel(key = "saved-$baseUrl-$profileId") {
                         SavedViewModel(container.videoRepository)
                     },
                     mediaBaseUrl = baseUrl,
@@ -323,7 +602,7 @@ fun App(container: AppContainer) {
                 )
 
                 is Route.Search -> SearchScreen(
-                        viewModel = viewModel(key = "search-$baseUrl") {
+                        viewModel = viewModel(key = "search-$baseUrl-$profileId") {
                             SearchViewModel(container.videoRepository)
                         },
                         mediaBaseUrl = baseUrl,
@@ -338,10 +617,31 @@ fun App(container: AppContainer) {
                         mediaBaseUrl = baseUrl,
                         onBack = { route = Route.Home },
                         onOpenSettings = { route = Route.Setup },
-                        onOpenVideo = { watching = WatchSession(it) },
+                        // The channel's own order comes with the video, so next
+                        // stays inside the list that was being read.
+                        onOpenVideo = { id, queue ->
+                            watching = WatchSession(id, queue = queue)
+                        },
                     )
                 }
+                }
+                }
 
+            // The chrome the miniplayer sits on, in pixels. Read once: the drag
+            // gesture and the bar itself must be built from the same numbers, or
+            // the video lands somewhere the bar is not.
+            val density = LocalDensity.current
+            val navigationInsetPx = with(density) {
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding().toPx()
+            }
+            val statusInsetPx = with(density) {
+                WindowInsets.statusBars.asPaddingValues().calculateTopPadding().toPx()
+            }
+            val tabBarPx = with(density) { Size.topBar.toPx() }
+            val miniPlayerPx = with(density) { Size.miniPlayer.toPx() }
+            // Reserved only where there is a tab bar to reserve for: search and
+            // the channel page have none.
+            val tabBarReservedPx = if (route is Route.Home) tabBarPx else 0f
             val session = watching
             // Not on the setup screen. Somebody typing an address is fixing the
             // connection this video came through, and a bar playing over that
@@ -362,19 +662,33 @@ fun App(container: AppContainer) {
                     WatchViewModel(
                         videoId = session.videoId,
                         startAtBeginning = session.startAtBeginning,
+                        autoPlay = session.autoPlay,
                         mediaBaseUrl = baseUrl,
                         videos = container.videoRepository,
                         streams = container.streamRepository,
                         narration = container.narrationRepository,
                         preferences = container.preferencesRepository,
+                        queue = session.queue,
                         onFinished = { next ->
                             trail.add(session.videoId)
-                            watching = WatchSession(next, startAtBeginning = true)
+                            watching = WatchSession(
+                                next,
+                                startAtBeginning = true,
+                                queue = session.queue,
+                            )
                         },
                         playerFactory = container.playerFactory,
                     )
                 }
                 DisposableEffect(watch) { onDispose { watch.close() } }
+
+                // Settings is a tab, so the sliders can be moved while this is
+                // still playing in the miniplayer. Without this the player keeps
+                // the levels it was handed when the video opened and the change
+                // appears to do nothing until the next one.
+                LaunchedEffect(watch, voiceLevel, duckLevel) {
+                    watch.applyNarrationLevels(voiceLevel, duckLevel)
+                }
 
                 if (session.minimised) {
                     val playbackState by watch.state.collectAsStateWithLifecycle()
@@ -395,6 +709,17 @@ fun App(container: AppContainer) {
                         },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
+                            // Follows the tab bar down as it leaves. The padding
+                            // below reserves the bar's height; when the bar is
+                            // gone that reservation is a gap, and the player was
+                            // left hanging in the middle of the feed.
+                            .graphicsLayer {
+                                translationY = if (route is Route.Home) {
+                                    barsHidden * tabBarPx
+                                } else {
+                                    0f
+                                }
+                            }
                             // It sits *on* the tab bar, not over it — the bar is
                             // how somebody leaves for another tab while this
                             // keeps playing. Search and the channel page have no
@@ -407,7 +732,39 @@ fun App(container: AppContainer) {
                             ),
                     )
                 } else {
-                    WatchLayer(onMinimise = { watching = session.copy(minimised = true) }) {
+                    // Started at `false` and flipped on the first frame, which
+                    // is what makes the rise actually play: an AnimatedVisibility
+                    // composed already visible has nothing to animate *from*, so
+                    // the player would appear whole and instantly — the very
+                    // thing this exists to replace.
+                    //
+                    // This is the other half of "tap a video and it plays": the
+                    // card is pressed, the player rises from the bottom of the
+                    // screen over the feed, and the feed stays where it was
+                    // underneath. Reversed, it is the same movement the drag
+                    // gesture makes by hand.
+                    val rise = remember { MutableTransitionState(false) }
+                    rise.targetState = true
+
+                    AnimatedVisibility(
+                        visibleState = rise,
+                        enter = slideInVertically(tween(ROUTE_MILLIS)) { it } +
+                            fadeIn(tween(ROUTE_MILLIS)),
+                        exit = slideOutVertically(tween(ROUTE_MILLIS)) { it } +
+                            fadeOut(tween(ROUTE_MILLIS)),
+                    ) {
+                    WatchLayer(
+                        onMinimise = { watching = session.copy(minimised = true) },
+                        // Exactly where the miniplayer's own bar will be — the
+                        // same three terms its padding and its translation are
+                        // built from, so the picture arrives at the bar rather
+                        // than past it.
+                        landingFromBottomPx = navigationInsetPx +
+                            tabBarReservedPx -
+                            barsHidden * tabBarPx +
+                            miniPlayerPx,
+                        topInsetPx = statusInsetPx,
+                    ) {
                         WatchScreen(
                             viewModel = watch,
                             mediaBaseUrl = baseUrl,
@@ -419,7 +776,11 @@ fun App(container: AppContainer) {
                             // somebody into the middle of a track.
                             onAdvanceTo = {
                                 trail.add(session.videoId)
-                                watching = WatchSession(it, startAtBeginning = true)
+                                watching = WatchSession(
+                                    it,
+                                    startAtBeginning = true,
+                                    queue = session.queue,
+                                )
                             },
                             onPlayPrevious = {
                                 val previous = trail.removeLastOrNull()
@@ -436,6 +797,7 @@ fun App(container: AppContainer) {
                                 route = Route.Channel(it)
                             },
                         )
+                    }
                     }
                 }
             }

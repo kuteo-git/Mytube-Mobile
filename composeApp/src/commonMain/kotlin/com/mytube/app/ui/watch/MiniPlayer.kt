@@ -28,10 +28,20 @@ import androidx.compose.ui.unit.sp
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.BarBackdrop
 import com.mytube.app.ui.theme.Tokens
 
 /** The bar's height, which is what the picture inside it is sized from. */
 private val MINI_HEIGHT = 64.dp
+
+/**
+ * How wide the bar's picture is, as a share of the screen.
+ *
+ * The drag shrinks the full-width video down to exactly this, so the gesture
+ * ends where the bar begins. Derived from the bar's own 16:9 thumbnail against
+ * a phone's width — one number, so the two cannot land in different places.
+ */
+const val MINI_THUMB_FRACTION = 0.3f
 
 /**
  * The video, shrunk to a bar above the tab bar.
@@ -72,14 +82,20 @@ fun MiniPlayer(
 ) {
     val strings = LocalStrings.current
 
-    Column(
+    Box(
         modifier
             .fillMaxWidth()
-            .background(Tokens.surface)
             // The whole bar reopens the video. A target this size wants one
             // meaning, and the two buttons on it carve out their own.
             .clickable(onClick = onExpand),
     ) {
+    // The same frosted material as the bars, rather than a solid fill. It sits
+    // on the tab bar and inherits that bar's job of letting the feed show
+    // through — a solid strip between two frosted ones reads as a different
+    // surface that happens to be the same colour.
+    BarBackdrop(Modifier.matchParentSize(), fromTop = false)
+
+    Column(Modifier.fillMaxWidth()) {
         // A line, not a bar. It says how far through without asking for any of
         // the 64dp the row needs, and it is the only thing here that moves.
         Box(Modifier.fillMaxWidth().height(2.dp).background(Tokens.line)) {
@@ -144,6 +160,7 @@ fun MiniPlayer(
                 )
             }
         }
+    }
     }
 }
 

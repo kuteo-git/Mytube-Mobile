@@ -228,13 +228,38 @@ fun PlayerControls(
                     )
                 }
 
-                // The clock as a pill at the bottom left, fullscreen opposite,
-                // and the bar itself along the very bottom edge.
+                // The seek bar first, so the row below is composed *after* it
+                // and wins the overlap.
+                //
+                // This ordering is the whole of bug "the buttons are hard to
+                // press". The bar is full width with a 32dp touch target along
+                // the bottom edge, and it used to be drawn last — so it lay on
+                // top of the fullscreen button and the clock, and a tap meant
+                // for fullscreen was read as a seek to 94%. Nothing about the
+                // button was too small; it was underneath something invisible.
+                if (!isLive) {
+                    SeekBar(
+                        progress = playback.progress,
+                        enabled = playback.durationSeconds > 0,
+                        onSeekFraction = {
+                            onSeek(it * playback.durationSeconds)
+                            lastTouch++
+                        },
+                        onInteract = { lastTouch++ },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
+
+                // The clock as a pill at the bottom left, fullscreen opposite.
+                //
+                // The bottom padding clears the seek bar's 32dp target rather
+                // than only its 3dp line: a row sitting 12dp up was inside the
+                // bar's reach even after the ordering above was fixed.
                 Row(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .padding(start = Space.sm, end = Space.sm, bottom = Space.md),
+                        .padding(start = Space.sm, end = Space.sm, bottom = 34.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
@@ -270,18 +295,6 @@ fun PlayerControls(
                         icon = if (fullscreen) ShrinkIcon else ExpandIcon,
                         label = if (fullscreen) strings.exitFullscreen else strings.fullscreen,
                         onClick = { onToggleFullscreen(); lastTouch++ },
-                    )
-                }
-
-                if (!isLive) {
-                    SeekBar(
-                        progress = playback.progress,
-                        enabled = playback.durationSeconds > 0,
-                        onSeekFraction = {
-                            onSeek(it * playback.durationSeconds)
-                            lastTouch++
-                        },
-                        modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 }
             }
@@ -334,6 +347,15 @@ private fun SeekBar(
     progress: Float,
     enabled: Boolean,
     onSeekFraction: (Double) -> Unit,
+    /**
+     * Called on every movement of the finger.
+     *
+     * Without it the five-second timer kept running through a slow drag and the
+     * whole control bar — the one being dragged — faded out from under the
+     * thumb. That is most of "it is hard to seek while the video is playing":
+     * the target was not small, it was disappearing.
+     */
+    onInteract: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var width by remember { mutableStateOf(1f) }
@@ -347,8 +369,10 @@ private fun SeekBar(
         modifier
             .fillMaxWidth()
             // A 3dp line is what the design system draws, and 3dp is nothing to
-            // aim at. The touch target is 24dp and the line is centred in it.
-            .height(24.dp)
+            // aim at. The target is 32dp with the line centred in it — 24 was
+            // the number before, and on a moving video with a thumb arriving at
+            // an angle it was measurably missable.
+            .height(32.dp)
             .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
             // Tapping the bar moves there. Its own pointerInput rather than a
             // branch inside the drag detector: the two gestures are recognised
@@ -363,7 +387,10 @@ private fun SeekBar(
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
                 detectHorizontalDragGestures(
-                    onDragStart = { dragging = (it.x / width).coerceIn(0f, 1f) },
+                    onDragStart = {
+                        dragging = (it.x / width).coerceIn(0f, 1f)
+                        onInteract()
+                    },
                     onDragEnd = {
                         if (dragging >= 0f) onSeekFraction(dragging.toDouble())
                         dragging = -1f
@@ -371,6 +398,7 @@ private fun SeekBar(
                     onDragCancel = { dragging = -1f },
                     onHorizontalDrag = { change, _ ->
                         dragging = (change.position.x / width).coerceIn(0f, 1f)
+                        onInteract()
                     },
                 )
             },
@@ -389,10 +417,18 @@ private fun SeekBar(
             Modifier
                 .align(Alignment.CenterStart)
                 .fillMaxWidth(shown)
-                .height(24.dp),
+                .height(32.dp),
             contentAlignment = Alignment.CenterEnd,
         ) {
-            Box(Modifier.size(12.dp).clip(CircleShape).background(Tokens.brand))
+            // Bigger while a finger is on it. A thumb the size of the one it is
+            // under says the bar has been grabbed, which is the only feedback a
+            // seek gives before the picture catches up.
+            Box(
+                Modifier
+                    .size(if (dragging >= 0f) 18.dp else 12.dp)
+                    .clip(CircleShape)
+                    .background(Tokens.brand),
+            )
         }
     }
 }
@@ -407,10 +443,12 @@ private fun ControlButton(
 ) {
     Box(
         modifier
-            // 44dp of target around a 24dp glyph. Six of these sit in one row
-            // on a phone; 48 each would not fit, and below 44 a moving thumb
-            // misses and the picture underneath swallows the tap.
-            .size(44.dp)
+            // 48dp of target around a 24dp glyph — the platform minimum on both
+            // systems, and what this was raised to from 44. Three of these sit
+            // in the top row and one at the bottom, so the width is there; the
+            // earlier note about six per row described a layout that no longer
+            // exists.
+            .size(48.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,

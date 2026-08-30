@@ -70,6 +70,21 @@ interface VideoPlayer {
     fun narrate(clips: List<NarrationClip>)
 
     /**
+     * How loud the voice is, and how far the video ducks under it.
+     *
+     * On the player for the same reason [narrate] is: only the player can turn
+     * the video down, and the two levels are meaningless apart. Both are
+     * fractions of the video's own level — the voice may exceed 1, because
+     * synthesised speech is quieter than film audio.
+     *
+     * Safe to call before there is anything to narrate, and before the platform
+     * has finished connecting: the level is remembered and applied when a voice
+     * exists. Without that the levels read from the device at startup would be
+     * dropped on the floor for the first video of every launch.
+     */
+    fun setNarrationLevels(voice: Float, duck: Float)
+
+    /**
      * Show one of the tracks handed over at load, or none.
      *
      * An empty language switches subtitles off. It selects rather than loads:

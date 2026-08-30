@@ -1,5 +1,8 @@
 package com.mytube.app.ui.home
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -29,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -93,9 +97,27 @@ fun VideoCard(
     val press = remember { MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
 
+    // The card settles very slightly under a finger and springs back when it is
+    // let go — the acknowledgement every native list has and this one did not.
+    //
+    // 0.98, not a figure anybody would name if asked: a card that visibly
+    // shrinks reads as a button, and this is a picture. What it has to do is
+    // confirm the touch landed *here* rather than on the card above, in the
+    // moment before the player rises. A spring rather than a tween, because
+    // release is the half people feel.
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "card-press",
+    )
+
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clickable(
                 interactionSource = press,
                 indication = null,
@@ -171,18 +193,16 @@ fun VideoCard(
                 ),
             verticalAlignment = Alignment.Top,
         ) {
-            AsyncImage(
-                model = imageModel(mediaBaseUrl, video.channel.avatarPath),
-                contentDescription = video.channel.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(Size.avatar)
-                    .clip(CircleShape)
-                    .background(Tokens.surface)
-                    .then(
-                        if (onOpenChannel != null) Modifier.clickable(onClick = onOpenChannel)
-                        else Modifier,
-                    ),
+            ChannelAvatar(
+                name = video.channel.name,
+                mediaBaseUrl = mediaBaseUrl,
+                path = video.channel.avatarPath,
+                size = Size.avatar,
+                modifier = if (onOpenChannel != null) {
+                    Modifier.clickable(onClick = onOpenChannel)
+                } else {
+                    Modifier
+                },
             )
             Spacer(Modifier.width(Space.md))
 

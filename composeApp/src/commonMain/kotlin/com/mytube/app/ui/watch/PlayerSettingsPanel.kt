@@ -55,11 +55,16 @@ import com.mytube.app.ui.theme.Tokens
  *
  * ## What is here, and what is not
  *
- * Narration, with the pass's progress under it — the two things this app can
- * actually do. **Subtitles and Autoplay are deliberately absent**: this app
- * renders no subtitle track and holds no queue, so a row for either would be the
- * dead button §5 of the server charter forbids. They belong here the day those
- * exist.
+ * Subtitles, narration and autoplay — the three things that are about *this*
+ * video and are changed while it plays.
+ *
+ * The first two arrived once this app could actually render a track and follow a
+ * queue; an earlier note here recorded their absence as deliberate, on the
+ * ground that a row for something the app could not do is the dead button §5 of
+ * the server charter forbids. That reasoning was right and its premise is gone.
+ *
+ * How loud the voice is and which voice it is live in Settings, not here. See
+ * the note at their old position below.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,6 +138,14 @@ fun PlayerSettingsPanel(
                 onToggle = onToggleAutoplay,
             )
 
+            // The voice's levels and its name are **not** here.
+            //
+            // They were, briefly, and they belong in Settings: they are chosen
+            // once for the device — and, in the voice's case, once for the whole
+            // house — while everything else on this sheet is about the video
+            // playing above it. A control somebody sets once does not earn a
+            // place on the surface they open twenty times an evening.
+            //
             // The progress the web app shows as "Preparing speech… 18/388". It
             // is here rather than on the button because a bar can say *how far*,
             // and a label on a pill can only say a number in a space that runs
@@ -250,3 +263,4 @@ private fun SwitchRow(label: String, checked: Boolean, onToggle: () -> Unit) {
         )
     }
 }
+

@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Comment
+import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
+import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Reaction
@@ -57,6 +59,26 @@ private const val PROGRESS_EVERY_SECONDS = 10.0
  * that has barely changed.
  */
 private const val NARRATION_POLL_MILLIS = 3_000L
+
+/**
+ * How often the video is re-read while waiting for its caption tracks, and how
+ * long that is worth doing for.
+ *
+ * The gateway fetches subtitles **when play is pressed** — `handleStream` kicks
+ * off `fetchSubtitlesOnly` in the background — so a video nobody has opened
+ * before answers `/api/videos/{id}` with an empty `subtitles` list, and this app
+ * read that once and believed it for the rest of the sitting. That is the whole
+ * of two faults reported together: no CC button on a new video, and narration
+ * doing nothing until it was switched off and on again. Switching it off and on
+ * "fixed" it only because by then the tracks had arrived.
+ *
+ * Four seconds apart for a minute. Long enough for an upstream fetch of a
+ * caption file, and bounded rather than endless: a video that genuinely has no
+ * subtitles must stop being asked about, or every video without them costs a
+ * request a second for as long as it plays.
+ */
+private const val SUBTITLE_POLL_MILLIS = 4_000L
+private const val SUBTITLE_POLL_ATTEMPTS = 15
 
 sealed interface WatchState {
     data object Loading : WatchState
@@ -123,6 +145,24 @@ sealed interface WatchState {
          * on its own the next time somebody opens one video deliberately.
          */
         val autoplay: Boolean = false,
+        /**
+         * How loud the voice is, and what the video drops to under it.
+         *
+         * In the state rather than read from the store by the sheet, because
+         * the sliders have to move while a finger is on them — a control that
+         * waits for a write to disk before it redraws is a control that sticks.
+         */
+        val voiceLevel: Float = DEFAULT_VOICE_LEVEL,
+        val duckLevel: Float = DEFAULT_DUCK_LEVEL,
+        /**
+         * What pressing next plays, or empty when there is nowhere to go.
+         *
+         * Computed once here rather than by the screen reaching into `upNext`,
+         * because the answer is no longer always the rail's first entry: a video
+         * opened from a channel follows *that* channel's list, in the order the
+         * channel page was showing. See [nextId].
+         */
+        val nextId: String = "",
     ) : WatchState
 }
 
@@ -154,6 +194,21 @@ class WatchViewModel(
      */
     private val startAtBeginning: Boolean,
     /**
+     * Whether to start playing as soon as the stream is ready.
+     *
+     * False for exactly one case, and it is the reason this exists: the video
+     * restored from the last session. Reopening the app puts the miniplayer back
+     * with the video loaded and *stopped* — sound starting on its own because
+     * somebody unlocked their phone is the behaviour nobody wants and every app
+     * that does it gets complained about. Pressing play then resumes from where
+     * they left off, which the server already knows.
+     *
+     * **No default**, following [startAtBeginning] and for the same reason: a
+     * default here buys one short call site and pays for it with a video that
+     * silently plays, or silently does not, at a call site nobody updated.
+     */
+    private val autoPlay: Boolean,
+    /**
      * Advance to this video, because the last one played to its end.
      *
      * A callback rather than state the screen watches, because what happens next
@@ -169,6 +224,16 @@ class WatchViewModel(
     private val streams: StreamRepository,
     private val narration: NarrationRepository,
     private val preferences: PreferencesRepository,
+    /**
+     * The list this video was opened from, in the order it was shown.
+     *
+     * Empty when the video was opened from somewhere with no order to it — the
+     * feed, a search, the miniplayer's rail. When it is not empty, *this* is
+     * what next means, which is the web app's rule: a channel page sorted by
+     * Popular and then played through has to stay in that order, or sorting was
+     * only ever a way of finding one video to leave the list by.
+     */
+    private val queue: List<String> = emptyList(),
     playerFactory: VideoPlayerFactory,
 ) : ViewModel() {
 
@@ -220,9 +285,9 @@ class WatchViewModel(
         if (!current.autoplay) return
         // A broadcast has no end to reach, and nothing sensible to advance to.
         if (current.isLive) return
-        val next = current.upNext.firstOrNull() ?: return
+        if (current.nextId.isEmpty()) return
         advanced = true
-        onFinished(next.id)
+        onFinished(current.nextId)
     }
 
     fun retry() = load()
@@ -288,6 +353,40 @@ class WatchViewModel(
         }
     }
 
+    /**
+     * What next means for this video.
+     *
+     * The queue wins when this video is in it, which is what makes a channel
+     * sorted by Popular play through in that order. Falling back to the rail —
+     * rather than to nothing — matters when a queue runs out: the last video of
+     * a channel page still has somewhere to go, which is what the rail is for.
+     */
+    private fun nextId(upNext: List<Video>): String {
+        val here = queue.indexOf(videoId)
+        if (here >= 0 && here + 1 < queue.size) return queue[here + 1]
+        return upNext.firstOrNull()?.id.orEmpty()
+    }
+
+    /**
+     * Apply the levels chosen in Settings to the player.
+     *
+     * Apply, not *set*: nothing is written to disk here. Settings owns those
+     * values and persists them, and this exists because the sliders can be moved
+     * while a video is already playing in the miniplayer — the player would
+     * otherwise keep the levels it was handed when the video opened, and the
+     * change would appear to do nothing until the next video.
+     */
+    fun applyNarrationLevels(voice: Float, duck: Float) {
+        player.setNarrationLevels(voice, duck)
+        _state.update { current ->
+            if (current is WatchState.Playing) {
+                current.copy(voiceLevel = voice, duckLevel = duck)
+            } else {
+                current
+            }
+        }
+    }
+
     fun toggleAutoplay() {
         val current = _state.value as? WatchState.Playing ?: return
         val next = !current.autoplay
@@ -310,7 +409,13 @@ class WatchViewModel(
     fun filterRail(channelOnly: Boolean) {
         val current = _state.value as? WatchState.Playing ?: return
         if (current.railChannelOnly == channelOnly) return
-        _state.value = current.copy(railChannelOnly = channelOnly, upNext = emptyList())
+        // nextId goes with the rail it came from. Left behind, "next" would
+        // point into a list this screen is no longer showing.
+        _state.value = current.copy(
+            railChannelOnly = channelOnly,
+            upNext = emptyList(),
+            nextId = nextId(emptyList()),
+        )
         loadUpNext(if (channelOnly) current.video.channel.id else "")
     }
 
@@ -561,7 +666,7 @@ class WatchViewModel(
                             // resuming would run out immediately.
                             if (video.isInProgress) resumeAt else 0.0,
                         )
-                        player.play()
+                        if (autoPlay) player.play()
 
                         // The device's own answers, read once the video is
                         // known. Applied here rather than at construction
@@ -578,12 +683,22 @@ class WatchViewModel(
                             }
                         if (language.isNotEmpty()) player.showSubtitles(language)
 
+                        // The device's levels, told to the player before a
+                        // single line exists. The player holds them until a
+                        // narrator is built, which is why this can run here
+                        // rather than being deferred to the first clip.
+                        val voiceLevel = preferences.voiceLevel()
+                        val duckLevel = preferences.duckLevel()
+                        player.setNarrationLevels(voiceLevel, duckLevel)
+
                         WatchState.Playing(
                             video = video,
                             playback = PlaybackState(),
                             isLive = stream.isLive,
                             subtitleLanguage = language,
                             autoplay = preferences.autoplay(),
+                            voiceLevel = voiceLevel,
+                            duckLevel = duckLevel,
                             // Deliberately **not** started here. The switch
                             // records what somebody wants; starting a server
                             // pass is what `startNarration` does, and doing both
@@ -603,6 +718,10 @@ class WatchViewModel(
 
             loadUpNext("")
             loadComments()
+            // Before the narration decision below, and deliberately: on a video
+            // nobody has opened before there are no caption tracks yet, and the
+            // pass this app is about to ask for reads one.
+            awaitSubtitles()
             // After the state exists, not beside the track selection above:
             // `loadCues` reads the current Playing state to find the track's
             // URL, and at that point there is not one yet.
@@ -667,9 +786,79 @@ class WatchViewModel(
             val rail = runCatching { videos.upNext(videoId, channelId) }
                 .getOrDefault(emptyList())
             _state.update { current ->
-                if (current is WatchState.Playing) current.copy(upNext = rail) else current
+                if (current is WatchState.Playing) {
+                    current.copy(upNext = rail, nextId = nextId(rail))
+                } else {
+                    current
+                }
             }
         }
+    }
+
+    /**
+     * Wait for the caption tracks the gateway fetches once play is pressed.
+     *
+     * The video was read before the stream request, so on anything nobody has
+     * opened before its `subtitles` list is empty — and this app believed that
+     * for the whole sitting. Two reported faults were one cause: no CC button
+     * appeared on a new video, and the voice did nothing until it was switched
+     * off and on again, which "worked" only because the tracks had arrived by
+     * then.
+     *
+     * Bounded, and it stops the moment anything arrives. A video that truly
+     * carries no captions is a real answer, and asking about it for ever would
+     * be a request every four seconds for the length of a film.
+     *
+     * `suspend`, and awaited by [load], because the narration decision below it
+     * depends on the answer: a pass started against a video with no caption file
+     * is a pass with nothing to read.
+     */
+    private suspend fun awaitSubtitles() {
+        val current = _state.value as? WatchState.Playing ?: return
+        if (current.video.subtitles.isNotEmpty()) return
+        // A broadcast is still being spoken; there is no caption file coming.
+        if (current.isLive) return
+
+        repeat(SUBTITLE_POLL_ATTEMPTS) {
+            delay(SUBTITLE_POLL_MILLIS)
+            val now = _state.value as? WatchState.Playing ?: return
+            // Somebody moved on, or found a track another way.
+            if (now.video.id != current.video.id) return
+            if (now.video.subtitles.isNotEmpty()) return
+
+            val fresh = runCatching { videos.video(current.video.id) }.getOrNull() ?: return@repeat
+            if (fresh.subtitles.isEmpty()) return@repeat
+
+            // Only the tracks are taken. The rest of the fresh copy would
+            // overwrite the like, the save and the subscription this screen has
+            // drawn optimistically since it loaded — putting the server's older
+            // answer back over the viewer's own action.
+            val settled = _state.value as? WatchState.Playing ?: return
+            if (settled.video.id != current.video.id) return
+            _state.value = settled.copy(
+                video = settled.video.copy(subtitles = fresh.subtitles),
+            )
+            applyRememberedTrack()
+            return
+        }
+    }
+
+    /**
+     * Show the remembered language, now that the video admits to having it.
+     *
+     * Only when nothing is showing already: a viewer who chose a track while
+     * this was waiting has said something more recent than the stored
+     * preference, and overriding it would undo a deliberate choice.
+     */
+    private suspend fun applyRememberedTrack() {
+        val current = _state.value as? WatchState.Playing ?: return
+        if (current.subtitleLanguage.isNotEmpty()) return
+        val wanted = runCatching { preferences.subtitleLanguage() }.getOrDefault("")
+        if (wanted.isEmpty()) return
+        if (current.video.subtitles.none { it.language == wanted }) return
+        _state.value = current.copy(subtitleLanguage = wanted)
+        player.showSubtitles(wanted)
+        loadCues(wanted)
     }
 
     private fun asState(error: Throwable): WatchState = when (error) {

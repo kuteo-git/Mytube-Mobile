@@ -7,8 +7,10 @@ import com.mytube.app.data.remote.dto.CommentsDto
 import com.mytube.app.data.remote.dto.FeedDto
 import com.mytube.app.data.remote.dto.FeedMixDto
 import com.mytube.app.data.remote.dto.NarrationDto
+import com.mytube.app.data.remote.dto.ProfilesDto
 import com.mytube.app.data.remote.dto.StreamDto
 import com.mytube.app.data.remote.dto.TopicsDto
+import com.mytube.app.data.remote.dto.TtsConfigDto
 import com.mytube.app.data.remote.dto.VideoDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -170,6 +172,35 @@ class GatewayDataSource(private val client: HttpClient) {
     }.orThrow().body()
 
     /**
+     * The voice the speech service is asked for.
+     *
+     * Server-wide rather than per device, and that is a real consequence worth
+     * knowing: changing it here changes it for the television too, and every
+     * clip already synthesised was made with the old one. The server keys its
+     * cache on the voice, so nothing is *misread* — the old clips simply stop
+     * being reused, and the next video pays for its speech again.
+     */
+    suspend fun ttsConfig(baseUrl: String, userId: String): TtsConfigDto =
+        client.get("${baseUrl.trimEnd('/')}/api/settings/tts") {
+            identify(userId)
+        }.orThrow().body()
+
+    /**
+     * Change the voice, and nothing else.
+     *
+     * The endpoint merges a submission over what is stored and reads an empty
+     * field as "keep what you have" — which is exactly what is wanted here, and
+     * why sending only the voice cannot wipe the API key this app never sees.
+     */
+    suspend fun setTtsVoice(baseUrl: String, userId: String, voice: String) {
+        client.post("${baseUrl.trimEnd('/')}/api/settings/tts") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(TtsConfigDto(voice = voice))
+        }.orThrow()
+    }
+
+    /**
      * Ask the server to translate and speak this video.
      *
      * Answers 202 and returns at once — a full pass takes minutes, and a request
@@ -202,6 +233,15 @@ class GatewayDataSource(private val client: HttpClient) {
      * leaves unprotected on purpose, and sending a profile header to a static
      * file would imply the answer depends on who is asking.
      */
+    /**
+     * Who lives here.
+     *
+     * No `identify`: the list of members is not per member, and sending one
+     * member's header to ask who exists would imply the answer depends on it.
+     */
+    suspend fun profiles(baseUrl: String): ProfilesDto =
+        client.get("${baseUrl.trimEnd('/')}/api/profiles").orThrow().body()
+
     suspend fun subtitleFile(url: String): String =
         // `bodyAsText`, not `body<String>()`. The client installs JSON content
         // negotiation and this file is served as `text/vtt`, so going through

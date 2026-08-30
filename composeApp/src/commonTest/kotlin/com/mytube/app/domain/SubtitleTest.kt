@@ -133,4 +133,45 @@ class SubtitleTest {
         assertEquals("second", cueAt(cues, 3.5)?.text)
         assertNull(cueAt(cues, 9.0))
     }
+
+    /**
+     * A caption file is XML underneath, so its text arrives escaped.
+     *
+     * Found on the simulator rather than reasoned about: a CBC clip drew
+     * `&gt;&gt; That's BC MP Zoe Royer` across the picture. Nothing in the code
+     * looked wrong — the parser was faithfully showing what the file said.
+     */
+    @Test
+    fun `decodes the html escapes a caption file is written with`() {
+        val cues = parseWebVtt(
+            """
+            WEBVTT
+
+            00:00:01.000 --> 00:00:03.000
+            &gt;&gt; That&#39;s BC MP Zoe Royer &amp; friends
+            """.trimIndent(),
+        )
+        assertEquals(1, cues.size)
+        assertEquals(">> That's BC MP Zoe Royer & friends", cues[0].text)
+    }
+
+    /**
+     * An escaped escape stays escaped.
+     *
+     * `&amp;gt;` is a caption quoting the characters `&gt;`. Decoding `&amp;`
+     * before `&gt;` would turn it into `>` — the file's own words rewritten to
+     * mean something else. This is why the order in `decodeEntities` matters.
+     */
+    @Test
+    fun `does not decode an escape twice`() {
+        val cues = parseWebVtt(
+            """
+            WEBVTT
+
+            00:00:01.000 --> 00:00:03.000
+            write &amp;gt; for a chevron
+            """.trimIndent(),
+        )
+        assertEquals("write &gt; for a chevron", cues[0].text)
+    }
 }

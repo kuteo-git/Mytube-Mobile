@@ -10,7 +10,7 @@ import com.mytube.app.domain.player.NarrationHost
 /**
  * Media3 behind [NarrationHost].
  *
- * Six calls and no decisions. This file used to hold the ticker, the ducking and
+ * Seven calls and no decisions. This file used to hold the ticker, the ducking and
  * the "what is speaking now" bookkeeping as well, and so did its iOS
  * counterpart — two copies of one behaviour, which is two places to fix
  * everything and two ways for the platforms to drift. All of it moved to the
@@ -41,6 +41,10 @@ class AndroidNarrationHost(context: Context, private val video: Player) : Narrat
         speaker.volume = volume
         speaker.prepare()
         speaker.play()
+    }
+
+    override fun setSpeechVolume(level: Float) {
+        speaker.volume = level
     }
 
     override fun silence() {

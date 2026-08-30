@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import com.mytube.app.domain.model.Profile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -99,8 +100,15 @@ class ServerSetupViewModelTest {
         override suspend fun setBaseUrl(url: String) { saved = url }
         override suspend fun language() = ""
         override suspend fun setLanguage(tag: String) = Unit
+        override suspend fun profiles() = emptyList<Profile>()
+
         override suspend fun profileId(): String = ""
         override suspend fun setProfileId(id: String) = Unit
         override suspend fun reachable(url: String): Boolean = reachable
+
+        // The speech voice lives on the server, not on this screen. A fake that
+        // answers nothing is the honest stand-in: the setup form never reads it.
+        override suspend fun ttsVoice(): String = ""
+        override suspend fun setTtsVoice(voice: String) = Unit
     }
 }
