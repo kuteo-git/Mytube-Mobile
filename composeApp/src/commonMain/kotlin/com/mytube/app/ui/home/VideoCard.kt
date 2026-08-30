@@ -71,6 +71,15 @@ fun VideoCard(
      */
     onSave: (() -> Unit)? = null,
     onNotInterested: (() -> Unit)? = null,
+    /**
+     * Open the channel this video belongs to.
+     *
+     * Its own target on the avatar, not the whole row. The avatar is the one
+     * part of a card that *is* the channel — pressing it and getting the video
+     * is the thing people describe as "the avatar does nothing", because
+     * something did happen and it was not what they aimed at.
+     */
+    onOpenChannel: (() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth().clickable(onClick = onClick)) {
@@ -138,7 +147,14 @@ fun VideoCard(
                 model = imageModel(mediaBaseUrl, video.channel.avatarPath),
                 contentDescription = video.channel.name,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(Size.avatar).clip(CircleShape).background(Tokens.surface),
+                modifier = Modifier
+                    .size(Size.avatar)
+                    .clip(CircleShape)
+                    .background(Tokens.surface)
+                    .then(
+                        if (onOpenChannel != null) Modifier.clickable(onClick = onOpenChannel)
+                        else Modifier,
+                    ),
             )
             Spacer(Modifier.width(Space.md))
 
@@ -178,49 +194,7 @@ fun VideoCard(
             // The overflow button. On the web it appears on hover or focus;
             // a phone has neither, so it is always there — which is what the
             // web app itself shows on a phone.
-            if (onSave != null || onNotInterested != null) {
-                Box {
-                    Icon(
-                        imageVector = MoreVertical,
-                        contentDescription = strings.moreOptions,
-                        tint = Tokens.text2,
-                        modifier = Modifier
-                            .size(Size.iconButton)
-                            .clip(CircleShape)
-                            .clickable { menuOpen = true }
-                            .padding(Space.sm),
-                    )
-                    DropdownMenu(
-                        expanded = menuOpen,
-                        onDismissRequest = { menuOpen = false },
-                        containerColor = Tokens.surface,
-                    ) {
-                        if (onSave != null) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        // What the button *did*, once it is
-                                        // done — the same rule the watch
-                                        // screen's Save pill follows.
-                                        if (video.saved) strings.savedVideo
-                                        else strings.saveVideo,
-                                        color = Tokens.text,
-                                    )
-                                },
-                                onClick = { menuOpen = false; onSave() },
-                            )
-                        }
-                        if (onNotInterested != null) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(strings.notInterested, color = Tokens.text)
-                                },
-                                onClick = { menuOpen = false; onNotInterested() },
-                            )
-                        }
-                    }
-                }
-            }
+            VideoCardMenu(video, strings, onSave, onNotInterested)
         }
 
         // 40px between cards, from the grid's vertical gap. It is what makes a
@@ -253,6 +227,67 @@ object Radius {
     val thumbnail = 12.dp
     val badge = 4.dp
     val chip = 8.dp
+}
+
+/**
+ * The overflow menu on a card.
+ *
+ * Its own composable because two different cards draw it — the feed's and the
+ * Continue watching rail's — and the rail was missing it entirely. A card that
+ * looks like the others and has one fewer control is a card somebody presses
+ * twice before deciding it is broken.
+ *
+ * Null callbacks draw **no button at all**. A card in a list of upstream
+ * results, where neither action means anything, gets no dot rather than a dead
+ * one.
+ */
+@Composable
+fun VideoCardMenu(
+    video: Video,
+    strings: Strings,
+    onSave: (() -> Unit)?,
+    onNotInterested: (() -> Unit)?,
+) {
+    if (onSave == null && onNotInterested == null) return
+    var menuOpen by remember { mutableStateOf(false) }
+
+    Box {
+        Icon(
+            imageVector = MoreVertical,
+            contentDescription = strings.moreOptions,
+            tint = Tokens.text2,
+            modifier = Modifier
+                .size(Size.iconButton)
+                .clip(CircleShape)
+                .clickable { menuOpen = true }
+                .padding(Space.sm),
+        )
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false },
+            containerColor = Tokens.surface,
+        ) {
+            if (onSave != null) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            // What the button *did*, once it is done — the same
+                            // rule the watch screen's Save pill follows.
+                            if (video.saved) strings.savedVideo else strings.saveVideo,
+                            color = Tokens.text,
+                        )
+                    },
+                    onClick = { menuOpen = false; onSave() },
+                )
+            }
+            if (onNotInterested != null) {
+                DropdownMenuItem(
+                    text = { Text(strings.notInterested, color = Tokens.text) },
+                    onClick = { menuOpen = false; onNotInterested() },
+                )
+            }
+        }
+    }
 }
 
 object Size {

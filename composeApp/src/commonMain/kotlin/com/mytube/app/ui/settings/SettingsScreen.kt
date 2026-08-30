@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.LocalStrings
@@ -51,8 +52,12 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 fun SettingsScreen(
     baseUrl: String,
     language: Language,
+    /** Null until the server has answered, or if it cannot. */
+    feedMix: FeedMix?,
     onOpenServer: () -> Unit,
+    onOpenSaved: () -> Unit,
     onPickLanguage: (Language) -> Unit,
+    onChangeMix: (FeedMix) -> Unit,
 ) {
     val strings = LocalStrings.current
 
@@ -72,6 +77,24 @@ fun SettingsScreen(
                     value = baseUrl.ifEmpty { strings.setTheAddress },
                     onClick = onOpenServer,
                 )
+            }
+
+            item(key = "saved") {
+                SettingRow(
+                    label = strings.savedTitle,
+                    value = strings.noSavedDetail,
+                    onClick = onOpenSaved,
+                )
+            }
+
+            // Only once the server has answered. Sliders drawn at zero and then
+            // jumping to their real values look like a setting that was reset.
+            if (feedMix != null) {
+                item(key = "mix-heading") { SectionHeading(strings.feedMix) }
+                item(key = "mix") {
+                    FeedMixSection(feedMix, onChangeMix)
+                    Spacer(Modifier.height(Space.md))
+                }
             }
 
             item(key = "language-heading") {
@@ -163,8 +186,11 @@ private fun SettingsPreview() {
         SettingsScreen(
             baseUrl = "http://192.168.1.42:8180",
             language = Language.English,
+            feedMix = FeedMix(60, 20, 20, fixedPercent = 28),
             onOpenServer = {},
+            onOpenSaved = {},
             onPickLanguage = {},
+            onChangeMix = {},
         )
     }
 }
@@ -177,8 +203,11 @@ private fun SettingsUnconfiguredPreview() {
         SettingsScreen(
             baseUrl = "",
             language = Language.English,
+            feedMix = null,
             onOpenServer = {},
+            onOpenSaved = {},
             onPickLanguage = {},
+            onChangeMix = {},
         )
     }
 }
@@ -191,8 +220,11 @@ private fun SettingsVietnamesePreview() {
             SettingsScreen(
                 baseUrl = "http://192.168.1.42:8180",
                 language = Language.Vietnamese,
+                feedMix = FeedMix(60, 20, 20, fixedPercent = 28),
                 onOpenServer = {},
+                onOpenSaved = {},
                 onPickLanguage = {},
+                onChangeMix = {},
             )
         }
     }

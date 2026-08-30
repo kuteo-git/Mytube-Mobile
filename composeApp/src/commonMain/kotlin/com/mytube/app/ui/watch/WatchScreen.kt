@@ -74,6 +74,16 @@ fun WatchScreen(
      * not pick reads as a glitch.
      */
     onAdvanceTo: (String) -> Unit,
+    /**
+     * Go back to the video watched before this one.
+     *
+     * The trail lives above this screen, in the app: it is a fact about the
+     * sitting rather than about one video, and a ViewModel rebuilt for every
+     * video could not hold it.
+     */
+    onPlayPrevious: () -> Unit,
+    hasPrevious: Boolean,
+    onOpenChannel: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -90,14 +100,18 @@ fun WatchScreen(
         onToggleSaved = viewModel::toggleSaved,
         onToggleSubscribed = viewModel::toggleSubscribed,
         onToggleNarration = viewModel::toggleNarration,
+        onToggleAutoplay = viewModel::toggleAutoplay,
         onSelectSubtitles = viewModel::selectSubtitles,
         onPlayNext = {
             val next = (state as? WatchState.Playing)?.upNext?.firstOrNull()
             if (next != null) onAdvanceTo(next.id)
         },
+        onPlayPrevious = onPlayPrevious,
+        hasPrevious = hasPrevious,
         onToggleRail = viewModel::toggleRail,
         onFilterRail = viewModel::filterRail,
         onOpenVideo = onOpenVideo,
+        onOpenChannel = onOpenChannel,
     )
 }
 
@@ -115,11 +129,16 @@ fun WatchContent(
     onToggleSaved: () -> Unit,
     onToggleSubscribed: () -> Unit,
     onToggleNarration: () -> Unit,
+    onToggleAutoplay: () -> Unit,
     onSelectSubtitles: (String) -> Unit,
     onPlayNext: () -> Unit,
+    onPlayPrevious: () -> Unit,
+    /** Whether anything was watched before this in the current sitting. */
+    hasPrevious: Boolean,
     onToggleRail: () -> Unit,
     onFilterRail: (Boolean) -> Unit,
     onOpenVideo: (String) -> Unit,
+    onOpenChannel: (String) -> Unit,
 ) {
     val strings = LocalStrings.current
     // Today, so the rail's "New" badge can be decided without a clock inside a
@@ -175,9 +194,24 @@ fun WatchContent(
                         onToggleFullscreen = { fullscreen = !fullscreen },
                         onOpenSettings = { settingsOpen = !settingsOpen },
                         onPlayNext = onPlayNext,
-                        // Nothing to advance to, so the button is not drawn
-                        // rather than drawn dead.
+                        onPlayPrevious = onPlayPrevious,
+                        // The CC button is a shortcut, not a replacement for
+                        // the menu: it turns the first track on and off, which
+                        // is what somebody reaching for it nearly always wants.
+                        // Choosing *which* track stays in the sheet.
+                        onToggleSubtitles = {
+                            onSelectSubtitles(
+                                if (state.subtitleLanguage.isEmpty()) {
+                                    state.video.subtitles.first().language
+                                } else {
+                                    ""
+                                },
+                            )
+                        },
                         hasNext = state.upNext.isNotEmpty(),
+                        hasPrevious = hasPrevious,
+                        hasSubtitles = state.video.subtitles.isNotEmpty(),
+                        subtitlesOn = state.subtitleLanguage.isNotEmpty(),
                     )
                 }
 
@@ -201,6 +235,9 @@ fun WatchContent(
                 onSelectSubtitles = onSelectSubtitles,
                 narrating = state.narrating,
                 narration = state.narration,
+                autoplay = state.autoplay,
+                onToggleAutoplay = onToggleAutoplay,
+                onDismiss = { settingsOpen = false },
                 onToggleNarration = onToggleNarration,
             )
         }
@@ -270,7 +307,12 @@ fun WatchContent(
                 }
 
                 item(key = "channel") {
-                    ChannelRow(state.video, mediaBaseUrl, onToggleSubscribed)
+                    ChannelRow(
+                        video = state.video,
+                        mediaBaseUrl = mediaBaseUrl,
+                        onToggleSubscribed = onToggleSubscribed,
+                        onOpenChannel = { onOpenChannel(state.video.channel.id) },
+                    )
                 }
 
                 item(key = "actions") {
@@ -320,7 +362,12 @@ fun WatchContent(
  * the eye goes to Subscribe rather than to whose channel this is.
  */
 @Composable
-private fun ChannelRow(video: Video, mediaBaseUrl: String, onToggleSubscribed: () -> Unit) {
+private fun ChannelRow(
+    video: Video,
+    mediaBaseUrl: String,
+    onToggleSubscribed: () -> Unit,
+    onOpenChannel: () -> Unit,
+) {
     val strings = LocalStrings.current
 
     Row(
@@ -333,10 +380,17 @@ private fun ChannelRow(video: Video, mediaBaseUrl: String, onToggleSubscribed: (
             contentScale = ContentScale.Crop,
             // 40 on the watch page, against 36 in a card and 24 on a comment.
             // From the design system, and the differences are deliberate there.
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(Tokens.surface),
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Tokens.surface)
+                .clickable(onClick = onOpenChannel),
         )
         Spacer(Modifier.width(Space.md))
-        Column(Modifier.weight(1f)) {
+        // The name opens the channel too, which is what the web does and what a
+        // thumb aiming at a 40dp circle needs — the avatar alone is a small
+        // target for the one thing on this row that is not a button.
+        Column(Modifier.weight(1f).clickable(onClick = onOpenChannel)) {
             Text(
                 text = video.channel.name,
                 color = Tokens.text,
@@ -444,11 +498,15 @@ private fun preview(state: WatchState) {
             onToggleSaved = {},
             onToggleSubscribed = {},
             onToggleNarration = {},
+            onToggleAutoplay = {},
             onSelectSubtitles = {},
             onPlayNext = {},
+            onPlayPrevious = {},
+            hasPrevious = false,
             onToggleRail = {},
             onFilterRail = {},
             onOpenVideo = {},
+            onOpenChannel = {},
         )
     }
 }

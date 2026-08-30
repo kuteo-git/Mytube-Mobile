@@ -888,3 +888,79 @@ Then two more, both found by measuring rather than reading:
 
 Measured after: a video stored at 18s reopens and is at 26s ten seconds later;
 pressing next on a video stored at 60s starts it at zero.
+
+## Six more from the phone, and the player changes shape again (2026-08-30)
+
+### The control bar is YouTube's, not the web app's
+
+Asked for by name, with a screenshot. The previous version copied the *web* app's
+single bottom bar — right for a page, cramped on a phone, where six controls
+shared one row with the clock between them. It is now: chevron-down and gear at
+the top, three transport controls on translucent discs in the middle, the clock
+as a pill bottom-left, fullscreen opposite, and the progress line along the very
+bottom edge.
+
+- **The discs are load-bearing.** Over a moving picture a bare glyph disappears
+  against whatever is behind it, and the middle of the frame is the one place
+  that cannot be relied on to be dark.
+- **A chevron, not a back arrow.** It collapses the video to the miniplayer
+  rather than closing it; an arrow promises the opposite.
+- **Previous and next are drawn faint when there is nowhere to go**, not removed
+  — so the play button does not move under a thumb already reaching for it.
+- **No cast button.** There is nothing to cast to: the library is reached over
+  the house wifi by IP, and a Cast receiver is a second server this project does
+  not have.
+- **The trail lives in the app, not the ViewModel.** "Previous" is a fact about
+  the *sitting*, and a ViewModel rebuilt for every video cannot remember what
+  came before it. Not persisted either: offering to go back to something watched
+  last week is not what the button says.
+
+### The settings panel is a bottom sheet
+
+It was anchored under the picture, which pushed the whole page down as it opened
+— the title and channel row moved under a thumb already reaching for them. A
+sheet rises over the page and leaves it where it was, and on a phone the bottom
+is where a hand is. **No scrim**: the default dims the whole window, which would
+grey out the video these settings are about.
+
+Autoplay is real now, and fires from the ViewModel only when it is on *and* there
+is somewhere to go — so the caller has no condition to re-check and the two
+cannot disagree about when a video ends. "Finished" is `isPlaying` going false
+with the playhead at the duration; there is no separate event on the port and
+adding one would be a second way to say the same thing.
+
+### Four things that were missing
+
+- **The Continue watching rail had no overflow menu.** A card that looks like the
+  others and has one fewer control is one somebody presses twice before deciding
+  it is broken. The menu moved into `VideoCardMenu` so both cards draw the same
+  one.
+- **Save had nowhere to lead.** There was a Save action in every menu and no page
+  showing the result — the same defect as a dead button, one step removed: the
+  press did something real and nothing in the app could show it. `/api/pinned` is
+  that page.
+- **The channel avatar did nothing.** It is the one part of a card that *is* the
+  channel; pressing it and getting the video is what people describe as "the
+  avatar does nothing", because something did happen and it was not what they
+  aimed at. On the watch screen the name is a target too — 40dp is small for the
+  only thing on that row which is not a button.
+- **Loading was a spinner.** A spinner in the middle of an empty screen says
+  "wait"; the skeleton says *what* is coming, and the page then fills in rather
+  than appearing. It pulses rather than sweeping a gradient: a sweep is a second
+  animation to keep at 60fps on a television, and a fade between two greys says
+  the same thing for one alpha.
+
+### The feed mix
+
+Three sliders, read from and written to the server — it is **one setting for the
+household**, so a phone changing it changes everybody's Home. The fixed share is
+read from the server rather than assumed: the web app carried its own copy once
+and spent a release quoting a stale figure after a new fixed share took ten per
+cent of the page.
+
+**The other two shares are rescaled rather than each slider clamped.** Clamping
+each to "100 minus the other two" makes the last few percent unreachable, and a
+slider that stops before its end is one people push at. `rebalance` is pure and
+tested, because the edges are where it goes wrong: moving one to 100 leaves
+nothing to rescale, and three integers rounding to a total of 100 does not come
+out even.

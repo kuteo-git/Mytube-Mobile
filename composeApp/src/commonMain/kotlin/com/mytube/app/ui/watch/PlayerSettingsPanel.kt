@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -38,12 +41,17 @@ import com.mytube.app.ui.theme.Tokens
 /**
  * What the gear on the control bar opens.
  *
- * ## Why it sits under the picture and not in a sheet
+ * ## Why it is a bottom sheet
  *
- * Because that is where the web app puts it, and the reason is the same on both:
- * these settings are about the video that is playing, and a sheet that covers
- * the video makes somebody change the narration setting while looking at a grey
- * rectangle. Anchored under the picture, the video keeps running above it.
+ * It was anchored directly under the picture, which pushed the whole page down
+ * as it opened — the title and the channel row moved under a thumb already
+ * reaching for them. A sheet rises over the page and leaves it where it was, and
+ * on a phone the bottom is where a hand is.
+ *
+ * The video keeps playing above it either way. That was the requirement, and a
+ * sheet meets it as long as it does not cover the picture — which is why this one
+ * is not full height and never will be: everything in it is a setting *about*
+ * what is on screen.
  *
  * ## What is here, and what is not
  *
@@ -53,6 +61,7 @@ import com.mytube.app.ui.theme.Tokens
  * dead button §5 of the server charter forbids. They belong here the day those
  * exist.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerSettingsPanel(
     visible: Boolean,
@@ -60,23 +69,30 @@ fun PlayerSettingsPanel(
     subtitleLanguage: String,
     narrating: Boolean,
     narration: Narration,
+    autoplay: Boolean,
     onSelectSubtitles: (String) -> Unit,
     onToggleNarration: () -> Unit,
+    onToggleAutoplay: () -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = expandVertically(),
-        exit = shrinkVertically(),
+    if (!visible) return
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Tokens.bg,
+        // No scrim over the picture. The default dims the whole window, which
+        // would grey out the video these settings are about.
+        scrimColor = Color.Transparent,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = Tokens.text2) },
         modifier = modifier,
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(Tokens.surface)
-                .padding(horizontal = Space.lg, vertical = Space.md),
+                .padding(start = Space.lg, end = Space.lg, bottom = Space.xl),
         ) {
             // Only when the video has any. A "Subtitles: Off" row over a video
             // with no tracks is a control whose every option is the state it is
@@ -104,28 +120,18 @@ fun PlayerSettingsPanel(
                 Spacer(Modifier.height(Space.lg))
             }
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = strings.narration,
-                    color = Tokens.text,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Switch(
-                    checked = narrating,
-                    onCheckedChange = { onToggleNarration() },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = Tokens.brand,
-                        uncheckedThumbColor = Tokens.text2,
-                        uncheckedTrackColor = Tokens.surfaceHover,
-                    ),
-                )
-            }
+            SwitchRow(
+                label = strings.narration,
+                checked = narrating,
+                onToggle = onToggleNarration,
+            )
+
+            Spacer(Modifier.height(Space.md))
+            SwitchRow(
+                label = strings.autoplay,
+                checked = autoplay,
+                onToggle = onToggleAutoplay,
+            )
 
             // The progress the web app shows as "Preparing speech… 18/388". It
             // is here rather than on the button because a bar can say *how far*,
@@ -216,4 +222,31 @@ private fun TrackChip(label: String, selected: Boolean, onClick: () -> Unit) {
 internal fun trackLabel(track: SubtitleTrack): String {
     val language = track.language.substringBefore('-').uppercase()
     return if (track.generated) "$language (auto)" else language
+}
+
+
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            color = Tokens.text,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = { onToggle() },
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Tokens.brand,
+                uncheckedThumbColor = Tokens.text2,
+                uncheckedTrackColor = Tokens.surfaceHover,
+            ),
+        )
+    }
 }

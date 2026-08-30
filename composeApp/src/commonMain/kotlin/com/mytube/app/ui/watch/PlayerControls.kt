@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -95,7 +96,12 @@ fun PlayerControls(
     onToggleFullscreen: () -> Unit,
     onOpenSettings: () -> Unit,
     onPlayNext: () -> Unit,
+    onPlayPrevious: () -> Unit,
+    onToggleSubtitles: () -> Unit,
     hasNext: Boolean,
+    hasPrevious: Boolean,
+    hasSubtitles: Boolean,
+    subtitlesOn: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -131,77 +137,106 @@ fun PlayerControls(
             // punishing the video for the controls.
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))) {
 
-                ControlButton(
-                    icon = BackIcon,
-                    label = strings.back,
-                    onClick = onBack,
-                    modifier = Modifier.align(Alignment.TopStart).padding(Space.sm),
-                )
-
-                // The bar the web app draws: a thin progress line across the
-                // whole width, and one row under it — play, next, the clock on
-                // the left; audio, settings, fullscreen on the right.
+                // Top row: collapse on the left, subtitles and settings on the
+                // right. This is the arrangement YouTube's own player uses, and
+                // it is here because it was asked for by name — the previous
+                // version copied the *web* app's single bottom bar, which is
+                // right for a page and cramped on a phone, where six controls
+                // shared one row and the clock sat between them.
                 //
-                // It replaced a centre play button flanked by two ±10s circles.
-                // That arrangement is what a phone's *system* player uses, and
-                // it puts the three most-pressed controls over the middle of the
-                // picture — exactly where somebody is looking. Compared with the
-                // web app on a phone, it was the largest single difference on
-                // the screen.
-                Column(
+                // No cast button. There is nothing to cast to: the library is
+                // reached over the house wifi by IP, and a Cast receiver would
+                // be a second server this project does not have.
+                Row(
                     Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth(),
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = Space.xs, vertical = Space.xs),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (!isLive) {
-                        SeekBar(
-                            progress = playback.progress,
-                            enabled = playback.durationSeconds > 0,
-                            onSeekFraction = {
-                                onSeek(it * playback.durationSeconds)
-                                lastTouch++
-                            },
+                    ControlButton(
+                        // A chevron down, not a back arrow: this collapses the
+                        // video to the miniplayer rather than closing it, and
+                        // an arrow would promise the opposite.
+                        icon = ChevronIcon,
+                        label = strings.back,
+                        onClick = onBack,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    if (hasSubtitles) {
+                        ControlButton(
+                            icon = if (subtitlesOn) CaptionsOnIcon else CaptionsIcon,
+                            label = strings.subtitles,
+                            onClick = { onToggleSubtitles(); lastTouch++ },
                         )
                     }
+                    ControlButton(
+                        icon = SettingsGearIcon,
+                        label = strings.settingsInPlayer,
+                        onClick = { onOpenSettings(); lastTouch++ },
+                    )
+                }
 
+                // The three transport controls, in the middle, on discs.
+                //
+                // The discs are the point: over a moving picture a bare glyph
+                // disappears against whatever happens to be behind it, and the
+                // middle of the frame is the one place that cannot be relied on
+                // to be dark.
+                Row(
+                    Modifier.align(Alignment.Center),
+                    horizontalArrangement = Arrangement.spacedBy(28.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DiscButton(
+                        icon = PreviousIcon,
+                        label = strings.playPrevious,
+                        enabled = hasPrevious,
+                        onClick = { onPlayPrevious(); lastTouch++ },
+                    )
+                    DiscButton(
+                        icon = if (playback.isPlaying) PauseIcon else PlayIcon,
+                        label = if (playback.isPlaying) strings.pause else strings.play,
+                        enabled = true,
+                        size = 64.dp,
+                        onClick = { onPlayPause(); lastTouch++ },
+                    )
+                    DiscButton(
+                        icon = NextIcon,
+                        label = strings.playNext,
+                        enabled = hasNext,
+                        onClick = { onPlayNext(); lastTouch++ },
+                    )
+                }
+
+                // The clock as a pill at the bottom left, fullscreen opposite,
+                // and the bar itself along the very bottom edge.
+                Row(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(start = Space.sm, end = Space.sm, bottom = Space.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Row(
                         Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = Space.sm, vertical = Space.xs),
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        ControlButton(
-                            icon = if (playback.isPlaying) PauseIcon else PlayIcon,
-                            label = if (playback.isPlaying) strings.pause else strings.play,
-                            onClick = { onPlayPause(); lastTouch++ },
-                        )
-                        // The next video, which is the first row of the rail
-                        // below — so the button and the list always name the
-                        // same thing. Absent when the rail is empty, rather
-                        // than drawn and dead.
-                        if (hasNext) {
-                            ControlButton(
-                                icon = NextIcon,
-                                label = strings.playNext,
-                                onClick = { onPlayNext(); lastTouch++ },
-                            )
-                        }
-
-                        Spacer(Modifier.width(Space.xs))
                         if (isLive) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier.size(8.dp).clip(CircleShape)
-                                        .background(Tokens.brand),
-                                )
-                                Spacer(Modifier.width(Space.sm))
-                                Text(
-                                    text = strings.live,
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            }
+                            Box(
+                                Modifier.size(8.dp).clip(CircleShape)
+                                    .background(Tokens.brand),
+                            )
+                            Spacer(Modifier.width(Space.sm))
+                            Text(
+                                text = strings.live,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
                         } else {
                             Text(
                                 text = formatDuration(playback.positionSeconds.toInt()) +
@@ -210,24 +245,60 @@ fun PlayerControls(
                                 fontSize = 13.sp,
                             )
                         }
-
-                        Spacer(Modifier.weight(1f))
-
-                        ControlButton(
-                            icon = SettingsGearIcon,
-                            label = strings.settingsInPlayer,
-                            onClick = { onOpenSettings(); lastTouch++ },
-                        )
-                        ControlButton(
-                            icon = if (fullscreen) ShrinkIcon else ExpandIcon,
-                            label = if (fullscreen) strings.exitFullscreen
-                            else strings.fullscreen,
-                            onClick = { onToggleFullscreen(); lastTouch++ },
-                        )
                     }
+                    Spacer(Modifier.weight(1f))
+                    ControlButton(
+                        icon = if (fullscreen) ShrinkIcon else ExpandIcon,
+                        label = if (fullscreen) strings.exitFullscreen else strings.fullscreen,
+                        onClick = { onToggleFullscreen(); lastTouch++ },
+                    )
+                }
+
+                if (!isLive) {
+                    SeekBar(
+                        progress = playback.progress,
+                        enabled = playback.durationSeconds > 0,
+                        onSeekFraction = {
+                            onSeek(it * playback.durationSeconds)
+                            lastTouch++
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
                 }
             }
         }
+    }
+}
+
+/**
+ * A transport control on a translucent disc.
+ *
+ * Disabled means drawn faint and not pressable, rather than absent: previous and
+ * next keep their places whether or not there is anywhere to go, so the play
+ * button does not move under a thumb that is already reaching for it.
+ */
+@Composable
+private fun DiscButton(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    size: androidx.compose.ui.unit.Dp = 52.dp,
+) {
+    Box(
+        Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.45f))
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = Color.White.copy(alpha = if (enabled) 1f else 0.35f),
+            modifier = Modifier.size(size * 0.46f),
+        )
     }
 }
 
@@ -244,6 +315,7 @@ private fun SeekBar(
     progress: Float,
     enabled: Boolean,
     onSeekFraction: (Double) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var width by remember { mutableStateOf(1f) }
     // What the finger is on while it is down. The player's own progress keeps
@@ -253,7 +325,7 @@ private fun SeekBar(
     val shown = if (dragging >= 0f) dragging else progress
 
     Box(
-        Modifier
+        modifier
             .fillMaxWidth()
             // A 3dp line is what the design system draws, and 3dp is nothing to
             // aim at. The touch target is 24dp and the line is centred in it.

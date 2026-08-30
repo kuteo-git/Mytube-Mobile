@@ -159,6 +159,9 @@ class HomeViewModelTest {
         override suspend fun topics() = emptyList<com.mytube.app.domain.model.Topic>()
         override suspend fun live() = emptyList<Video>()
         override suspend fun history(limit: Int) = emptyList<Video>()
+        override suspend fun saved() = emptyList<Video>()
+        override suspend fun feedMix() = throw NotImplementedError()
+        override suspend fun saveFeedMix(mix: com.mytube.app.domain.repository.FeedMix) = Unit
         override suspend fun subscriptions() = emptyList<com.mytube.app.domain.model.Channel>()
         override suspend fun upNext(videoId: String, channelId: String) = emptyList<Video>()
         override suspend fun recordProgress(

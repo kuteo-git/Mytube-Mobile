@@ -118,6 +118,15 @@ interface Strings {
     fun fromChannel(name: String): String
     val newBadge: String
     val playNext: String
+    val playPrevious: String
+    val savedTitle: String
+    val noSaved: String
+    val noSavedDetail: String
+    val feedMix: String
+    val feedMixSubscribed: String
+    val feedMixAffinity: String
+    val feedMixDiscovery: String
+    val feedMixHint: String
 
     // --- navigation --------------------------------------------------------
     val navHome: String
@@ -265,6 +274,17 @@ object EnglishStrings : Strings {
     override fun fromChannel(name: String) = "From $name"
     override val newBadge = "New"
     override val playNext = "Next video"
+    override val playPrevious = "Previous video"
+    override val savedTitle = "Saved"
+    override val noSaved = "Nothing saved yet"
+    override val noSavedDetail =
+        "Saving a video keeps its file on the disk when the library runs out of room."
+    override val feedMix = "Home feed"
+    override val feedMixSubscribed = "Channels you follow"
+    override val feedMixAffinity = "More of what you watch"
+    override val feedMixDiscovery = "Something new"
+    override val feedMixHint =
+        "These three divide what is left after continue watching, rewatch and new uploads."
 
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
@@ -382,6 +402,16 @@ object VietnameseStrings : Strings {
     override fun fromChannel(name: String) = "Từ $name"
     override val newBadge = "Mới"
     override val playNext = "Video kế tiếp"
+    override val playPrevious = "Video trước"
+    override val savedTitle = "Đã lưu"
+    override val noSaved = "Chưa lưu video nào"
+    override val noSavedDetail = "Lưu một video là giữ file của nó lại khi ổ đĩa đầy."
+    override val feedMix = "Trang chủ"
+    override val feedMixSubscribed = "Kênh đang theo dõi"
+    override val feedMixAffinity = "Giống thứ bạn hay xem"
+    override val feedMixDiscovery = "Thử cái mới"
+    override val feedMixHint =
+        "Ba phần này chia nhau chỗ còn lại, sau xem tiếp, xem lại và video mới."
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"

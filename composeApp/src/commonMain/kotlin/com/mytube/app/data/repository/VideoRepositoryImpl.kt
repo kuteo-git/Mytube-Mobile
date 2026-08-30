@@ -9,7 +9,9 @@ import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.model.Narration
+import com.mytube.app.data.remote.dto.FeedMixDto
 import com.mytube.app.domain.repository.ChannelPage
+import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.ServerRepository
 import com.mytube.app.domain.repository.SortOption
@@ -92,6 +94,30 @@ class VideoRepositoryImpl(
     override suspend fun subscriptions(): List<Channel> =
         gateway.subscriptions(requireBaseUrl(), server.profileId())
             .channels.map { it.toDomain() }
+
+    override suspend fun saved(): List<Video> =
+        gateway.saved(requireBaseUrl(), server.profileId()).videos.map { it.toDomain() }
+
+    override suspend fun feedMix(): FeedMix {
+        val dto = gateway.feedMix(requireBaseUrl(), server.profileId())
+        return FeedMix(
+            subscribedPercent = dto.subscribedPercent,
+            affinityPercent = dto.affinityPercent,
+            discoveryPercent = dto.discoveryPercent,
+            fixedPercent = dto.fixedShares.continueWatching +
+                dto.fixedShares.rewatch + dto.fixedShares.freshSubscribed,
+        )
+    }
+
+    override suspend fun saveFeedMix(mix: FeedMix) = gateway.saveFeedMix(
+        requireBaseUrl(),
+        server.profileId(),
+        FeedMixDto(
+            subscribedPercent = mix.subscribedPercent,
+            affinityPercent = mix.affinityPercent,
+            discoveryPercent = mix.discoveryPercent,
+        ),
+    )
 
     override suspend fun comments(videoId: String): List<Comment> =
         gateway.comments(requireBaseUrl(), server.profileId(), videoId)

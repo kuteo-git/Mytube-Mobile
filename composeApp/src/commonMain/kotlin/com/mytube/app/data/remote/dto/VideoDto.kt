@@ -285,3 +285,26 @@ fun CommentDto.toDomain(): Comment = Comment(
     likeCount = likeCount,
     replies = replies.map { it.toDomain() },
 )
+
+
+@Serializable
+data class FeedMixDto(
+    val subscribedPercent: Int = 0,
+    val affinityPercent: Int = 0,
+    val discoveryPercent: Int = 0,
+    val fixedShares: FixedSharesDto = FixedSharesDto(),
+)
+
+/**
+ * The parts of the page the sliders do **not** divide.
+ *
+ * Sent by the server rather than known here, and that is deliberate: the web app
+ * carried its own copy once and spent a release quoting a figure that had gone
+ * stale when a new fixed share took ten per cent of the page.
+ */
+@Serializable
+data class FixedSharesDto(
+    val continueWatching: Int = 0,
+    val rewatch: Int = 0,
+    val freshSubscribed: Int = 0,
+)

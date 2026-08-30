@@ -15,6 +15,7 @@ import com.mytube.app.ui.watch.MiniPlayer
 import com.mytube.app.ui.watch.WatchState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -39,6 +40,9 @@ import com.mytube.app.ui.history.HistoryScreen
 import com.mytube.app.ui.history.HistoryViewModel
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.deviceLanguage
+import com.mytube.app.domain.repository.FeedMix
+import com.mytube.app.ui.saved.SavedScreen
+import com.mytube.app.ui.saved.SavedViewModel
 import com.mytube.app.ui.search.SearchScreen
 import com.mytube.app.ui.search.SearchViewModel
 import com.mytube.app.ui.settings.SettingsScreen
@@ -67,6 +71,7 @@ private sealed interface Route {
     data object Setup : Route
     data object Home : Route
     data object Search : Route
+    data object Saved : Route
     data class Channel(val channelId: String) : Route
 }
 
@@ -117,7 +122,25 @@ fun App(container: AppContainer) {
             // changing tab, or stepping into settings, does not take the video
             // with it.
             var watching: WatchSession? by remember { mutableStateOf(null) }
+            // What has been watched this sitting, oldest first.
+            //
+            // Held here rather than in the watch ViewModel because it is a fact
+            // about the *sitting*: a ViewModel is rebuilt for every video and
+            // could not remember what came before it. Not persisted — "previous"
+            // means previous in this sitting, and offering to go back to
+            // something watched last week is not what the button says.
+            val trail = remember { mutableStateListOf<String>() }
             val scope = rememberCoroutineScope()
+            // Null until the server answers. Read once for the process: it is
+            // one setting for the household and nothing else in the app changes
+            // it, so re-reading on every visit to Settings would be a request
+            // for an answer already held.
+            var feedMix: FeedMix? by remember { mutableStateOf(null) }
+            LaunchedEffect(baseUrl) {
+                if (baseUrl.isNotBlank()) {
+                    feedMix = runCatching { container.videoRepository.feedMix() }.getOrNull()
+                }
+            }
 
             // Which screen opens is a question for the settings store, and that
             // cannot be answered during composition. Nothing is drawn until it is:
@@ -165,6 +188,7 @@ fun App(container: AppContainer) {
                                     mediaBaseUrl = baseUrl,
                                     onOpenSettings = { tab = Tab.Settings },
                                     onOpenVideo = { watching = WatchSession(it) },
+                                    onOpenChannel = { route = Route.Channel(it) },
                                 )
 
                                 Tab.Subscriptions -> SubscriptionsScreen(
@@ -193,7 +217,20 @@ fun App(container: AppContainer) {
                                 Tab.Settings -> SettingsScreen(
                                     baseUrl = baseUrl,
                                     language = chosen,
+                                    feedMix = feedMix,
                                     onOpenServer = { route = Route.Setup },
+                                    onOpenSaved = { route = Route.Saved },
+                                    onChangeMix = { next ->
+                                        // Drawn immediately, sent after: a
+                                        // slider that waits for a round trip
+                                        // before moving is one that feels stuck.
+                                        feedMix = next
+                                        scope.launch {
+                                            runCatching {
+                                                container.videoRepository.saveFeedMix(next)
+                                            }
+                                        }
+                                    },
                                     onPickLanguage = { picked ->
                                         language = picked
                                         scope.launch {
@@ -204,7 +241,17 @@ fun App(container: AppContainer) {
                             }
                         }
 
-                    is Route.Search -> SearchScreen(
+                    is Route.Saved -> SavedScreen(
+                    viewModel = viewModel(key = "saved-$baseUrl") {
+                        SavedViewModel(container.videoRepository)
+                    },
+                    mediaBaseUrl = baseUrl,
+                    onOpenSettings = { route = Route.Setup },
+                    onOpenVideo = { watching = WatchSession(it) },
+                    onOpenChannel = { route = Route.Channel(it) },
+                )
+
+                is Route.Search -> SearchScreen(
                         viewModel = viewModel(key = "search-$baseUrl") {
                             SearchViewModel(container.videoRepository)
                         },
@@ -229,7 +276,7 @@ fun App(container: AppContainer) {
             // connection this video came through, and a bar playing over that
             // form is in the way of the one thing that screen is for.
             val browsing = route is Route.Home || route is Route.Search ||
-                route is Route.Channel
+                route is Route.Channel || route is Route.Saved
 
             if (session != null && browsing) {
                 // `remember` and a DisposableEffect, not `viewModel()`. That
@@ -248,6 +295,10 @@ fun App(container: AppContainer) {
                         videos = container.videoRepository,
                         streams = container.streamRepository,
                         narration = container.narrationRepository,
+                        onFinished = { next ->
+                            trail.add(session.videoId)
+                            watching = WatchSession(next, startAtBeginning = true)
+                        },
                         playerFactory = container.playerFactory,
                     )
                 }
@@ -295,7 +346,22 @@ fun App(container: AppContainer) {
                             // the difference is what stops "next" dropping
                             // somebody into the middle of a track.
                             onAdvanceTo = {
+                                trail.add(session.videoId)
                                 watching = WatchSession(it, startAtBeginning = true)
+                            },
+                            onPlayPrevious = {
+                                val previous = trail.removeLastOrNull()
+                                // Resumed, not restarted: going back means
+                                // returning to where you were.
+                                if (previous != null) watching = WatchSession(previous)
+                            },
+                            hasPrevious = trail.isNotEmpty(),
+                            onOpenChannel = {
+                                // The video keeps playing, collapsed, so opening
+                                // a channel from the watch screen does not end
+                                // what somebody was listening to.
+                                watching = session.copy(minimised = true)
+                                route = Route.Channel(it)
                             },
                         )
                     }

@@ -5,6 +5,7 @@ import com.mytube.app.data.remote.dto.ChannelVideosDto
 import com.mytube.app.data.remote.dto.ChannelsDto
 import com.mytube.app.data.remote.dto.CommentsDto
 import com.mytube.app.data.remote.dto.FeedDto
+import com.mytube.app.data.remote.dto.FeedMixDto
 import com.mytube.app.data.remote.dto.NarrationDto
 import com.mytube.app.data.remote.dto.StreamDto
 import com.mytube.app.data.remote.dto.TopicsDto
@@ -72,6 +73,30 @@ class GatewayDataSource(private val client: HttpClient) {
 
     suspend fun live(baseUrl: String, userId: String): FeedDto =
         client.get("${baseUrl.trimEnd('/')}/api/live") { identify(userId) }.orThrow().body()
+
+    /**
+     * The videos this member has kept.
+     *
+     * `/api/pinned`, not `/api/saved`: the server charter separates the two —
+     * Save is a personal shelf and `pinned` is a fact about the disk, derived
+     * from it — and settled on sending the *viewer's* answer under the older
+     * name. The rename happens at the mapper, not here.
+     */
+    suspend fun feedMix(baseUrl: String, userId: String): FeedMixDto =
+        client.get("${baseUrl.trimEnd('/')}/api/settings/feed-mix") {
+            identify(userId)
+        }.orThrow().body()
+
+    suspend fun saveFeedMix(baseUrl: String, userId: String, mix: FeedMixDto) {
+        client.post("${baseUrl.trimEnd('/')}/api/settings/feed-mix") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(mix)
+        }.orThrow()
+    }
+
+    suspend fun saved(baseUrl: String, userId: String): FeedDto =
+        client.get("${baseUrl.trimEnd('/')}/api/pinned") { identify(userId) }.orThrow().body()
 
     suspend fun history(baseUrl: String, userId: String, limit: Int): FeedDto =
         client.get("${baseUrl.trimEnd('/')}/api/history") {

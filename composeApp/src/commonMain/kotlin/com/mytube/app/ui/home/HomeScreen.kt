@@ -28,7 +28,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import com.mytube.app.ui.shell.FeedSkeleton
 import com.mytube.app.ui.shell.TabRefreshIndicator
+import com.mytube.app.ui.shell.tabContentPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -72,6 +74,7 @@ fun HomeScreen(
     mediaBaseUrl: String,
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
+    onOpenChannel: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -85,6 +88,7 @@ fun HomeScreen(
         onLoadMore = viewModel::loadMore,
         onSaveVideo = viewModel::toggleSaved,
         onNotInterested = viewModel::notInterested,
+        onOpenChannel = onOpenChannel,
     )
 }
 
@@ -105,12 +109,17 @@ fun HomeContent(
     onLoadMore: () -> Unit,
     onSaveVideo: (Video) -> Unit = {},
     onNotInterested: (Video) -> Unit = {},
+    onOpenChannel: (String) -> Unit = {},
 ) {
     val strings = LocalStrings.current
 
     Surface(color = Tokens.bg, modifier = Modifier.fillMaxSize()) {
         when (val current = state) {
-            is HomeState.Loading -> Centered { CircularProgressIndicator() }
+            is HomeState.Loading -> Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = tabContentPadding().calculateTopPadding()),
+            ) { FeedSkeleton() }
 
             is HomeState.NeedsServer -> Centered {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -133,7 +142,7 @@ fun HomeContent(
             is HomeState.Ready -> Feed(
                 current, mediaBaseUrl, strings,
                 onSelectChip, onOpenVideo, onRetry, onLoadMore,
-                onSaveVideo, onNotInterested,
+                onSaveVideo, onNotInterested, onOpenChannel,
             )
         }
     }
@@ -151,6 +160,7 @@ private fun Feed(
     onLoadMore: () -> Unit,
     onSaveVideo: (Video) -> Unit,
     onNotInterested: (Video) -> Unit,
+    onOpenChannel: (String) -> Unit,
 ) {
     val listState = rememberLazyListState()
 
@@ -231,6 +241,7 @@ private fun Feed(
                     videos = state.continueWatching,
                     mediaBaseUrl = mediaBaseUrl,
                     onOpenVideo = onOpenVideo,
+                    onSaveVideo = onSaveVideo,
                 )
             }
 
@@ -250,6 +261,7 @@ private fun Feed(
                     onClick = { onOpenVideo(video.id) },
                     onSave = { onSaveVideo(video) },
                     onNotInterested = { onNotInterested(video) },
+                    onOpenChannel = { onOpenChannel(video.channel.id) },
                 )
             }
 

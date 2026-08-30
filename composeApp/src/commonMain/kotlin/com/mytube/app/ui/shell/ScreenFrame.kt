@@ -1,6 +1,22 @@
 package com.mytube.app.ui.shell
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
@@ -117,7 +132,13 @@ fun TabScaffold(
 ) {
     Surface(color = Tokens.bg, modifier = Modifier.fillMaxSize()) {
         when {
-            loading -> Centered { CircularProgressIndicator() }
+            // The skeleton, not a spinner. A spinner in the middle of an empty
+            // screen says "wait"; this says what is coming, and the page then
+            // fills in rather than appearing.
+            loading -> Column(
+                Modifier.fillMaxSize().padding(top = tabContentPadding()
+                    .calculateTopPadding()),
+            ) { FeedSkeleton() }
 
             needsServer -> Centered {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -173,4 +194,71 @@ fun BoxScope.TabRefreshIndicator(state: PullToRefreshState, isRefreshing: Boolea
                     Size.topBar,
             ),
     )
+}
+
+/**
+ * The shape of a feed, before the feed arrives.
+ *
+ * A spinner in the middle of an empty screen says "wait" and nothing else. This
+ * says *what* is coming: the thumbnail's box, the avatar's circle, two lines of
+ * title. The page then fills in rather than appearing, which is the difference
+ * between a screen that felt slow and one that felt broken.
+ *
+ * It pulses rather than sweeping a gradient across. A sweep is prettier and it
+ * is a second animation to keep at 60fps on a television; a fade between two
+ * greys says the same thing and costs one alpha.
+ */
+@Composable
+fun FeedSkeleton(modifier: Modifier = Modifier, cards: Int = 3) {
+    val pulse = rememberInfiniteTransition(label = "skeleton")
+    val alpha by pulse.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "skeleton-alpha",
+    )
+    val shade = Tokens.surface.copy(alpha = alpha)
+
+    Column(modifier.fillMaxWidth()) {
+        repeat(cards) {
+            Column(Modifier.padding(bottom = Space.xxl)) {
+                Box(
+                    Modifier
+                        .padding(horizontal = Space.md)
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(shade),
+                )
+                Spacer(Modifier.height(Space.md))
+                Row(Modifier.padding(horizontal = Space.lg)) {
+                    Box(Modifier.size(36.dp).clip(CircleShape).background(shade))
+                    Spacer(Modifier.width(Space.md))
+                    Column(Modifier.weight(1f)) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(shade),
+                        )
+                        Spacer(Modifier.height(Space.sm))
+                        Box(
+                            Modifier
+                                // Short, like a channel name. Two full-width
+                                // bars read as a paragraph, and the eye notices
+                                // that the real card is not shaped like that.
+                                .fillMaxWidth(0.45f)
+                                .height(12.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(shade),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

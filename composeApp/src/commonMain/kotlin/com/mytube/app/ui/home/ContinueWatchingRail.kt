@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -52,6 +53,7 @@ fun ContinueWatchingRail(
     videos: List<Video>,
     mediaBaseUrl: String,
     onOpenVideo: (String) -> Unit,
+    onSaveVideo: (Video) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (videos.isEmpty()) return
@@ -71,7 +73,11 @@ fun ContinueWatchingRail(
             horizontalArrangement = Arrangement.spacedBy(Space.md),
         ) {
             items(videos, key = { it.id }) { video ->
-                RailCard(video, mediaBaseUrl) { onOpenVideo(video.id) }
+                RailCard(
+                    video = video,
+                    mediaBaseUrl = mediaBaseUrl,
+                    onSave = { onSaveVideo(video) },
+                ) { onOpenVideo(video.id) }
             }
         }
 
@@ -80,7 +86,12 @@ fun ContinueWatchingRail(
 }
 
 @Composable
-private fun RailCard(video: Video, mediaBaseUrl: String, onClick: () -> Unit) {
+private fun RailCard(
+    video: Video,
+    mediaBaseUrl: String,
+    onSave: (() -> Unit)?,
+    onClick: () -> Unit,
+) {
     Column(
         modifier = Modifier
             // Wide enough that the next card peeks in at the right edge, which
@@ -136,21 +147,38 @@ private fun RailCard(video: Video, mediaBaseUrl: String, onClick: () -> Unit) {
         }
 
         Spacer(Modifier.height(Space.sm))
-        Text(
-            text = video.title,
-            color = Tokens.text,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = video.channel.name,
-            color = Tokens.text2,
-            fontSize = 12.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // The same overflow menu as a feed card. It was missing here, and a
+        // card that looks like the others and has one fewer control is a card
+        // somebody presses twice before deciding it is broken.
+        Row {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = video.title,
+                    color = Tokens.text,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = video.channel.name,
+                    color = Tokens.text2,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            VideoCardMenu(
+                video = video,
+                strings = LocalStrings.current,
+                onSave = onSave,
+                // No "not interested" on this rail. It holds videos this viewer
+                // started watching; telling the ranker off from a list of things
+                // somebody chose is the wrong signal, the same reason History
+                // has only Save.
+                onNotInterested = null,
+            )
+        }
     }
 }

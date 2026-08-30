@@ -104,6 +104,14 @@ sealed interface WatchState {
         val railChannelOnly: Boolean = false,
         /** The track being shown, or empty for none. */
         val subtitleLanguage: String = "",
+        /**
+         * Whether reaching the end should advance to the next video.
+         *
+         * Per device and per sitting, not stored: it is a decision about *this*
+         * evening, and a phone that remembers it for a fortnight starts playing
+         * on its own the next time somebody opens one video deliberately.
+         */
+        val autoplay: Boolean = false,
     ) : WatchState
 }
 
@@ -134,6 +142,16 @@ class WatchViewModel(
      * for it with a fault nothing can catch.
      */
     private val startAtBeginning: Boolean,
+    /**
+     * Advance to this video, because the last one played to its end.
+     *
+     * A callback rather than state the screen watches, because what happens next
+     * is navigation — it belongs to whoever owns the route, not to the video
+     * that just finished. It fires **only** when autoplay is on and there is
+     * something to advance to, so the caller has no condition to re-check and
+     * the two cannot disagree about when a video ends.
+     */
+    private val onFinished: (String) -> Unit,
     /** Where images live, for the artwork the lock screen draws. */
     private val mediaBaseUrl: String,
     private val videos: VideoRepository,
@@ -199,6 +217,10 @@ class WatchViewModel(
         val next = if (current.subtitleLanguage == language) "" else language
         _state.value = current.copy(subtitleLanguage = next)
         player.showSubtitles(next)
+    }
+
+    fun toggleAutoplay() = _state.update {
+        if (it is WatchState.Playing) it.copy(autoplay = !it.autoplay) else it
     }
 
     fun toggleRail() = _state.update {
