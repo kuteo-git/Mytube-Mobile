@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import com.mytube.app.domain.player.Narrator
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.AVFAudio.setActive
@@ -76,6 +77,9 @@ class AvVideoPlayer : VideoPlayer {
 
     private var observer: Any? = null
 
+    /** Built on first use: most videos are never narrated. */
+    private var narrator: Narrator? = null
+
     /**
      * The lock screen's entry.
      *
@@ -111,16 +115,25 @@ class AvVideoPlayer : VideoPlayer {
     }
 
     /**
-     * Not implemented, and saying so rather than pretending.
+     * The second voice, through a `Narrator` sharing this process's audio session.
      *
-     * The Android side plays clips through a second `ExoPlayer` driven by the
-     * video's playhead. The iOS equivalent is a second `AVPlayer` in the same
-     * audio session, which is straightforward — and it cannot be *run* here:
-     * there is no Xcode project in this repository, so nothing on this platform
-     * has ever played a sound. Writing it untested and calling it done would put
-     * the app's whole reason for existing behind an unmeasured claim.
+     * An empty list switches narration off, which is the same call by design:
+     * "narrate nothing" and "stop narrating" are one state, and two methods for
+     * it would be two states that can disagree.
+     *
+     * The narrator is built on first use rather than in `init`. It holds a
+     * second `AVPlayer`, and most videos are never narrated — building one for
+     * every video would be a decoder per video for a feature nobody asked for.
      */
-    override fun narrate(clips: List<NarrationClip>) = Unit
+    override fun narrate(clips: List<NarrationClip>) {
+        if (clips.isEmpty()) {
+            narrator?.release()
+            narrator = null
+            return
+        }
+        val live = narrator ?: Narrator(IosNarrationHost(av)).also { narrator = it }
+        live.setClips(clips)
+    }
 
     /**
      * The language wanted, kept for the screen to read.
@@ -148,6 +161,8 @@ class AvVideoPlayer : VideoPlayer {
     }
 
     override fun stop() {
+        narrator?.release()
+        narrator = null
         nowPlaying.clear()
         av.pause()
         // Replacing the item with nothing is what clears the Now Playing entry
@@ -162,6 +177,8 @@ class AvVideoPlayer : VideoPlayer {
         // while the sound carries on — the whole point of the miniplayer — and a
         // lock screen that empties while the audio plays is the fault Android's
         // side of this already measured, in reverse.
+        narrator?.release()
+        narrator = null
         observer?.let { av.removeTimeObserver(it) }
         observer = null
         av.pause()

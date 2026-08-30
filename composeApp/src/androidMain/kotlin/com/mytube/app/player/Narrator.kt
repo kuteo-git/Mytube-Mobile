@@ -5,127 +5,49 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import com.mytube.app.domain.model.NarrationClip
-import com.mytube.app.domain.model.clipAt
-import com.mytube.app.domain.model.levelsFor
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.mytube.app.domain.player.NarrationHost
 
 /**
- * The second voice.
+ * Media3 behind [NarrationHost].
  *
- * A separate `ExoPlayer` playing one short WAV at a time, driven by where the
- * video has got to. It is not part of the video's playlist: a clip has to start
- * at a moment inside the video, and a playlist can only play things one after
- * another.
+ * Six calls and no decisions. This file used to hold the ticker, the ducking and
+ * the "what is speaking now" bookkeeping as well, and so did its iOS
+ * counterpart — two copies of one behaviour, which is two places to fix
+ * everything and two ways for the platforms to drift. All of it moved to the
+ * common `Narrator`; what is left is the part that genuinely cannot be shared,
+ * because ExoPlayer and AVPlayer have no type in common.
  *
- * ## Why the ducking is here
- *
- * Ducking is a fact about two sounds, and something has to hold both. The levels
- * themselves come from `levelsFor` in `domain`, copied from the web app together
- * with the reason they are independent — chained, the voice took its gain from
- * the already-ducked video, so moving one dragged the other.
- *
- * ## Why it polls rather than schedules
- *
- * A timer set for each clip has to be cancelled and rebuilt on every seek, every
- * pause and every list update, and the server's list grows while it plays. Four
- * checks a second against the playhead is right by construction: it cannot drift,
- * a seek needs no special case, and a clip appended a moment ago is picked up on
- * the next tick.
+ * The speaker is a second `ExoPlayer` rather than another item in the video's
+ * playlist: a clip has to begin at a moment *inside* the video, and a playlist
+ * can only play things one after another.
  */
 @UnstableApi
-class Narrator(context: Context, private val video: Player) {
+class AndroidNarrationHost(context: Context, private val video: Player) : NarrationHost {
 
     private val speaker = ExoPlayer.Builder(context).build()
-    private val scope = CoroutineScope(Dispatchers.Main)
-    private var ticker: Job? = null
 
-    private var clips: List<NarrationClip> = emptyList()
+    override val videoIsPlaying: Boolean get() = video.isPlaying
 
-    /** What is speaking now, so a clip is started once rather than every tick. */
-    private var speaking: NarrationClip? = null
+    override val videoPositionSeconds: Double get() = video.currentPosition / 1000.0
 
-    /** The video's own level, remembered so ducking can be undone exactly. */
-    private var master: Float = 1f
+    override fun videoVolume(): Float = video.volume
 
-    fun setClips(clips: List<NarrationClip>) {
-        this.clips = clips
-        if (clips.isEmpty()) {
-            stop()
-            return
-        }
-        if (ticker == null) start()
+    override fun setVideoVolume(level: Float) {
+        video.volume = level
     }
 
-    fun release() {
-        stop()
-        speaker.release()
-    }
-
-    private fun start() {
-        master = video.volume
-        ticker = scope.launch {
-            while (true) {
-                tick()
-                // Four times a second, the same rate the position readout uses.
-                // A clip starting a quarter-second late is inaudible as an
-                // error; a timer per clip is a rebuild on every seek.
-                delay(250)
-            }
-        }
-    }
-
-    private fun stop() {
-        ticker?.cancel()
-        ticker = null
-        speaker.stop()
-        speaker.clearMediaItems()
-        speaking = null
-        // Put the video back exactly where it was. Ramping it up to 1.0 would
-        // undo a viewer's own volume setting on the way out of narration.
-        video.volume = master
-    }
-
-    private fun tick() {
-        // Silence while the video is paused. Without this a clip started just
-        // before a pause carries on talking over a still frame.
-        if (!video.isPlaying) {
-            if (speaking != null) hush()
-            return
-        }
-
-        val at = video.currentPosition / 1000.0
-        val due = clipAt(clips, at)
-
-        if (due == null) {
-            if (speaking != null) hush()
-            return
-        }
-        if (due == speaking) return
-
-        val levels = levelsFor(
-            master = master,
-            muted = false,
-            narrating = true,
-        )
-        video.volume = levels.video
-        speaking = due
-
-        speaker.setMediaItem(MediaItem.fromUri(due.clipUrl))
-        speaker.volume = levels.narration
+    override fun speak(url: String, volume: Float) {
+        speaker.setMediaItem(MediaItem.fromUri(url))
+        speaker.volume = volume
         speaker.prepare()
         speaker.play()
     }
 
-    private fun hush() {
-        speaking = null
+    override fun silence() {
         speaker.stop()
-        // Back to the viewer's level, not to 1.0 — and not through duckLevel,
-        // which is where the video sits *while* a line runs.
-        video.volume = master
+        speaker.clearMediaItems()
     }
+
+    /** Hands back the decoder. Only the owner of this host may call it. */
+    fun dispose() = speaker.release()
 }

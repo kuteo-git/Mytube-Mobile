@@ -14,6 +14,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import com.mytube.app.domain.model.NarrationClip
+import com.mytube.app.domain.player.Narrator
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.VideoPlayer
@@ -83,6 +84,9 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
      */
     private var narrator: Narrator? = null
 
+    /** The Media3 half, kept so its decoder can be handed back. */
+    private var narrationHost: AndroidNarrationHost? = null
+
     /** Clips that arrived before the narrator did, replayed on connection. */
     private var pendingClips: List<NarrationClip> = emptyList()
 
@@ -118,7 +122,9 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
             {
                 val connected = future.get().also { it.addListener(listener) }
                 controller = connected
-                narrator = Narrator(context, connected).also {
+                val host = AndroidNarrationHost(context, connected)
+                narrationHost = host
+                narrator = Narrator(host).also {
                     if (pendingClips.isNotEmpty()) it.setClips(pendingClips)
                 }
                 pendingClips = emptyList()
@@ -172,6 +178,8 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
     override fun stop() {
         narrator?.release()
         narrator = null
+        narrationHost?.dispose()
+        narrationHost = null
         // Both, in this order. `stop()` alone leaves the item loaded, so Media3
         // keeps the session — and its notification — alive over a player with
         // nothing to play; clearing the queue is what tells the service the
@@ -196,6 +204,8 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
         stopTicking()
         narrator?.release()
         narrator = null
+        narrationHost?.dispose()
+        narrationHost = null
         controller?.removeListener(listener)
         controller?.release()
         controller = null
