@@ -1131,3 +1131,40 @@ Painting it per screen was wrong twice in one sitting.
 
 Sized from `WindowInsets.statusBars`, which is zero while the bar is hidden, so
 fullscreen gets no white band without a condition saying so.
+
+### The status bar names a background, and the root Box was drawn twice (2026-08-30)
+
+Two faults shipped in one build, both from one line-based edit that removed the
+white status-bar strip.
+
+- **`SystemBarStyle.light`/`dark` describe the strip behind the glyphs, not the
+  glyphs.** `light` was correct while that strip was white; with it gone the bar
+  is transparent over `Tokens.bg` (#0F0F0F), where the dark ink `light` asks for
+  is invisible. `dark` is what gives white ones. The two settings were always one
+  decision and had to move together — only one of them moved.
+- **A duplicated root `Box` swallowed every touch.** The deletion left the whole
+  route `when` standing twice, the first copy trailed by a stray `when` that
+  mutated `route`, `tab` and `watching` *during composition*. Nothing looked
+  wrong: the second Box drew the same screens over the first. But a full-screen
+  Box takes the touches that land on it, so the tab bar and the miniplayer were
+  both dead while the pixels were correct. **A UI fault with no visual symptom is
+  the argument against line-number edits** — the compiler was happy, the tests
+  were green, and the only way to find it was to tap.
+
+### iOS builds, and has never run (2026-08-30)
+
+`iosApp/iosApp.xcodeproj` is hand-written rather than generated: the three Swift
+files it wraps were already correct, and the KMP wizard would have replaced them.
+
+- Measured: `xcodebuild -sdk iphonesimulator26.5` → **BUILD SUCCEEDED**,
+  `Mytube.app` at 74 MB with 952 Kotlin symbols in the binary.
+- **The framework is static**, so there is no `Frameworks/` directory and the
+  74 MB is the executable. An empty embed step is the expected shape here.
+- **The Kotlin build phase sources `env.sh`.** The toolchain is on the external
+  volume and Xcode inherits no `JAVA_HOME` from the Finder, so without it the UI
+  build fails where the terminal build succeeds — a difference that reads as a
+  broken project.
+- **No iOS runtime is installed** and the connected iPhone reports `iOS 26.5 is
+  not installed`. Compiled and linked is all that has been shown; nothing has
+  been run, and the several-gigabyte platform download is still the open
+  decision.
