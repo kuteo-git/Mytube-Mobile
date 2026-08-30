@@ -49,9 +49,18 @@
 	<array>
 		<string>armv7</string>
 	</array>
+	<!--
+	  The outer bound of what is ever possible, not what is allowed right now.
+	  iOS asks the app delegate which of these apply moment to moment, and the
+	  delegate answers from Kotlin's OrientationLock — portrait everywhere except
+	  a video filling the screen. Listing portrait alone here, as this did, makes
+	  that flag unable to do anything however it is set.
+	-->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 </dict>
 </plist>
