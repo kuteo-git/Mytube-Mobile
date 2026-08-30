@@ -57,6 +57,17 @@ sealed interface HomeState {
         val loadingMore: Boolean = false,
         /** A pull-to-refresh is in flight; the list below stays on screen. */
         val refreshing: Boolean = false,
+        /**
+         * A different topic is being fetched.
+         *
+         * Distinct from `Loading`, and the distinction is the whole point: going
+         * to `Loading` destroys the composable that holds the chip row, so the
+         * row was rebuilt with its scroll at zero — press a chip off to the
+         * right and it jumped back to the left, taking the chip just pressed out
+         * of view. Staying in `Ready` keeps the chips exactly where they are and
+         * shows the skeleton only where the videos will go.
+         */
+        val switching: Boolean = false,
     ) : HomeState
 }
 
@@ -90,6 +101,19 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
     fun select(chip: Chip) {
         val current = _state.value
         if (current is HomeState.Ready && current.selected == chip) return
+
+        if (current is HomeState.Ready) {
+            // The chips and their scroll position stay; only the videos go.
+            _state.value = current.copy(
+                selected = chip,
+                videos = emptyList(),
+                continueWatching = emptyList(),
+                nextPageToken = "",
+                switching = true,
+            )
+            load(chip, showLoading = false)
+            return
+        }
         load(chip, showLoading = true)
     }
 
@@ -132,6 +156,9 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
     fun loadMore() {
         val current = _state.value
         if (current !is HomeState.Ready || current.loadingMore || current.refreshing) return
+        // A switch is already fetching this topic's first page; a second request
+        // would append it to itself.
+        if (current.switching) return
         if (current.nextPageToken.isEmpty()) return
         // Live is a list, not a feed: the server sends everything on air in one
         // answer with no page token, so there is nothing to ask for.

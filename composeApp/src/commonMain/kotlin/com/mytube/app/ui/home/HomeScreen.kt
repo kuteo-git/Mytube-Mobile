@@ -169,10 +169,18 @@ private fun Feed(
     // `derivedStateOf` is what keeps this from recomposing the whole screen on
     // every pixel of scroll: it recomputes on every frame but only *emits* when
     // the boolean flips.
-    val atEnd by remember {
+    // Everything read here comes from `layoutInfo`, which is snapshot state and
+    // grows with the list. The previous version compared against
+    // `state.videos.lastIndex` captured by a keyless `remember`, so the number
+    // was frozen at the first page's size: `atEnd` went true once, loaded page
+    // two, and then could never go false again — and `snapshotFlow` only emits
+    // on a change, so the third page was never asked for. The feed stopped at
+    // 48 videos, silently, which is what "no infinite scroll" looked like.
+    val atEnd by remember(listState) {
         derivedStateOf {
-            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            last >= state.videos.lastIndex - 3
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            last >= info.totalItemsCount - 4
         }
     }
     LaunchedEffect(listState) {
@@ -245,7 +253,11 @@ private fun Feed(
                 )
             }
 
-            if (state.videos.isEmpty()) {
+            if (state.switching) {
+                // The topic's videos are on their way. Only this part of the
+                // screen is unknown — the chips above it have not moved.
+                item(key = "switching") { FeedSkeleton(cards = 2) }
+            } else if (state.videos.isEmpty()) {
                 item(key = "empty") {
                     Box(Modifier.fillMaxWidth().padding(Space.xl), Alignment.Center) {
                         Text(strings.nothingHere, color = Tokens.text2)

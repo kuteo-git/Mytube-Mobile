@@ -964,3 +964,35 @@ slider that stops before its end is one people push at. `rebalance` is pure and
 tested, because the edges are where it goes wrong: moving one to 100 leaves
 nothing to rescale, and three integers rounding to a total of 100 does not come
 out even.
+
+## The feed stopped at 48, and the chips jumped left (2026-08-30)
+
+### `remember` with no key froze the end of the list
+
+`atEnd` was computed inside `remember { derivedStateOf { … state.videos.lastIndex … } }`.
+`derivedStateOf` re-reads *snapshot* state on every frame; `state.videos` is a
+plain captured value, and a keyless `remember` captures the **first** one. So the
+comparison was against the first page's size for ever.
+
+What that looks like: `atEnd` goes true near the bottom of page one, loads page
+two — and then can never go false again, because the visible index only grows.
+`snapshotFlow` emits on *change*, so it never fires again. The feed stopped at 48
+videos with nothing anywhere saying so.
+
+Everything now comes from `layoutInfo`, including `totalItemsCount`, which is
+snapshot state and grows with the list. There is no captured value left to go
+stale. Measured: 28 swipes and still in fresh content.
+
+### A topic switch destroyed the chip row
+
+Pressing a chip set the state to `Loading`, which unmounts the composable holding
+the chip row — so the row was rebuilt with its scroll at zero. Scroll right,
+press "Science & Technology", and the row jumped back to "All" with the chip just
+pressed off the screen.
+
+`Ready` gained `switching`. The state stays `Ready` through a topic change: the
+chips keep their scroll, and the skeleton is drawn **only where the videos will
+go**. Measured: the row does not move and the selected chip stays in place.
+
+`loadMore` refuses while switching — the first page of the new topic is already
+in flight, and a second request would append it to itself.
