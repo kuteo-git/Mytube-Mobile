@@ -1,47 +1,48 @@
 package com.mytube.app.ui.shell
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.unit.dp
 import com.mytube.app.ui.theme.Tokens
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 
 /**
- * The material behind a bottom sheet.
+ * The material a bottom sheet is made of.
  *
- * The same Haze source the bars read — which works here for the reason it works
- * there and would **not** have worked behind a native iOS sheet: a Material
- * `ModalBottomSheet` is drawn inside this app's own Compose scene, over the
- * content that Haze has registered.
+ * ## Why a Modifier and not a composable behind the content
  *
- * That is why the sheets are Material's on both platforms rather than Calf's.
- * `AdaptiveBottomSheet` presents a real `UISheetPresentationController` on iOS —
- * a separate Compose scene in its own view controller — which is genuinely more
- * native and was tried: on the simulator the gear and the avatar both consumed
- * their tap and **no sheet appeared**. Unverified-and-broken beats
- * less-native-and-working nowhere, so this reverted. A separate scene also puts
- * the sheet out of Haze's reach, so the blur asked for here would have needed a
- * second, different mechanism.
+ * It was a `Box(Modifier.matchParentSize())` *inside* the sheet, and
+ * `matchParentSize` matched the sheet's **content column**, not the sheet. A
+ * sheet is taller than what is in it: there is a drag handle above, and the
+ * navigation inset below. Both were left unpainted, so the strip under the last
+ * row was a window straight through to the comments behind — which is exactly
+ * what the sheet was reported as having, an empty gap at the bottom.
  *
- * Calf still supplies the switch, the press feedback and the spinner, which are
- * in the same scene and do work.
+ * Applied to the sheet's own modifier there is nothing left over to miss.
+ *
+ * ## Why the blur works here when it does not behind the floating bars
+ *
+ * A Material `ModalBottomSheet` is drawn inside this app's own Compose scene,
+ * over the content Haze has registered. See [BarBackdrop] for the two ways this
+ * fails when the surface is not in that scene.
+ *
+ * ## Why this is not Calf's sheet
+ *
+ * `AdaptiveBottomSheet` presents a real `UISheetPresentationController` on iOS,
+ * which is more native and was tried: on the simulator the gear and the avatar
+ * both consumed their tap and no sheet appeared. It also puts the sheet in a
+ * separate Compose scene, out of Haze's reach.
  */
 @Composable
-fun SheetBackdrop(modifier: Modifier = Modifier) {
+fun Modifier.sheetBackdrop(): Modifier {
     val haze = LocalHaze.current
-    if (haze == null) {
-        Box(modifier.background(Tokens.bg))
-        return
+    if (haze == null) return drawBehind { drawRect(Tokens.bg) }
+    return hazeEffect(state = haze) {
+        blurRadius = 32.dp
+        // Heavier than the bars'. A sheet covers a third of the screen and
+        // carries rows of text; a bar carries a few glyphs over a strip.
+        tints = listOf(HazeTint(Tokens.bg.copy(alpha = 0.7f)))
     }
-    Box(
-        modifier.hazeEffect(state = haze) {
-            blurRadius = 32.dp
-            // Heavier than the bars'. A sheet covers a third of the screen and
-            // carries rows of text; the bars carry a few glyphs over a strip.
-            tints = listOf(HazeTint(Tokens.bg.copy(alpha = 0.7f)))
-        },
-    )
 }

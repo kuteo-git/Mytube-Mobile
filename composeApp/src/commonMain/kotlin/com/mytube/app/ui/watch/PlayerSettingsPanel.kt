@@ -19,7 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.ModalBottomSheet
 import com.mohamedrejeb.calf.ui.toggle.AdaptiveSwitch
-import com.mytube.app.ui.shell.SheetBackdrop
+import com.mytube.app.ui.shell.sheetBackdrop
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -97,14 +97,23 @@ fun PlayerSettingsPanel(
         // would grey out the video these settings are about.
         scrimColor = Color.Transparent,
         dragHandle = { BottomSheetDefaults.DragHandle(color = Tokens.text2) },
-        modifier = modifier,
+        // On the sheet, not inside it: the handle above the content and the
+        // navigation inset below are part of the sheet and were being left
+        // unpainted. See [sheetBackdrop].
+        modifier = modifier.sheetBackdrop(),
     ) {
-        Box {
-        SheetBackdrop(Modifier.matchParentSize())
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(start = Space.lg, end = Space.lg, bottom = Space.xl),
+                // A gap under the drag handle. The content began immediately
+                // below it, so the first heading sat against the grabber and the
+                // sheet read as cropped rather than as a sheet with a top.
+                .padding(
+                    start = Space.lg,
+                    end = Space.lg,
+                    top = Space.md,
+                    bottom = Space.xl,
+                ),
         ) {
             // Only when the video has any. A "Subtitles: Off" row over a video
             // with no tracks is a control whose every option is the state it is
@@ -198,7 +207,6 @@ fun PlayerSettingsPanel(
                 Spacer(Modifier.height(Space.sm))
                 Text(strings.narrationFailed, color = Tokens.brand, fontSize = 12.sp)
             }
-        }
         }
     }
 }

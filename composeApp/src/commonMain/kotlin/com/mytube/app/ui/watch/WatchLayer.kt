@@ -16,7 +16,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import com.mytube.app.ui.shell.LocalHaze
 import com.mytube.app.ui.theme.Tokens
+import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.launch
 import kotlin.time.TimeSource
 
@@ -30,6 +34,15 @@ import kotlin.time.TimeSource
  * that forgot to pass it on stays solid while the rest fades.
  */
 val LocalDragProgress = compositionLocalOf { 0f }
+
+/**
+ * How blurred the tab underneath starts out, in pixels.
+ *
+ * It runs *down* to zero as the drag completes, so the feed is revealed out of
+ * focus and comes sharp as the video reaches the bar — the video is what is
+ * being looked at until then.
+ */
+private const val UNCOVER_BLUR = 28f
 
 /**
  * How far the picture has to travel, in pixels, to reach the bar.
@@ -104,6 +117,7 @@ fun WatchLayer(
     // away, and `landingFromBottomPx` for why the bottom of the screen is the
     // wrong target.
     val travel = (height - topInsetPx - landingFromBottomPx).coerceAtLeast(1f)
+    val haze = LocalHaze.current
     val progress = travelProgress(offset.value, travel)
 
     Box(
@@ -113,16 +127,36 @@ fun WatchLayer(
                 height = it.height.toFloat()
                 pictureHeight = it.width * 9f / 16f
             }
-            // The *ground* fades, not the layer.
+            // The *ground* changes, not the layer.
             //
             // `graphicsLayer { alpha }` here was the fault behind "the player
             // disappears instead of shrinking": alpha on this Box applies to
             // everything inside it, picture included, so by the time the video
             // had travelled far enough to be recognisable as heading for the bar
-            // it was already nine-tenths transparent. Fading the background
-            // colour instead lets the tab underneath come through while the
-            // picture stays solid all the way down.
-            .background(Tokens.bg.copy(alpha = 1f - progress))
+            // it was already nine-tenths transparent. Changing the ground
+            // instead lets the tab underneath come through while the picture
+            // stays solid all the way down.
+            //
+            // And it comes through as glass rather than as a fading sheet of
+            // paint: the panel starts opaque, and over the gesture it thins and
+            // the blur behind it *drops*, so the feed arrives out of focus and
+            // sharpens as the finger reaches the bar. A plain alpha ramp made
+            // the tab appear as a flat picture at half strength, which reads as
+            // two screens stacked rather than one being uncovered.
+            //
+            // `hazeEffect` reads the tab registered by the shell underneath this
+            // layer. Where nothing has registered one — a Preview — the paint is
+            // the fallback, which is what the layer did before.
+            .then(
+                if (haze != null) {
+                    Modifier.hazeEffect(state = haze) {
+                        blurRadius = (UNCOVER_BLUR * (1f - progress)).dp
+                        tints = listOf(HazeTint(Tokens.bg.copy(alpha = 1f - progress)))
+                    }
+                } else {
+                    Modifier.background(Tokens.bg.copy(alpha = 1f - progress))
+                },
+            )
             .pointerInput(height, pictureHeight) {
                 detectVerticalDragGestures(
                     onDragStart = { startedAt = TimeSource.Monotonic.markNow() },

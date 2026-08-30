@@ -68,10 +68,9 @@ fun ProfileSheet(
         onDismissRequest = onDismiss,
         containerColor = Color.Transparent,
         dragHandle = null,
+        modifier = Modifier.sheetBackdrop(),
     ) {
-        Box {
-        SheetBackdrop(Modifier.matchParentSize())
-        Column(Modifier.fillMaxWidth().padding(bottom = Space.xxl)) {
+        Column(Modifier.fillMaxWidth().padding(top = Space.md, bottom = Space.xxl)) {
             Text(
                 text = strings.profileTitle,
                 color = Tokens.text,
@@ -86,7 +85,6 @@ fun ProfileSheet(
                     onClick = { onPick(profile) },
                 )
             }
-        }
         }
     }
 }

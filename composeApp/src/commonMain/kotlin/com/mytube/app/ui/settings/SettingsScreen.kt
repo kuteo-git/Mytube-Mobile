@@ -17,8 +17,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,6 +49,7 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
+import com.mytube.app.ui.shell.LevelSlider
 import com.mytube.app.ui.shell.ScreenTitle
 import com.mytube.app.ui.shell.tabContentPadding
 import com.mytube.app.ui.theme.MytubeTheme
@@ -203,20 +202,10 @@ private fun LevelRow(label: String, value: Float, onChange: (Float) -> Unit) {
             Text(label, color = Tokens.text, fontSize = 14.sp)
             Text("${(value * 100).roundToInt()}%", color = Tokens.text2, fontSize = 13.sp)
         }
-        // Material's slider on both. `AdaptiveSlider` exists on Calf's main
-        // branch and is **not in the published 0.8.0** — checked by compiling
-        // against it, not by reading the docs, which list it. The switch and the
-        // sheet are there and are used; this one waits for a release that
-        // carries it.
-        Slider(
+        LevelSlider(
             value = value,
             onValueChange = onChange,
             valueRange = 0f..MAX_LEVEL,
-            colors = SliderDefaults.colors(
-                thumbColor = Tokens.brand,
-                activeTrackColor = Tokens.brand,
-                inactiveTrackColor = Tokens.surfaceHover,
-            ),
         )
     }
 }
@@ -352,15 +341,19 @@ private fun LanguageRow(label: String, selected: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, color = Tokens.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
-        // A filled dot rather than a tick or a background: the row is a choice
-        // between two, and the lit state has to be visible against tokens six
-        // units apart — the lesson the Like button already cost.
-        Spacer(
-            Modifier
-                .size(12.dp)
-                .clip(CircleShape)
-                .background(if (selected) Tokens.brand else Tokens.surfaceHover),
-        )
+        // A tick on the chosen row and nothing on the other, which is how every
+        // list of this kind on iOS marks its choice — and how the Settings app
+        // itself does. It replaced a pair of dots, one lit and one grey: two
+        // marks for one answer, and the unlit one reads as a second, disabled
+        // option rather than as "not this".
+        if (selected) {
+            Icon(
+                imageVector = TickIcon,
+                contentDescription = null,
+                tint = Tokens.brand,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -415,4 +408,25 @@ private fun SettingsVietnamesePreview() {
             )
         }
     }
+}
+
+
+/** The tick beside the chosen language. Two strokes, the shape every list uses. */
+private val TickIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "Tick",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 2.6f,
+            strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round,
+            strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round,
+        ) {
+            moveTo(5f, 12.5f); lineTo(10f, 17.5f); lineTo(19f, 6.5f)
+        }
+    }.build()
 }
