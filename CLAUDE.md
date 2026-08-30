@@ -996,3 +996,51 @@ go**. Measured: the row does not move and the selected chip stays in place.
 
 `loadMore` refuses while switching — the first page of the new topic is already
 in flight, and a second request would append it to itself.
+
+## Icon's tint repaints every path (2026-08-30)
+
+The CC button's "on" state was a filled white box with the letters knocked out in
+black. `Icon` applies a **tint**, which replaces the colour of every path in the
+vector — so the black letters turned white with the box and the button became a
+solid white square.
+
+The state is an underline now, and the glyph never changes. The rule is general
+and worth keeping: **anything two-toned inside an `Icon` has this fault waiting
+in it.** A two-colour glyph has to go through `Image`, or be expressed as
+something beside the icon rather than inside it.
+
+## Three preferences that were forgotten every video
+
+Subtitles, narration and autoplay lived in the watch ViewModel, which is rebuilt
+for every video — so all three reset on the next one.
+
+They are per **device**, in a port of their own. The reasoning is the charter's
+own for the equaliser: a phone in a pocket and a television in a room want
+different answers, and none of this is a statement about taste the ranker should
+hear. `ServerRepository` answers "where is the library and who is asking" —
+questions settled before any request can be made — and folding these in would
+leave that name true of half its members.
+
+- **A remembered subtitle language is a language, not "the first track".**
+  Remembering EN and being handed VI on the next video because that is what it
+  carries is not what was asked for. A video without the remembered language
+  opens with subtitles off, which is the honest answer to "show me English" when
+  there is none — and the CC button is not drawn at all, because there is nothing
+  to toggle.
+- **Remembering narration on is the one preference with a cost**, and it is worth
+  saying: opening any video then starts a server pass — translation and speech
+  for every line. That is what somebody who turned it on asked for.
+- **The switch and the pass are separate calls.** `toggleNarration` records what
+  somebody wants; `startNarration` does the work. Folded together, the remembered
+  case would have had to flip a boolean it already knew the value of just to
+  reach the code that starts the pass.
+- **A broadcast is never narrated on open.** The pass reads a caption file, and
+  one that is still being spoken has none.
+
+## "Watched" belongs on the Continue watching rail
+
+It is the only list in the app whose whole membership rule is *not finished*, so
+it is the one place a way out of it belongs. Recorded as fully watched rather
+than only hidden: the ranker already drops anything past 95% from Home, so
+telling it the truth is what makes the press outlive the app it was made in — the
+local removal only covers the seconds until the feed is next fetched.

@@ -98,6 +98,7 @@ interface Strings {
     val fullscreen: String
     val exitFullscreen: String
     val notInterested: String
+    val markWatched: String
     /** The gear on the control bar: what belongs to this video. */
     val settingsInPlayer: String
     val subtitles: String
@@ -251,6 +252,7 @@ object EnglishStrings : Strings {
     override val fullscreen = "Fullscreen"
     override val exitFullscreen = "Exit fullscreen"
     override val notInterested = "Not interested"
+    override val markWatched = "Watched"
     override val settingsInPlayer = "Settings"
     override val subtitles = "Subtitles"
     override val off = "Off"
@@ -383,6 +385,7 @@ object VietnameseStrings : Strings {
     override val fullscreen = "Toàn màn hình"
     override val exitFullscreen = "Thoát toàn màn hình"
     override val notInterested = "Không quan tâm"
+    override val markWatched = "Đã xem"
     override val settingsInPlayer = "Cài đặt"
     override val subtitles = "Phụ đề"
     override val off = "Tắt"

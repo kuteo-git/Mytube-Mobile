@@ -295,6 +295,7 @@ fun App(container: AppContainer) {
                         videos = container.videoRepository,
                         streams = container.streamRepository,
                         narration = container.narrationRepository,
+                        preferences = container.preferencesRepository,
                         onFinished = { next ->
                             trail.add(session.videoId)
                             watching = WatchSession(next, startAtBeginning = true)

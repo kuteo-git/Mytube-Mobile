@@ -12,6 +12,7 @@ import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.PlayingSubtitle
 import com.mytube.app.domain.repository.NarrationRepository
+import com.mytube.app.domain.repository.PreferencesRepository
 import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
@@ -157,6 +158,7 @@ class WatchViewModel(
     private val videos: VideoRepository,
     private val streams: StreamRepository,
     private val narration: NarrationRepository,
+    private val preferences: PreferencesRepository,
     playerFactory: VideoPlayerFactory,
 ) : ViewModel() {
 
@@ -217,10 +219,14 @@ class WatchViewModel(
         val next = if (current.subtitleLanguage == language) "" else language
         _state.value = current.copy(subtitleLanguage = next)
         player.showSubtitles(next)
+        viewModelScope.launch { runCatching { preferences.setSubtitleLanguage(next) } }
     }
 
-    fun toggleAutoplay() = _state.update {
-        if (it is WatchState.Playing) it.copy(autoplay = !it.autoplay) else it
+    fun toggleAutoplay() {
+        val current = _state.value as? WatchState.Playing ?: return
+        val next = !current.autoplay
+        _state.value = current.copy(autoplay = next)
+        viewModelScope.launch { runCatching { preferences.setAutoplay(next) } }
     }
 
     fun toggleRail() = _state.update {
@@ -247,12 +253,29 @@ class WatchViewModel(
         val next = !current.narrating
         _state.value = current.copy(narrating = next)
 
+        viewModelScope.launch { runCatching { preferences.setNarration(next) } }
+
         if (!next) {
             narrationPoll?.cancel()
             narrationPoll = null
             player.narrate(emptyList())
             return
         }
+
+        startNarration()
+    }
+
+    /**
+     * Ask the server for this video's narration, and follow the pass.
+     *
+     * Separate from the switch because two things call it: somebody pressing the
+     * switch, and a device that had it on last time. Folded into `toggle`, the
+     * remembered case would have had to flip a boolean it already knew the value
+     * of just to reach this code.
+     */
+    private fun startNarration() {
+        val current = _state.value as? WatchState.Playing ?: return
+        _state.value = current.copy(narrating = true)
 
         narrationPoll?.cancel()
         narrationPoll = viewModelScope.launch {
@@ -473,7 +496,35 @@ class WatchViewModel(
                             if (video.isInProgress) resumeAt else 0.0,
                         )
                         player.play()
-                        WatchState.Playing(video, PlaybackState(), isLive = stream.isLive)
+
+                        // The device's own answers, read once the video is
+                        // known. Applied here rather than at construction
+                        // because two of the three depend on what this video
+                        // actually has: a remembered language that this video
+                        // does not carry means no subtitles, not the nearest
+                        // one.
+                        val wantedLanguage = preferences.subtitleLanguage()
+                        val language =
+                            if (video.subtitles.any { it.language == wantedLanguage }) {
+                                wantedLanguage
+                            } else {
+                                ""
+                            }
+                        if (language.isNotEmpty()) player.showSubtitles(language)
+
+                        WatchState.Playing(
+                            video = video,
+                            playback = PlaybackState(),
+                            isLive = stream.isLive,
+                            subtitleLanguage = language,
+                            autoplay = preferences.autoplay(),
+                            // Deliberately **not** started here. The switch
+                            // records what somebody wants; starting a server
+                            // pass is what `startNarration` does, and doing both
+                            // from one place is how a preference becomes an
+                            // action nobody asked for on this video.
+                            narrating = false,
+                        )
                     }
                     is Stream.Upcoming -> WatchState.Upcoming(video)
                     is Stream.Unavailable -> WatchState.Unavailable(video, stream.reason)
@@ -486,6 +537,14 @@ class WatchViewModel(
 
             loadUpNext("")
             loadComments()
+            // A broadcast is never narrated: the pass reads a caption file, and
+            // one that is still being spoken has none.
+            if (preferences.narration() && _state.value.let {
+                    it is WatchState.Playing && !it.isLive
+                }
+            ) {
+                startNarration()
+            }
         }
     }
 

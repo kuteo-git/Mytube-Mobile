@@ -88,6 +88,7 @@ fun HomeScreen(
         onLoadMore = viewModel::loadMore,
         onSaveVideo = viewModel::toggleSaved,
         onNotInterested = viewModel::notInterested,
+        onMarkWatched = viewModel::markWatched,
         onOpenChannel = onOpenChannel,
     )
 }
@@ -109,6 +110,7 @@ fun HomeContent(
     onLoadMore: () -> Unit,
     onSaveVideo: (Video) -> Unit = {},
     onNotInterested: (Video) -> Unit = {},
+    onMarkWatched: (Video) -> Unit = {},
     onOpenChannel: (String) -> Unit = {},
 ) {
     val strings = LocalStrings.current
@@ -142,7 +144,7 @@ fun HomeContent(
             is HomeState.Ready -> Feed(
                 current, mediaBaseUrl, strings,
                 onSelectChip, onOpenVideo, onRetry, onLoadMore,
-                onSaveVideo, onNotInterested, onOpenChannel,
+                onSaveVideo, onNotInterested, onMarkWatched, onOpenChannel,
             )
         }
     }
@@ -160,6 +162,7 @@ private fun Feed(
     onLoadMore: () -> Unit,
     onSaveVideo: (Video) -> Unit,
     onNotInterested: (Video) -> Unit,
+    onMarkWatched: (Video) -> Unit,
     onOpenChannel: (String) -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -250,6 +253,7 @@ private fun Feed(
                     mediaBaseUrl = mediaBaseUrl,
                     onOpenVideo = onOpenVideo,
                     onSaveVideo = onSaveVideo,
+                    onMarkWatched = onMarkWatched,
                 )
             }
 

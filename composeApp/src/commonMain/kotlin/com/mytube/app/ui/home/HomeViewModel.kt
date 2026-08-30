@@ -153,6 +153,30 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         viewModelScope.launch { runCatching { videos.setNotInterested(video.id) } }
     }
 
+    /**
+     * "I have already seen this."
+     *
+     * Taken off the rail at once and recorded as fully watched, so the server
+     * agrees — the ranker already drops anything past 95% from Home, so telling
+     * it the truth is what makes this outlive the app it was pressed in. The
+     * local removal is what covers the seconds until the feed is next fetched.
+     */
+    fun markWatched(video: Video) {
+        val current = _state.value as? HomeState.Ready ?: return
+        _state.value = current.copy(
+            continueWatching = current.continueWatching.filterNot { it.id == video.id },
+        )
+        viewModelScope.launch {
+            runCatching {
+                videos.recordProgress(
+                    videoId = video.id,
+                    positionSeconds = video.durationSeconds.toDouble(),
+                    watchedFraction = 1.0,
+                )
+            }
+        }
+    }
+
     fun loadMore() {
         val current = _state.value
         if (current !is HomeState.Ready || current.loadingMore || current.refreshing) return

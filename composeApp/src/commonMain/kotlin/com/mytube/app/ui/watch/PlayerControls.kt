@@ -164,11 +164,30 @@ fun PlayerControls(
                     )
                     Spacer(Modifier.weight(1f))
                     if (hasSubtitles) {
-                        ControlButton(
-                            icon = if (subtitlesOn) CaptionsOnIcon else CaptionsIcon,
-                            label = strings.subtitles,
-                            onClick = { onToggleSubtitles(); lastTouch++ },
-                        )
+                        // On is marked by an underline, not a second glyph.
+                        //
+                        // The filled version of this icon was a white box with
+                        // the letters knocked out in black — and `Icon` applies
+                        // a *tint*, which repaints every path in one colour. The
+                        // letters turned white with the box and the button
+                        // became a solid white square. Anything two-toned inside
+                        // an `Icon` has the same fault waiting in it.
+                        Box(contentAlignment = Alignment.BottomCenter) {
+                            ControlButton(
+                                icon = CaptionsIcon,
+                                label = strings.subtitles,
+                                onClick = { onToggleSubtitles(); lastTouch++ },
+                            )
+                            if (subtitlesOn) {
+                                Box(
+                                    Modifier
+                                        .padding(bottom = 8.dp)
+                                        .width(22.dp)
+                                        .height(2.dp)
+                                        .background(Color.White),
+                                )
+                            }
+                        }
                     }
                     ControlButton(
                         icon = SettingsGearIcon,

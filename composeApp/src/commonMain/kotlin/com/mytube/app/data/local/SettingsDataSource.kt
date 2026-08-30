@@ -35,4 +35,7 @@ object SettingsKeys {
     const val BASE_URL = "server.baseUrl"
     const val PROFILE_ID = "profile.id"
     const val LANGUAGE = "ui.language"
+    const val NARRATION = "player.narration"
+    const val AUTOPLAY = "player.autoplay"
+    const val SUBTITLE_LANGUAGE = "player.subtitleLanguage"
 }

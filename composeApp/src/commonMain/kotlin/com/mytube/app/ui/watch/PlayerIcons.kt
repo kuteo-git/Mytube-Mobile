@@ -272,39 +272,6 @@ internal val CaptionsIcon: ImageVector by lazy {
     }
 }
 
-/**
- * The CC box, filled: subtitles on.
- *
- * A filled box with the letters knocked out, because the outline and the fill
- * have to differ at a glance over a moving picture — the same lesson the Like
- * button cost, where two states six units apart were invisible.
- */
-internal val CaptionsOnIcon: ImageVector by lazy {
-    ImageVector.Builder(
-        name = "CaptionsOn",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        path(fill = SolidColor(Color.White)) {
-            moveTo(3.5f, 5.5f); lineTo(20.5f, 5.5f); lineTo(20.5f, 18.5f)
-            lineTo(3.5f, 18.5f); close()
-        }
-        path(
-            stroke = SolidColor(Color.Black),
-            strokeLineWidth = 2f,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round,
-        ) {
-            moveTo(10f, 10f); curveTo(8.6f, 10f, 7.5f, 10.9f, 7.5f, 12f)
-            curveTo(7.5f, 13.1f, 8.6f, 14f, 10f, 14f)
-            moveTo(17f, 10f); curveTo(15.6f, 10f, 14.5f, 10.9f, 14.5f, 12f)
-            curveTo(14.5f, 13.1f, 15.6f, 14f, 17f, 14f)
-        }
-    }.build()
-}
-
 /** A bookmark: Save, which keeps the file against the eviction sweep. */
 internal val SaveFilledIcon: ImageVector by lazy {
     filled("SaveFilled") {

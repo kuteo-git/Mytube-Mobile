@@ -54,6 +54,7 @@ fun ContinueWatchingRail(
     mediaBaseUrl: String,
     onOpenVideo: (String) -> Unit,
     onSaveVideo: (Video) -> Unit = {},
+    onMarkWatched: (Video) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     if (videos.isEmpty()) return
@@ -77,6 +78,7 @@ fun ContinueWatchingRail(
                     video = video,
                     mediaBaseUrl = mediaBaseUrl,
                     onSave = { onSaveVideo(video) },
+                    onMarkWatched = { onMarkWatched(video) },
                 ) { onOpenVideo(video.id) }
             }
         }
@@ -90,6 +92,7 @@ private fun RailCard(
     video: Video,
     mediaBaseUrl: String,
     onSave: (() -> Unit)?,
+    onMarkWatched: (() -> Unit)?,
     onClick: () -> Unit,
 ) {
     Column(
@@ -178,6 +181,10 @@ private fun RailCard(
                 // somebody chose is the wrong signal, the same reason History
                 // has only Save.
                 onNotInterested = null,
+                // "Watched" is what this rail is *for*: it is the only list in
+                // the app whose whole membership rule is "not finished", so it
+                // is the one place a way out of it belongs.
+                onMarkWatched = onMarkWatched,
             )
         }
     }

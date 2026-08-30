@@ -247,8 +247,9 @@ fun VideoCardMenu(
     strings: Strings,
     onSave: (() -> Unit)?,
     onNotInterested: (() -> Unit)?,
+    onMarkWatched: (() -> Unit)? = null,
 ) {
-    if (onSave == null && onNotInterested == null) return
+    if (onSave == null && onNotInterested == null && onMarkWatched == null) return
     var menuOpen by remember { mutableStateOf(false) }
 
     Box {
@@ -278,6 +279,12 @@ fun VideoCardMenu(
                         )
                     },
                     onClick = { menuOpen = false; onSave() },
+                )
+            }
+            if (onMarkWatched != null) {
+                DropdownMenuItem(
+                    text = { Text(strings.markWatched, color = Tokens.text) },
+                    onClick = { menuOpen = false; onMarkWatched() },
                 )
             }
             if (onNotInterested != null) {
