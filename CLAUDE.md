@@ -1044,3 +1044,48 @@ it is the one place a way out of it belongs. Recorded as fully watched rather
 than only hidden: the ranker already drops anything past 95% from Home, so
 telling it the truth is what makes the press outlive the app it was made in — the
 local removal only covers the seconds until the feed is next fetched.
+
+## A white status bar, and back finally means something (2026-08-30)
+
+### The strip above the app is white
+
+Measured before changing anything: the status bar, the top bar and the page were
+all `#0F0F0F` — identical, no seam, nothing broken. So this was a preference, not
+a fault, and it was asked for by name.
+
+**It is two settings, not one.** The app paints the strip (`Tokens.statusBar`),
+and `MainActivity` tells the system to draw its clock, battery and signal in
+*dark* ink — `SystemBarStyle.light` means a light background. Painting the strip
+alone leaves white glyphs on white. They must move together, and the token's
+comment says so where somebody would change it.
+
+### The system back gesture was never handled
+
+Pressing back anywhere left the app. It is now **one handler in `App`**, and one
+is the point: back is a question about the whole navigation state, and every
+screen knows only its own part — the watch layer sits over a tab, the tab sits
+inside a route. A handler on any of them would guess about the others.
+
+Ordered outwards from the most recently opened thing: an expanded video collapses
+to the miniplayer, then a screen returns to Home, then a tab returns to the first
+one. After that the handler is **disabled** rather than doing nothing, so the
+system closes the app as every other app does.
+
+- **Every condition that enables it must have a branch.** It did not, for one
+  build: a *collapsed* video counted as backable with nothing to do, so back was
+  swallowed and the app could not be left. Measured — three presses, still on
+  screen.
+- **A collapsed video is deliberately not backable.** The miniplayer survives
+  changing tabs and is closed by its own X; back closing it too would make the
+  one control that means "stop" ambiguous.
+- `ui-backhandler` is a separate artifact. It was already in the Gradle cache —
+  something resolves it transitively — and is not on the classpath until asked
+  for by name. Worth using rather than Android's: what "back" means is the same
+  on both platforms, and `expect/actual` there would be a seam with nothing
+  different on either side of it.
+
+### Saved had no way out
+
+Reached from Settings, with no tab bar of its own. Same back arrow as the channel
+page, drawn over every state — a shelf that would not load was otherwise a dead
+end, and iOS has no system back at all.

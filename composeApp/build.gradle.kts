@@ -37,6 +37,15 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            // The system back gesture, in common code.
+            //
+            // A separate artifact rather than part of `compose.ui`: it is in the
+            // cache because something transitively resolves it, and it is not on
+            // the classpath until it is asked for by name. Without it the only
+            // BackHandler is Android's, in `androidx.activity`, which would put
+            // navigation behind an `expect/actual` for no reason — the decision
+            // about what "back" means is the same on both platforms.
+            implementation(libs.compose.backhandler)
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)

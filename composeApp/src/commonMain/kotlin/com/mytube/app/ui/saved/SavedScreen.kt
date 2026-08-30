@@ -1,6 +1,21 @@
 package com.mytube.app.ui.saved
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import com.mytube.app.ui.home.Space
+import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.watch.BackIcon
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -19,6 +34,7 @@ import com.mytube.app.ui.shell.tabContentPadding
 fun SavedScreen(
     viewModel: SavedViewModel,
     mediaBaseUrl: String,
+    onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
@@ -28,6 +44,7 @@ fun SavedScreen(
     SavedContent(
         state = state,
         mediaBaseUrl = mediaBaseUrl,
+        onBack = onBack,
         onOpenSettings = onOpenSettings,
         onOpenVideo = onOpenVideo,
         onOpenChannel = onOpenChannel,
@@ -40,6 +57,7 @@ fun SavedScreen(
 fun SavedContent(
     state: SavedState,
     mediaBaseUrl: String,
+    onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
@@ -48,6 +66,7 @@ fun SavedContent(
 ) {
     val strings = LocalStrings.current
 
+    Box(Modifier.fillMaxSize()) {
     TabScaffold(
         loading = state is SavedState.Loading,
         needsServer = state is SavedState.NeedsServer,
@@ -84,5 +103,23 @@ fun SavedContent(
                 )
             }
         }
+    }
+
+    // Drawn over every state, the same as the channel page's. This screen is
+    // reached from Settings and has no tab bar of its own, so without it a
+    // shelf that would not load is a dead end — and iOS has no system back at
+    // all, so the way out has to be on the screen.
+    Box(
+        Modifier
+            .align(Alignment.TopStart)
+            .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+            .padding(start = Space.xs)
+            .size(48.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onBack),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(BackIcon, strings.back, tint = Tokens.text, modifier = Modifier.size(24.dp))
+    }
     }
 }

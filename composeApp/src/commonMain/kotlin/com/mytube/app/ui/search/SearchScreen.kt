@@ -109,7 +109,12 @@ fun SearchContent(
 
     Surface(color = Tokens.bg, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+            Spacer(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Tokens.statusBar)
+                    .windowInsetsTopHeight(WindowInsets.statusBars),
+            )
             SearchBar(query, onBack, onType, onClear)
 
             when (state) {

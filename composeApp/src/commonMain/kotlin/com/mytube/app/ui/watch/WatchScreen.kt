@@ -159,7 +159,14 @@ fun WatchContent(
     Column(Modifier.fillMaxSize().background(Tokens.bg)) {
         // No status-bar gap in fullscreen — there is no status bar, and the gap
         // would be a black band where the picture should be.
-        if (!fullscreen) Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        if (!fullscreen) {
+            Spacer(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Tokens.statusBar)
+                    .windowInsetsTopHeight(WindowInsets.statusBars),
+            )
+        }
 
         // The picture keeps its 16:9 box in every state. A screen whose top half
         // changes height as it loads makes everything below it jump, and the

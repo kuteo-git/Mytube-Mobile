@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import com.mytube.app.ui.App
 
@@ -42,7 +43,17 @@ class MainActivity : ComponentActivity() {
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // `light` means a light *background*, so the system draws its clock,
+        // battery and signal in dark ink. That is not decoration: the strip
+        // behind them is white (`Tokens.statusBar`), and the default white
+        // glyphs would be invisible on it. The two settings are one decision and
+        // must move together.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+            ),
+        )
         askForNotifications()
         val container = MytubeApp.container(applicationContext)
         setContent { App(container) }

@@ -102,7 +102,12 @@ private fun TopBar(profileInitial: String, onSearch: () -> Unit, modifier: Modif
         // windowInsetsTopHeight, not windowInsetsPadding. Padding on a Spacer
         // with no size of its own collapses to nothing, which is why the first
         // attempt left the clock sitting on the logo.
-        Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+        Spacer(
+            Modifier
+                .fillMaxWidth()
+                .background(Tokens.statusBar)
+                .windowInsetsTopHeight(WindowInsets.statusBars),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()

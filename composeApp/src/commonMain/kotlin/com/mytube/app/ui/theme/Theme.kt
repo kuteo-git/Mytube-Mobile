@@ -28,6 +28,20 @@ object Tokens {
     /** `--bg` — page, top bar, sidebar. */
     val bg = Color(0xFF0F0F0F)
 
+    /**
+     * Behind the system's clock, battery and signal.
+     *
+     * White, against a dark app, and asked for by name. It is not in the design
+     * system — that file describes the page, and this is the strip *above* it —
+     * so it is named here rather than reached for as a literal at the two places
+     * that paint it.
+     *
+     * It comes with an obligation: the system draws its own glyphs there, and on
+     * white they have to be dark. That is set once in `MainActivity`, and the
+     * two must change together or the clock disappears.
+     */
+    val statusBar = Color.White
+
     /** `--surface` — dropdowns, chips, tooltips. */
     val surface = Color(0xFF212121)
 

@@ -14,6 +14,7 @@ import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.watch.MiniPlayer
 import com.mytube.app.ui.watch.WatchState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -96,6 +97,7 @@ private data class WatchSession(
  * screen has arrives through this one argument, which is what makes the graph
  * something a reader can follow and a test can replace.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun App(container: AppContainer) {
     // Null until the stored choice has been read. Nothing is drawn before then:
@@ -150,6 +152,44 @@ fun App(container: AppContainer) {
                 baseUrl = container.serverRepository.baseUrl()
                 if (route is Route.Deciding) {
                     route = if (baseUrl.isBlank()) Route.Setup else Route.Home
+                }
+            }
+
+            // What the system back gesture means, decided in one place.
+            //
+            // One handler rather than one per screen, because "back" is a
+            // question about the *whole* navigation state and every screen only
+            // knows its own part: the watch layer sits over a tab, the tab sits
+            // inside a route, and a handler on any of them would have to guess
+            // about the others. Ordered from the most recently opened thing
+            // outwards, which is what somebody pressing back means.
+            //
+            // Disabled at the last step rather than doing nothing: a handler
+            // that swallows back on Home would trap the app open, and leaving it
+            // to the system is what makes the gesture close it as every other
+            // app does.
+            // A *collapsed* video is deliberately not counted. The miniplayer
+            // survives changing tabs and is closed by its own X; back closing it
+            // would make the one control that means "stop" ambiguous. And every
+            // condition here must have a branch below — enabling the handler
+            // with nothing to do swallows the gesture, which traps the app open.
+            // Measured: it did, for one build.
+            val backable = watching?.minimised == false ||
+                route !is Route.Home ||
+                tab != Tab.Home
+            BackHandler(backable) {
+                val session = watching
+                when {
+                    // Expanded video: collapse it rather than close it. The
+                    // sound carries on, which is what the drag down does too.
+                    session != null && !session.minimised ->
+                        watching = session.copy(minimised = true)
+
+                    // A screen opened from a tab.
+                    route !is Route.Home -> route = Route.Home
+
+                    // A tab other than the first.
+                    tab != Tab.Home -> tab = Tab.Home
                 }
             }
 
@@ -246,6 +286,7 @@ fun App(container: AppContainer) {
                         SavedViewModel(container.videoRepository)
                     },
                     mediaBaseUrl = baseUrl,
+                    onBack = { route = Route.Home },
                     onOpenSettings = { route = Route.Setup },
                     onOpenVideo = { watching = WatchSession(it) },
                     onOpenChannel = { route = Route.Channel(it) },
