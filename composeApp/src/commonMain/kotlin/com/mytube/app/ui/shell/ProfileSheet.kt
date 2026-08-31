@@ -63,12 +63,13 @@ fun ProfileSheet(
     onDismiss: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    // Material's, blurred — see [SheetBackdrop].
+    // Opaque, and the scrim left at its default — see `SheetBackdrop.kt`. This
+    // one covers a feed rather than a playing video, so there is nothing behind
+    // it that dimming would spoil.
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color.Transparent,
+        containerColor = Tokens.bg,
         dragHandle = null,
-        modifier = Modifier.sheetBackdrop(),
     ) {
         Column(Modifier.fillMaxWidth().padding(top = Space.md, bottom = Space.xxl)) {
             Text(

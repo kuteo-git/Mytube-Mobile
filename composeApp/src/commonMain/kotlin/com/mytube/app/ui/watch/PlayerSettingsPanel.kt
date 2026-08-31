@@ -19,7 +19,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.ModalBottomSheet
 import com.mohamedrejeb.calf.ui.toggle.AdaptiveSwitch
-import com.mytube.app.ui.shell.sheetBackdrop
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -86,21 +85,22 @@ fun PlayerSettingsPanel(
 
     if (!visible) return
 
-    // Material's sheet on both platforms, blurred by [SheetBackdrop] — see there
-    // for why Calf's native iOS sheet was tried and reverted.
+    // Material's sheet on both platforms — see `SheetBackdrop.kt` for why Calf's
+    // native iOS sheet was tried and reverted, and why this is opaque rather
+    // than frosted.
+    //
+    // `containerColor` rather than anything drawn inside: the sheet is taller
+    // than its content by a drag handle and a navigation inset, and a background
+    // painted from within misses both. That gap was a window through to the
+    // comments behind.
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        // Transparent, so [SheetBackdrop] below is what the sheet is made of.
-        // A container colour here would paint over the material.
-        containerColor = Color.Transparent,
+        containerColor = Tokens.bg,
         // No scrim over the picture. The default dims the whole window, which
         // would grey out the video these settings are about.
         scrimColor = Color.Transparent,
         dragHandle = { BottomSheetDefaults.DragHandle(color = Tokens.text2) },
-        // On the sheet, not inside it: the handle above the content and the
-        // navigation inset below are part of the sheet and were being left
-        // unpainted. See [sheetBackdrop].
-        modifier = modifier.sheetBackdrop(),
+        modifier = modifier,
     ) {
         Column(
             Modifier
