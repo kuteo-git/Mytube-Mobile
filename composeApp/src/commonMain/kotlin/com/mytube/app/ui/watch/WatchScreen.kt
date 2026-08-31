@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,26 +64,9 @@ import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.shell.WatchSkeleton
 import com.mytube.app.ui.theme.Tokens
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import org.jetbrains.compose.ui.tooling.preview.Preview
-
-/**
- * How tall the row of title and channel is while the picture is being dragged.
- *
- * The miniplayer's own bar height, so the two line up at the moment the gesture
- * hands over — a different number here would make the text jump as the bar
- * appeared.
- */
-private val MINI_TITLE_HEIGHT = 64.dp
-
-/**
- * How far into the drag the title and channel begin to appear.
- *
- * Early, because the row's left edge tracks the picture's live width: there is
- * clear space beside the thumbnail from the first frame of the gesture. A little
- * later than zero only so the text is not competing with the page it is
- * replacing, which is still fading out.
- */
-private const val MINI_TITLE_FROM = 0.15f
 
 /**
  * How much faster the page under the picture fades than the finger moves.
@@ -211,9 +196,25 @@ fun WatchContent(
     // fading its own background to let the tab through — so the tab never
     // appeared, and what a dragging finger uncovered was a flat dark rectangle.
     // Two backgrounds, one of them fading, and the one on top winning.
+    // What the settings sheet blurs.
+    //
+    // Its own state, not the shell's `LocalHaze`. That one is registered on the
+    // tab content, and the watch screen is a sibling drawn *over* it — a sheet
+    // reading it would frost the feed hiding behind this page rather than the
+    // page itself. Everything above the sheet in this screen is inside it.
+    val sheetHaze = rememberHazeState()
+
+    // A Box, so the sheet can be a full-screen overlay of this screen.
+    //
+    // It was a `ModalBottomSheet`, which portals to the window and therefore sat
+    // over the picture even in fullscreen, wherever it happened to be written.
+    // In the scene it has to be a sibling of the whole page and drawn last, or
+    // it opens underneath the thing it belongs to.
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
             .fillMaxSize()
+            .hazeSource(sheetHaze)
             .background(if (fullscreen) Tokens.bg else Tokens.bg.copy(alpha = 1f - drag)),
     ) {
         // No status-bar gap in fullscreen — there is no status bar, and the gap
@@ -308,6 +309,8 @@ fun WatchContent(
                         playback = state.playback,
                         isLive = state.isLive,
                         fullscreen = fullscreen,
+                        title = state.video.title,
+                        channel = state.video.channel.name,
                         onPlayPause = onPlayPause,
                         onSeek = onSeek,
                         onSkip = onSkip,
@@ -354,74 +357,14 @@ fun WatchContent(
             }
         }
 
-        // What travels with the picture: the title and the channel.
-        //
-        // Drawn **after** the picture so it is on top of it, and its left edge
-        // is the picture's *current* width rather than the final one — so the
-        // text follows the shrinking thumbnail's right edge the whole way down
-        // instead of hiding behind it for two thirds of the gesture and
-        // appearing at the very end. That is what the web does, and it is why
-        // this was reported as the title not moving at all: it was there, and it
-        // was underneath the video.
-        if (!fullscreen && drag > 0f && state is WatchState.Playing) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(MINI_TITLE_HEIGHT)
-                    .graphicsLayer {
-                        translationY = drag * travel
-                        // In early, because it now has somewhere to be from the
-                        // first moment: the picture has already begun to clear
-                        // the space it occupies.
-                        alpha = ((drag - MINI_TITLE_FROM) / (1f - MINI_TITLE_FROM))
-                            .coerceIn(0f, 1f)
-                    },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Spacer(Modifier.fillMaxWidth(lerp(1f, MINI_THUMB_FRACTION, drag)))
-                Column(Modifier.weight(1f).padding(horizontal = Space.md)) {
-                    Text(
-                        text = state.video.title,
-                        color = Tokens.text,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = state.video.channel.name,
-                        color = Tokens.text2,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
+        // The title and the channel used to travel with the picture here — a
+        // row whose left edge tracked the shrinking thumbnail's right edge all
+        // the way down. It is gone: the miniplayer's own bar is now drawn from
+        // the first pixel of the drag and carries that text itself, so keeping
+        // this would print the same title twice, one copy sliding over the
+        // other. Text that is already in its final place does not need a second
+        // copy flying to meet it.
 
-        }
-
-        // Directly under the picture, so the video keeps playing above whatever
-        // is being changed.
-        if (state is WatchState.Playing) {
-            PlayerSettingsPanel(
-                // Shown in fullscreen too. It was suppressed there, which left
-                // the gear on the control bar doing nothing at all once the
-                // video filled the screen — a dead button, and the one thing
-                // §5 of the server charter forbids outright. A sheet portals to
-                // the window, so it sits over the picture rather than inside
-                // the layout that fullscreen has taken over.
-                visible = settingsOpen,
-                subtitles = state.video.subtitles,
-                subtitleLanguage = state.subtitleLanguage,
-                onSelectSubtitles = onSelectSubtitles,
-                narrating = state.narrating,
-                narration = state.narration,
-                autoplay = state.autoplay,
-                onToggleAutoplay = onToggleAutoplay,
-                onDismiss = { settingsOpen = false },
-                onToggleNarration = onToggleNarration,
-            )
         }
 
         if (fullscreen) return@Column
@@ -551,6 +494,34 @@ fun WatchContent(
             }
         }
         }
+    }
+
+    // Drawn last, over the whole page, so it is on top of it.
+    //
+    // Shown in fullscreen too. It was suppressed there once, which left the gear
+    // on the control bar doing nothing at all as soon as the video filled the
+    // screen — a dead button, and the one thing §5 of the server charter forbids
+    // outright. In fullscreen there is no Compose-drawn content behind it, so
+    // its glass falls back to the wash, which is the same thing that happens in
+    // a Preview.
+    if (state is WatchState.Playing) {
+        PlayerSettingsPanel(
+                visible = settingsOpen,
+                haze = sheetHaze,
+                bottomInset = WindowInsets.navigationBars
+                    .asPaddingValues()
+                    .calculateBottomPadding(),
+                subtitles = state.video.subtitles,
+                subtitleLanguage = state.subtitleLanguage,
+                onSelectSubtitles = onSelectSubtitles,
+                narrating = state.narrating,
+                narration = state.narration,
+                autoplay = state.autoplay,
+                onToggleAutoplay = onToggleAutoplay,
+                onDismiss = { settingsOpen = false },
+                onToggleNarration = onToggleNarration,
+        )
+    }
     }
 }
 

@@ -10,6 +10,14 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,14 +45,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.glassSurface
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -90,6 +102,17 @@ fun PlayerControls(
      */
     isLive: Boolean,
     fullscreen: Boolean,
+    /**
+     * The video's title and channel, drawn **only in fullscreen**.
+     *
+     * Everywhere else they are already the first thing under the picture, and a
+     * second copy over it is the same fault just removed from the miniplayer's
+     * drag: one piece of text printed twice, in two places, disagreeing about
+     * where it belongs. Fullscreen covers that page, so this is the only state
+     * in which the screen cannot otherwise say what is playing.
+     */
+    title: String,
+    channel: String,
     onPlayPause: () -> Unit,
     onSeek: (Double) -> Unit,
     onSkip: (Double) -> Unit,
@@ -118,6 +141,30 @@ fun PlayerControls(
     // middle of the picture rather than in the corner where the clock lives.
     var scrub by remember { mutableStateOf(-1f) }
     val scrubbing = scrub >= 0f
+    // What the bar has to clear at the bottom of the screen in fullscreen. Zero
+    // on a phone with hardware buttons, 34dp on one with a home indicator.
+    val navigationInset = WindowInsets.navigationBars
+        .asPaddingValues()
+        .calculateBottomPadding()
+
+    // And what everything has to clear at the *sides*.
+    //
+    // In portrait these are zero, which is why nothing needed them until the
+    // player was turned: landscape on a phone with a Dynamic Island puts a real
+    // inset on both edges, and the screen's corners are round on top of that. A
+    // row padded with a flat 8dp then has its first and last control clipped —
+    // reported from an iPhone 16e, and invisible on the simulator's flat
+    // screenshot until you look for it.
+    //
+    // Added to the paddings rather than applied to the scrim: the scrim is the
+    // darkening over the picture and has to reach the edges, while the controls
+    // must not.
+    val sides = WindowInsets.safeDrawing
+        .only(WindowInsetsSides.Horizontal)
+        .asPaddingValues()
+    val direction = LocalLayoutDirection.current
+    val safeStart = sides.calculateStartPadding(direction)
+    val safeEnd = sides.calculateEndPadding(direction)
 
     LaunchedEffect(visible, lastTouch, playback.isPlaying) {
         // A paused video keeps its controls. Hiding them leaves a still frame
@@ -163,7 +210,12 @@ fun PlayerControls(
                     Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .padding(horizontal = Space.xs, vertical = Space.xs),
+                        .padding(
+                            start = Space.xs + safeStart,
+                            end = Space.xs + safeEnd,
+                            top = Space.xs,
+                            bottom = Space.xs,
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ControlButton(
@@ -174,7 +226,42 @@ fun PlayerControls(
                         label = strings.back,
                         onClick = onBack,
                     )
-                    Spacer(Modifier.weight(1f))
+                    if (fullscreen) {
+                        // `weight` on the text rather than on a Spacer, so a long
+                        // title is truncated instead of pushing the cluster on the
+                        // right off the edge of a landscape phone.
+                        Column(Modifier.weight(1f).padding(horizontal = Space.sm)) {
+                            Text(
+                                text = title,
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = channel,
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+                    // The two on the right share one pill.
+                    //
+                    // Two glyphs side by side with nothing around them read as
+                    // two unrelated marks on the picture; in a pill they read as
+                    // one cluster of controls, which is what they are. The pill
+                    // is also where the extra width comes from — the gear was
+                    // reported as hard to hit, and each button inside is 56dp
+                    // wide against the 48 it had.
+                    Row(
+                        Modifier.glassSurface(RoundedCornerShape(percent = 50)),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                     if (hasSubtitles) {
                         // On is marked by an underline, not a second glyph.
                         //
@@ -206,6 +293,7 @@ fun PlayerControls(
                         label = strings.settingsInPlayer,
                         onClick = { onOpenSettings(); lastTouch++ },
                     )
+                    }
                 }
 
                 // The three transport controls, in the middle, on discs.
@@ -242,20 +330,35 @@ fun PlayerControls(
 
                 // The clock as a pill at the bottom left, fullscreen opposite.
                 //
-                // The bottom padding clears the seek bar's 32dp target rather
-                // than only its 3dp line: a row sitting 12dp up was inside the
-                // bar's reach even after the ordering above was fixed.
+                // The bottom padding clears the seek bar's **32dp target**, not
+                // its 3dp line — a row sitting 12dp up was inside the bar's
+                // reach even though nothing looked as though it touched.
+                //
+                // And in fullscreen it has to clear the bar's own inset too.
+                // That was missed when the bar moved up off the screen edge:
+                // the row kept a flat 34dp while the bar rose to
+                // `navigationInset + 16`, so the two ended up on the same line
+                // and the shrink button sat on top of the slider. The number is
+                // computed from the same three terms the bar is placed with,
+                // rather than being a constant that has to be remembered twice.
                 Row(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .padding(start = Space.sm, end = Space.sm, bottom = 34.dp),
+                        .padding(
+                            start = Space.sm + safeStart,
+                            end = Space.sm + safeEnd,
+                            bottom = if (fullscreen) {
+                                navigationInset + Space.lg + SEEK_TARGET + Space.sm
+                            } else {
+                                34.dp
+                            },
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
                         Modifier
-                            .clip(RoundedCornerShape(percent = 50))
-                            .background(Color.Black.copy(alpha = 0.55f))
+                            .glassSurface(RoundedCornerShape(percent = 50))
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -281,38 +384,80 @@ fun PlayerControls(
                         }
                     }
                     Spacer(Modifier.weight(1f))
-                    ControlButton(
-                        icon = if (fullscreen) ShrinkIcon else ExpandIcon,
-                        label = if (fullscreen) strings.exitFullscreen else strings.fullscreen,
-                        onClick = { onToggleFullscreen(); lastTouch++ },
-                    )
+                    Box(Modifier.glassSurface(CircleShape)) {
+                        ControlButton(
+                            icon = if (fullscreen) ShrinkIcon else ExpandIcon,
+                            label = if (fullscreen) {
+                                strings.exitFullscreen
+                            } else {
+                                strings.fullscreen
+                            },
+                            width = 48.dp,
+                            onClick = { onToggleFullscreen(); lastTouch++ },
+                        )
+                    }
                 }
             }
         }
 
-        // The bar lives outside the scrim, so it is there whether or not the
-        // controls are.
+        // Outside the picture the bar lives outside the scrim, so it is there
+        // whether or not the controls are.
         //
         // That is what the platform does and it is the whole shape of this
-        // control: at rest it is a hairline along the very bottom edge saying
-        // how far through the video is; touched, it grows and takes a finger.
-        // It used to appear and disappear with the controls, which meant a video
-        // playing with the controls faded had nothing on screen to say how far
-        // through it was.
+        // control: at rest it is a hairline along the very bottom edge of the
+        // *frame*, saying how far through the video is; touched, it grows and
+        // takes a finger. It used to appear and disappear with the controls,
+        // which left a playing video with nothing on screen to say where it was.
+        //
+        // **In fullscreen that reasoning has no subject.** There is no frame for
+        // the hairline to be the edge of — it is a stripe floating across the
+        // bottom of the screen with the buttons that explain it already faded
+        // out, which is how it was reported. So in fullscreen it goes up and
+        // down with everything else, and it moves in from the edges: at the very
+        // bottom of an iPhone it shares its 32dp target with the home
+        // indicator's swipe, and a finger seeking would leave the app.
         if (!isLive) {
-            SeekBar(
-                progress = playback.progress,
-                enabled = playback.durationSeconds > 0,
-                expanded = visible,
-                scrub = scrub,
-                onScrub = { scrub = it },
-                onSeekFraction = {
-                    onSeek(it * playback.durationSeconds)
-                    lastTouch++
-                },
-                onInteract = { lastTouch++ },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+            val seekBar: @Composable () -> Unit = {
+                SeekBar(
+                    progress = playback.progress,
+                    enabled = playback.durationSeconds > 0,
+                    expanded = visible,
+                    scrub = scrub,
+                    onScrub = { scrub = it },
+                    onSeekFraction = {
+                        onSeek(it * playback.durationSeconds)
+                        lastTouch++
+                    },
+                    onInteract = { lastTouch++ },
+                    modifier = if (fullscreen) {
+                        // The real inset, not 34dp: an iPhone with a home
+                        // indicator reports 34 and a phone with buttons reports
+                        // 0, and a constant is wrong on exactly one of them.
+                        Modifier.padding(
+                            start = Space.lg + safeStart,
+                            end = Space.lg + safeEnd,
+                            bottom = Space.lg + navigationInset,
+                        )
+                    } else {
+                        Modifier
+                    },
+                )
+            }
+
+            if (fullscreen) {
+                // Same condition as the controls, so the two cannot disagree
+                // about whether the player is on screen.
+                AnimatedVisibility(
+                    visible = visible || scrubbing,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                ) {
+                    seekBar()
+                }
+            } else {
+                Box(Modifier.align(Alignment.BottomCenter)) { seekBar() }
+            }
         }
 
         // The time being aimed at, in the middle of the picture.
@@ -358,8 +503,7 @@ private fun DiscButton(
     Box(
         Modifier
             .size(size)
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.45f))
+            .glassSurface(CircleShape)
             .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
@@ -380,8 +524,8 @@ private fun DiscButton(
  * - **At rest**: a hairline along the very bottom edge of the picture. No thumb.
  *   It is a readout, and a thumb on a line nobody is touching is an invitation
  *   to a gesture that is already available anywhere along it.
- * - **Controls up**: the same line, with a small knob, so it reads as something
- *   that can be taken hold of.
+ * - **Controls up**: still just the line. A knob on a bar nobody is touching is
+ *   an invitation to a gesture that is already available anywhere along it.
  * - **Under a finger**: the track thickens and the knob grows, which is the only
  *   feedback a seek has before the picture catches up — and the picture does not
  *   catch up until the finger lifts.
@@ -431,8 +575,19 @@ private fun SeekBar(
     // The notch last reported, so one is felt per crossing rather than per frame.
     var lastNotch by remember { mutableStateOf(-1) }
 
+    // Where the finger is, kept *inside* the gesture as well as hoisted.
+    //
+    // `pointerInput` keys on `enabled`, so its block captures the values it was
+    // composed with and keeps them for the life of the gesture detector. Reading
+    // the hoisted `scrub` from inside `onDragEnd` therefore read -1 for ever —
+    // the guard never passed, and letting go of the bar applied no seek at all.
+    // The hoisted copy still exists because the rest of the screen draws from
+    // it; this one is what the gesture decides with.
+    val here = remember { mutableStateOf(-1f) }
+
     fun move(x: Float) {
         val fraction = (x / width).coerceIn(0f, 1f)
+        here.value = fraction
         onScrub(fraction)
         onInteract()
         val notch = (fraction * NOTCHES).toInt()
@@ -450,12 +605,11 @@ private fun SeekBar(
         },
         label = "seek-track",
     )
+    // Nothing to grab until something grabs it. A knob sitting on a line nobody
+    // is touching invites a gesture that is already available anywhere along the
+    // bar, and it is one more thing over the picture.
     val knob by animateDpAsState(
-        targetValue = when {
-            dragging -> KNOB_DRAGGING
-            expanded -> KNOB_EXPANDED
-            else -> 0.dp
-        },
+        targetValue = if (dragging) KNOB_DRAGGING else 0.dp,
         label = "seek-knob",
     )
 
@@ -465,7 +619,11 @@ private fun SeekBar(
             // A 3dp line is nothing to aim at. The target is 32dp with the line
             // along its bottom edge — 24 was the number before, and on a moving
             // video with a thumb arriving at an angle it was measurably missable.
-            .height(32.dp)
+            //
+            // Named, because the row above the bar has to keep clear of *this*
+            // and not of the line: two copies of the number is how the shrink
+            // button ended up drawn on top of the slider.
+            .height(SEEK_TARGET)
             .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
             // Tapping the bar moves there. Its own pointerInput rather than a
             // branch inside the drag detector: the two gestures are recognised
@@ -482,11 +640,13 @@ private fun SeekBar(
                 detectHorizontalDragGestures(
                     onDragStart = { move(it.x) },
                     onDragEnd = {
-                        if (scrub >= 0f) onSeekFraction(scrub.toDouble())
+                        if (here.value >= 0f) onSeekFraction(here.value.toDouble())
+                        here.value = -1f
                         onScrub(-1f)
                         lastNotch = -1
                     },
                     onDragCancel = {
+                        here.value = -1f
                         onScrub(-1f)
                         lastNotch = -1
                     },
@@ -504,33 +664,40 @@ private fun SeekBar(
                 .background(Color.White.copy(alpha = 0.3f)),
         ) {
             Box(Modifier.fillMaxWidth(shown).fillMaxHeight().background(Tokens.brand))
-        }
 
-        // The knob rides the filled portion's right edge.
-        //
-        // align(CenterStart) is not decoration. The parent centres its children,
-        // so a box occupying the filled fraction was centred in the bar rather
-        // than starting at its left edge — putting the thumb at 55% over a video
-        // twelve per cent through, with the red fill beside it disagreeing.
-        if (knob > 0.dp) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth(shown)
-                    .height(knob),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Box(Modifier.size(knob).clip(CircleShape).background(Tokens.brand))
+            // The knob rides the filled portion's right edge, **inside the
+            // track** so it is centred on the line rather than resting on it.
+            //
+            // It was a sibling of the track anchored to the bottom of the touch
+            // target, which put its centre `knob/2` above the bottom while the
+            // line's centre is `track/2` above it — eight points of daylight,
+            // and the knob visibly floating over the bar. A Box does not clip,
+            // so a 22dp circle inside a 6dp track overflows symmetrically, which
+            // is exactly what centring means here.
+            if (knob > 0.dp) {
+                Box(
+                    Modifier.fillMaxWidth(shown).fillMaxHeight(),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    Box(Modifier.size(knob).clip(CircleShape).background(Tokens.brand))
+                }
             }
         }
     }
 }
 
+/**
+ * How tall the bar's touch target is — the line itself is [TRACK_RESTING].
+ *
+ * Read in two places: by the bar, and by the row above it, which must not
+ * overlap it.
+ */
+private val SEEK_TARGET = 32.dp
+
 /** A hairline at rest; a line to grab when the controls are up; a bar under a finger. */
 private val TRACK_RESTING = 3.dp
 private val TRACK_EXPANDED = 3.dp
 private val TRACK_DRAGGING = 6.dp
-private val KNOB_EXPANDED = 12.dp
 private val KNOB_DRAGGING = 22.dp
 
 /** How many notches the width is divided into, for the feedback. */
@@ -542,16 +709,21 @@ private fun ControlButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 24.dp,
+    size: Dp = 24.dp,
+    /**
+     * 56 by default, 48 for a button drawn inside a circle of its own.
+     *
+     * Wider than it is tall, and only wider: the gear was reported as hard to
+     * hit, and the room to fix that is horizontal — the row runs across the top
+     * of the picture with space to spare, while growing it downward would reach
+     * into the frame and, at the bottom of the screen, into the seek bar's own
+     * 32dp target. The glyph stays 24dp; what changed is what counts as a hit.
+     */
+    width: Dp = 56.dp,
 ) {
     Box(
         modifier
-            // 48dp of target around a 24dp glyph — the platform minimum on both
-            // systems, and what this was raised to from 44. Three of these sit
-            // in the top row and one at the bottom, so the width is there; the
-            // earlier note about six per row described a layout that no longer
-            // exists.
-            .size(48.dp)
+            .size(width = width, height = 48.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,

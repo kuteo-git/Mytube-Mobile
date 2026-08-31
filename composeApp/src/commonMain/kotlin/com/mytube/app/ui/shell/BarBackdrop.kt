@@ -77,20 +77,28 @@ fun BarBackdrop(
      * the thin end under the text and the solid end against nothing.
      */
     fromTop: Boolean = true,
-    /**
-     * How much of the app's own colour sits over the blur.
-     *
-     * The default is chrome that content passes under. The miniplayer asks for
-     * more: it is a *panel* rather than an edge, it carries two lines of text,
-     * and at the chrome level it read as a smear of whatever thumbnail happened
-     * to be behind it rather than as a surface.
-     */
-    tint: Float = TINT_CHROME,
+) {
+    GlassBackdrop(modifier, LocalHaze.current, fromTop)
+}
+
+/**
+ * The same material, told which blur to read rather than reading the ambient one.
+ *
+ * [BarBackdrop] is the shell's chrome and the shell's `LocalHaze` is always the
+ * right answer for it. A sheet is not: the player's sheet must blur the *watch
+ * page* it opens over, which is a different scene from the tab feed the shell
+ * registers — so [GlassSheet] holds its own state and passes it in here. Same
+ * glass, same [TINT_GLASS], one place that knows how to paint it.
+ */
+@Composable
+fun GlassBackdrop(
+    modifier: Modifier = Modifier,
+    haze: HazeState?,
+    fromTop: Boolean = true,
 ) {
     // 0.94 against 0.72. Wide enough for the movement under it to be visible,
     // and the solid end is where every glyph sits — the tab labels are 10sp, and
     // 10sp of grey over a passing thumbnail is unreadable much below 0.9.
-    val haze = LocalHaze.current
     if (haze != null) {
         Box(
             modifier.hazeEffect(state = haze) {
@@ -105,7 +113,7 @@ fun BarBackdrop(
                 // one. The blur says the content continues underneath; the tint
                 // is what keeps a 10sp tab label legible over whatever is
                 // passing, and what stops the bar reading as a window.
-                tints = listOf(HazeTint(Tokens.bg.copy(alpha = tint)))
+                tints = listOf(HazeTint(Tokens.bg.copy(alpha = TINT_GLASS)))
             },
         )
         return
@@ -128,8 +136,20 @@ fun BarBackdrop(
  */
 val LocalHaze = compositionLocalOf<HazeState?> { null }
 
-/** Chrome that content passes under: the two bars and the chip row. */
-const val TINT_CHROME = 0.74f
-
-/** A panel that sits on the chrome: the miniplayer, which carries text. */
-const val TINT_PANEL = 0.86f
+/**
+ * How much of the app's own colour sits over the blur, everywhere.
+ *
+ * **One number, and it has to stay one.** There were two — 0.74 for the bars and
+ * 0.86 for the miniplayer, on the reasoning that a panel carrying text wants
+ * more of the app's colour over it than an edge content merely passes under.
+ * That reasoning is fine in isolation and wrong in place: the miniplayer *rests
+ * on* the tab bar and shares an edge with it, so the two shades read as two
+ * different surfaces that happen to be next to each other, and the seam between
+ * them is visible in any screenshot of the bottom of the screen. It was reported
+ * exactly that way.
+ *
+ * The value kept is the higher one, deliberately: unifying downward would have
+ * made the miniplayer's two lines of text *less* legible over a passing
+ * thumbnail, and 10sp tab labels have room to spare at 0.86.
+ */
+const val TINT_GLASS = 0.86f

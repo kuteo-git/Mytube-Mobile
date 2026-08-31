@@ -30,7 +30,6 @@ import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.BarBackdrop
-import com.mytube.app.ui.shell.TINT_PANEL
 import com.mytube.app.ui.theme.Tokens
 
 /** The bar's height, which is what the picture inside it is sized from. */
@@ -94,6 +93,23 @@ fun MiniPlayer(
      * a tab bar under this and how far it has scrolled away.
      */
     bottomInset: Dp = 0.dp,
+    /**
+     * Whether the picture is drawn here, or only the black box it sits in.
+     *
+     * False for exactly one caller: the copy of this bar drawn *underneath* the
+     * watch layer while the drag is in progress. Both platforms bind a player to
+     * one surface and one only — Android's `PlayerView` and iOS's
+     * `AVPlayerLayer` — so two `VideoSurface`s pointed at the same player means
+     * the second steals it and the first goes black. During the drag the watch
+     * screen is the one holding it, and the real video is travelling down into
+     * precisely this box, so the box is covered by it and never seen empty.
+     *
+     * **No default.** A flag whose default is the common case is a flag the one
+     * call site that needed the other value forgets to pass, with the compiler
+     * saying nothing — which is how `startAtBeginning` resumed a video twelve
+     * minutes in.
+     */
+    showSurface: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -109,7 +125,7 @@ fun MiniPlayer(
     // on the tab bar and inherits that bar's job of letting the feed show
     // through — a solid strip between two frosted ones reads as a different
     // surface that happens to be the same colour.
-    BarBackdrop(Modifier.matchParentSize(), fromTop = false, tint = TINT_PANEL)
+    BarBackdrop(Modifier.matchParentSize(), fromTop = false)
 
     Column(Modifier.fillMaxWidth().padding(bottom = bottomInset)) {
         // A line, not a bar. It says how far through without asking for any of
@@ -128,7 +144,9 @@ fun MiniPlayer(
                     .aspectRatio(16f / 9f)
                     .background(Color.Black),
             ) {
-                VideoSurface(player, Modifier.fillMaxWidth().fillMaxHeight())
+                if (showSurface) {
+                    VideoSurface(player, Modifier.fillMaxWidth().fillMaxHeight())
+                }
             }
 
             Column(

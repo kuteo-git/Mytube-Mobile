@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,11 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import com.mytube.app.ui.shell.LocalHaze
 import com.mytube.app.ui.theme.Tokens
-import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.launch
 import kotlin.time.TimeSource
 
@@ -34,15 +31,6 @@ import kotlin.time.TimeSource
  * that forgot to pass it on stays solid while the rest fades.
  */
 val LocalDragProgress = compositionLocalOf { 0f }
-
-/**
- * How blurred the tab underneath starts out, in pixels.
- *
- * It runs *down* to zero as the drag completes, so the feed is revealed out of
- * focus and comes sharp as the video reaches the bar — the video is what is
- * being looked at until then.
- */
-private const val UNCOVER_BLUR = 28f
 
 /**
  * How far the picture has to travel, in pixels, to reach the bar.
@@ -100,6 +88,8 @@ fun WatchLayer(
     landingFromBottomPx: Float,
     /** The status bar's height: where the picture's own box begins. */
     topInsetPx: Float,
+    /** How far through the drag this is, 0 to 1, reported on every change. */
+    onDragProgress: (Float) -> Unit,
     content: @Composable () -> Unit,
 ) {
     val offset = remember { Animatable(0f) }
@@ -117,8 +107,18 @@ fun WatchLayer(
     // away, and `landingFromBottomPx` for why the bottom of the screen is the
     // wrong target.
     val travel = (height - topInsetPx - landingFromBottomPx).coerceAtLeast(1f)
-    val haze = LocalHaze.current
     val progress = travelProgress(offset.value, travel)
+
+    // Reported outward on every change, because the bar the picture is heading
+    // for is drawn by `App.kt` and has to fade in at the same rate. `App.kt` is
+    // where it must be drawn — only it knows the landing position, which it
+    // already computes as `landingFromBottomPx` — and this is the one fact it
+    // cannot work out for itself.
+    //
+    // `LocalDragProgress` stays for everything *inside* the layer: a composition
+    // local reaches the parts of the watch screen that react to the drag without
+    // threading a parameter through each of them.
+    SideEffect { onDragProgress(progress) }
 
     Box(
         Modifier
@@ -137,26 +137,24 @@ fun WatchLayer(
             // instead lets the tab underneath come through while the picture
             // stays solid all the way down.
             //
-            // And it comes through as glass rather than as a fading sheet of
-            // paint: the panel starts opaque, and over the gesture it thins and
-            // the blur behind it *drops*, so the feed arrives out of focus and
-            // sharpens as the finger reaches the bar. A plain alpha ramp made
-            // the tab appear as a flat picture at half strength, which reads as
-            // two screens stacked rather than one being uncovered.
+            // # It used to be glass, and that was the bug
             //
-            // `hazeEffect` reads the tab registered by the shell underneath this
-            // layer. Where nothing has registered one — a Preview — the paint is
-            // the fallback, which is what the layer did before.
-            .then(
-                if (haze != null) {
-                    Modifier.hazeEffect(state = haze) {
-                        blurRadius = (UNCOVER_BLUR * (1f - progress)).dp
-                        tints = listOf(HazeTint(Tokens.bg.copy(alpha = 1f - progress)))
-                    }
-                } else {
-                    Modifier.background(Tokens.bg.copy(alpha = 1f - progress))
-                },
-            )
+            // The ground was a `hazeEffect` whose blur ran *down* from 28dp to
+            // zero across the gesture, so the feed was uncovered out of focus
+            // and came sharp as the finger reached the bar. The intent was that
+            // the video stays the thing being looked at; what it actually
+            // produced, and what was reported, is a screen where **nothing
+            // arrives** — no miniplayer appears, the layer underneath merely
+            // stops being blurry, and the bar materialises at the end. Reading
+            // it beside the web app makes the difference plain: there the feed
+            // is sharp from the first pixel and the video visibly shrinks *into*
+            // a bar that is already there.
+            //
+            // So the blur is gone and the bar is drawn from the start, by
+            // `App.kt` — the only place that knows where it lands. All that is
+            // left here is the paint thinning out, which is the honest
+            // description of one screen being uncovered by another.
+            .background(Tokens.bg.copy(alpha = 1f - progress))
             .pointerInput(height, pictureHeight) {
                 detectVerticalDragGestures(
                     onDragStart = { startedAt = TimeSource.Monotonic.markNow() },

@@ -1168,3 +1168,206 @@ files it wraps were already correct, and the KMP wizard would have replaced them
   not installed`. Compiled and linked is all that has been shown; nothing has
   been run, and the several-gigabyte platform download is still the open
   decision.
+
+## The drag had no destination, and the glass had two colours (2026-08-31)
+
+Two faults reported from the phone, with screenshots of the web app beside them.
+Both were about the same few pixels at the bottom of the screen.
+
+### Nothing arrived; the layer underneath merely came into focus
+
+`MiniPlayer` was composed only once `session.minimised` was already true, so for
+the whole length of the drag **there was no bar**. The one thing changing on
+screen was `WatchLayer`'s own ground: a `hazeEffect` whose blur ran down from
+28dp to zero, revealing the tab out of focus and sharpening as the finger
+landed. Described from the outside, accurately: *"kéo xuống thì nó không show
+background của mini player, thay vào đó cái layer ở dưới bớt mờ dần."*
+
+The web app does the opposite and it is the whole difference: the feed is sharp
+from the first pixel, and the video visibly shrinks **into a bar that is already
+there**.
+
+- **The uncover blur is gone.** It was written to keep the video the thing being
+  looked at, and what it actually produced was a screen where the destination
+  does not exist until the gesture ends. All the layer does now is thin its
+  paint, which is the honest description of one screen being uncovered by
+  another.
+- **The bar is drawn by `App.kt`, not by the layer.** Only `App.kt` knows where
+  it lands — it already computes `landingFromBottomPx` from the navigation
+  inset, the tab bar's height and how far that bar has scrolled away. So the
+  layer reports its progress outward (`onDragProgress`) and `App.kt` draws the
+  bar underneath it, alpha ramping linearly with the drag.
+- **One modifier, two call sites.** The bar drawn under the drag and the bar left
+  behind by it share the `align`/`offset`/`padding` chain. They have to land on
+  the same pixel, because `landingFromBottomPx` is built from those same three
+  terms; a placement that differed between them would put the picture down where
+  the bar is not.
+- **`showSurface` is false during the drag, and has no default.** Both platforms
+  bind a player to exactly one surface — Android's `PlayerView`, iOS's
+  `AVPlayerLayer` — so two `VideoSurface`s on one player means the second steals
+  it and the first goes black. The watch screen holds it while the drag runs, and
+  the real picture is travelling into precisely that box, so the black box is
+  never seen empty. No default on the flag for the reason `startAtBeginning`
+  lost its own: a flag defaulted to the common case is a flag the one call site
+  that needed the other value forgets, silently.
+- **The title that flew down is deleted.** `WatchScreen` drew its own title and
+  channel tracking the shrinking thumbnail's right edge. With the bar present
+  from the first pixel that is the same text twice, one copy sliding over the
+  other. Text already in its final place does not need a second copy flying to
+  meet it.
+
+### Two tints stacked on one another
+
+The miniplayer asked for `TINT_PANEL` 0.86 and the bars for `TINT_CHROME` 0.74,
+on the reasoning that a panel carrying text wants more of the app's colour over
+it than an edge content merely passes under. Fine in isolation, wrong in place:
+the miniplayer *rests on* the tab bar and shares an edge with it, so the two read
+as two surfaces that happen to be adjacent.
+
+One constant now, `TINT_GLASS`, and it is the **higher** value — unifying
+downward would have made the miniplayer's two lines less legible over a passing
+thumbnail, while 10sp tab labels have room to spare at 0.86. Measured after: the
+miniplayer band and the tab bar band both read 18–19 with no step at the seam.
+
+### iOS has now actually run
+
+The charter above says it never had. That is out of date: an iOS 26.5 runtime is
+installed, and this was measured on the **iPhone 16e simulator** — the drag,
+the spring-back with the video still playing, the bar landing under the picture,
+and the seam. The Release build is signed and installed on the phone itself.
+
+- **Gestures on the simulator are drivable from the terminal**, which is what
+  made the above measurable rather than described. `simctl` has no touch input;
+  synthesised `CGEvent` mouse drags over the Simulator window do. The device
+  screen sits inside the window at 1:1 points with a bezel offset — calibrate by
+  finding one landmark (the red mark in the top bar) in both a `simctl io
+  screenshot` and a `screencapture` of the window, rather than assuming the
+  screen fills it.
+
+## Glass on the player, and a sheet that is finally made of it (2026-08-31)
+
+Reported from the phone with a screenshot of YouTube's own player beside it.
+
+### The seek bar had no frame to be the edge of
+
+In fullscreen the bar stayed on screen after the controls had faded — a red
+stripe across the bottom with nothing to explain it. The cause was a decision
+that is still right everywhere else: the bar is drawn *outside* the scrim, so a
+video playing with the controls hidden still says how far through it is. That
+works because the bar is the **bottom edge of the picture**. Fullscreen has no
+picture edge, so the same line is a stripe floating over the film.
+
+- **It follows the controls in fullscreen and only there.** Outside fullscreen
+  the hairline stays, because the reason for it is intact.
+- **And it moves in from the edges**: 16dp at the sides, and the real
+  `navigationBars` inset plus 16dp at the bottom. Not 34dp — that is an iPhone
+  with a home indicator, and a phone with buttons reports 0. At the very bottom
+  the bar's 32dp target overlaps the home-indicator swipe, so a finger seeking
+  would leave the app.
+
+### One material for everything over the picture
+
+The controls carried three different fills — 0.45 for the transport discs, 0.55
+for the clock pill, nothing at all behind the corner buttons. Three shades of
+black on one frame is the fault corrected between the miniplayer and the tab bar
+a day earlier, one screen over. `Modifier.glassSurface(shape)` is now the only
+answer: 0.45 black with a 0.12 white hairline, which is what makes it read as
+glass rather than as a hole punched in the picture.
+
+- **It is not a blur and cannot be.** The picture behind these controls is a
+  `UIKitView` on iOS and a `SurfaceView` on Android; Compose draws neither into
+  its own layer, so Haze has no video pixels to sample. Worth stating because
+  the request was for "liquid glass" — and the reference screenshot turns out
+  not to be frosted either. `BarBackdrop` can frost the bars because what passes
+  under *those* is a Compose-drawn feed.
+- **CC and the gear share one pill**; the three transport discs stay separate,
+  as in the reference. Two glyphs with nothing around them read as two unrelated
+  marks; in a pill they read as one cluster, which is what they are — and the
+  pill is where the extra width comes from.
+- **The buttons are 56dp wide and still 48 tall.** The gear was reported as hard
+  to hit and the room to fix that is horizontal: the row has width to spare,
+  while growing downward reaches into the frame and, at the bottom, into the
+  seek bar's own target.
+- **Fullscreen gains the title and channel**, top left. Only there: everywhere
+  else they are already the first thing under the picture.
+
+### The sheet is glass, after a file explaining why it could not be
+
+`SheetBackdrop.kt` recorded the failure honestly and drew the wrong conclusion
+from it. `ModalBottomSheet` renders into its own popup layer with its own
+coordinate space, so Haze — which positions from `positionInRoot` — drew the
+slice of the app from the *top of the screen* into the sheet's place. That is
+not a tuning problem and no parameter fixes it: **the sheet is not in the scene
+Haze recorded.** The conclusion drawn was "a sheet is not made of glass". The
+right one was "then do not use a popup layer".
+
+`GlassSheet` is an ordinary child of the caller's full-screen `Box`, at real
+coordinates. Measured: the settings sheet frosts the watch page behind it, and
+the profile sheet frosts the feed.
+
+- **Everything the platform sheet gave away had to be rebuilt** — the rise,
+  tap-outside, drag-down, back. A sheet missing any one of them is a trap. All
+  four are measured except back, which iOS does not have.
+- **Drawn last, and that is now load-bearing.** A popup layer is on top wherever
+  it is written; a child of a Box is on top only if it is written last. Left
+  where it was, `ProfileSheet` opened underneath every screen and the miniplayer.
+- **Always composed, told whether it is showing.** An `if` around it removes the
+  node the exit animation would play on, so the sheet would vanish rather than
+  slide away. Same reason `MutableTransitionState` drives it: composed already
+  visible, there is nothing to animate *from*.
+- **The back handler is local, against the one-handler rule.** That rule is
+  about *navigation* state, which each screen knows only part of. Whether a
+  sheet is open is not navigation — `settingsOpen` is a `remember` inside
+  `WatchScreen` — and `ModalBottomSheet` handled its own back for the same
+  reason. The innermost enabled handler wins.
+- **The scrim is a parameter, not a constant.** The player's settings sit over
+  the video they adjust, so dimming it would grey out the thing being changed;
+  the profile sheet covers a feed it has no relationship with and dims it like
+  any modal. One material, two answers about what is behind.
+- **The watch screen registers its own haze source.** `hazeSource` wraps only
+  `AppShell`'s content, and the watch layer is a sibling drawn over it — a sheet
+  reading the ambient `LocalHaze` would frost the feed hiding behind the video.
+
+### The glass was dark, not glassy; and the sheet stretched when the phone turned
+
+Both reported after the first build reached the phone.
+
+- **A single flat fill reads as a hole, not a pane.** 0.45 black with a 0.12 rim
+  is *dark*, which is not the same thing. It is three layers now: a lighter base
+  (0.32) that still keeps a white glyph legible, a diagonal white sheen fading
+  out across the shape, and a brighter rim (0.22) over both. The gradient is what
+  does the work — a flat translucent fill has no direction, and direction is what
+  says light is landing on a surface rather than a window being cut in the
+  picture. Diagonal rather than vertical: a vertical ramp on a 48dp disc reads as
+  a shadow under it.
+- **The blur was asked for again, and costed rather than refused.** It is
+  reachable — a `UIVisualEffectView` inside `VideoContainer` above the
+  `AVPlayerLayer` on iOS, a TextureView plus `RenderEffect` on Android. Both work
+  by pushing the position and shape of every one of these controls down into the
+  platform layer, which is a crack straight through the seam §3 exists to keep,
+  and the Android half is unverified. Not done, for an effect the reference
+  screenshot does not itself have.
+- **The sheet kept its height and lost its proportion.** Content sized for
+  portrait is ~246dp: a third of a portrait phone and two thirds of a landscape
+  one, where it covered the video it is about. Capped on **both** axes, because
+  they are two faults: `widthIn(max = 480.dp)` — above any phone in portrait, so
+  that orientation is untouched — stops an 844dp band of glass holding two
+  switches; `heightIn(max = 45%)` stops it swallowing the screen. The content
+  scrolls when the cap bites, below the drag handle rather than around it, or the
+  scroll container would take the dismiss gesture.
+
+### Driving the simulator: activate first
+
+Synthesised `CGEvent` clicks are swallowed while the Simulator window is not
+frontmost — the first click only focuses it. Every measurement above needed
+`osascript -e 'tell application "Simulator" to activate'` before the click, and
+half an hour went into taps that appeared to do nothing. Note also that a tap
+made while the controls are hidden only reveals them, so reaching a button is
+two taps, not one.
+
+### Still not done
+
+Preview frames while scrubbing, asked for in the same round. The server has no
+storyboard — grep of `services/` finds no sprite, VTT storyboard or preview
+route — so it is a change in both repositories: sprites at ingest, a route, a
+DTO, and the drawing here. Deliberately deferred, not forgotten.

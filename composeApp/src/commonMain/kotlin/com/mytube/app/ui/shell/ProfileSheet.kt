@@ -3,6 +3,7 @@ package com.mytube.app.ui.shell
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,9 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,22 +53,27 @@ import com.mytube.app.ui.theme.Tokens
  * does nothing until a second member exists, which is the same rule the web app
  * follows.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileSheet(
+fun BoxScope.ProfileSheet(
+    visible: Boolean,
     profiles: List<Profile>,
     currentId: String,
     onPick: (Profile) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    // Opaque, and the scrim left at its default — see `SheetBackdrop.kt`. This
-    // one covers a feed rather than a playing video, so there is nothing behind
-    // it that dimming would spoil.
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Tokens.bg,
-        dragHandle = null,
+    // The same glass as the bars and the player's own sheet — one material for
+    // every surface that floats over the app.
+    //
+    // Dimmed behind, unlike the player's. That is not an inconsistency: this one
+    // covers a feed it has no relationship with, while the player's sits over
+    // the video its settings are about, and greying out the thing being adjusted
+    // is the one thing a sheet must not do.
+    GlassSheet(
+        visible = visible,
+        haze = LocalHaze.current,
+        scrim = SCRIM,
+        onDismiss = onDismiss,
     ) {
         Column(Modifier.fillMaxWidth().padding(top = Space.md, bottom = Space.xxl)) {
             Text(
@@ -124,3 +128,6 @@ private fun ProfileRow(profile: Profile, selected: Boolean, onClick: () -> Unit)
         }
     }
 }
+
+/** The standard modal dim, matching what Material's sheet drew here before. */
+private val SCRIM = Color.Black.copy(alpha = 0.32f)

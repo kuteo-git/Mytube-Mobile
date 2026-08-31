@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -357,28 +359,6 @@ fun App(container: AppContainer) {
             // screen is showing. It is the miniplayer that needs this, not the
             // watch screen: the video keeps playing while somebody searches or
             // opens a channel, and the bar has to be reachable from there.
-            if (profilesOpen) {
-                ProfileSheet(
-                    profiles = profiles,
-                    currentId = currentProfile?.id.orEmpty(),
-                    onDismiss = { profilesOpen = false },
-                    onPick = { picked ->
-                        profilesOpen = false
-                        if (picked.id != profileId) {
-                            profileId = picked.id
-                            // Everything playing belongs to the person who was
-                            // watching. Their history, their rail, their saved
-                            // shelf — leaving the video up would be one member's
-                            // evening carried into another's.
-                            watching = null
-                            trail.clear()
-                            tab = Tab.Home
-                            scope.launch { container.serverRepository.setProfileId(picked.id) }
-                        }
-                    },
-                )
-            }
-
             // Every scrolling screen has to leave room for the miniplayer, and
             // it is an ambient fact rather than something to thread through
             // seven signatures. See `tabContentPadding`.
@@ -692,9 +672,77 @@ fun App(container: AppContainer) {
                     watch.applyNarrationLevels(voiceLevel, duckLevel)
                 }
 
+                // How far the drag toward the bar has got, reported by the
+                // watch layer. It lives here because the bar the picture is
+                // travelling to is drawn here — only this scope knows where that
+                // bar lands, which it already computes as `landingFromBottomPx`.
+                //
+                // Keyed so it cannot survive into a state where it is a lie: a
+                // new video starts at zero, and so does a session that has just
+                // collapsed.
+                var dragProgress by remember(session.videoId, session.minimised) {
+                    mutableFloatStateOf(0f)
+                }
+
+                val playbackState by watch.state.collectAsStateWithLifecycle()
+                val playing = playbackState as? WatchState.Playing
+
+                // One modifier, two call sites — the bar drawn under the drag
+                // and the bar left behind by it. They have to land on the same
+                // pixel: `landingFromBottomPx` below is built from these same
+                // three terms, so a placement that differed between them would
+                // put the picture down somewhere the bar is not.
+                val miniPlayerModifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    // Follows the tab bar down as it leaves. The padding
+                    // below reserves the bar's height; when the bar is
+                    // gone that reservation is a gap, and the player was
+                    // left hanging in the middle of the feed.
+                    //
+                    // `offset`, not `graphicsLayer { translationY }`.
+                    //
+                    // Haze samples from the node's **layout** position and knows
+                    // nothing about a draw-time transform, so a translated
+                    // surface drew its glass at the place it would have been —
+                    // which on a moving miniplayer meant no background at all,
+                    // and the tab bar showing straight through it. `offset`
+                    // moves the node at placement, so the position Haze reads is
+                    // the position it is drawn at.
+                    .offset {
+                        IntOffset(
+                            x = 0,
+                            // The tab bar's *whole* height, inset
+                            // included — that is what slides away, and
+                            // matching only the 56dp row left the player
+                            // hanging 34dp short of the screen edge.
+                            y = if (route is Route.Home) {
+                                (barsHidden * (tabBarPx + navigationInsetPx))
+                                    .roundToInt()
+                            } else {
+                                0
+                            },
+                        )
+                    }
+                    // It sits *on* the tab bar, not over it — the bar is
+                    // how somebody leaves for another tab while this
+                    // keeps playing. Search and the channel page have no
+                    // tab bar, so there is nothing to clear there.
+                    //
+                    // The navigation inset **and** the tab bar's row.
+                    //
+                    // Both, because the tab bar's own row sits *above*
+                    // the inset: it runs from 34dp to 90dp off the
+                    // bottom of a phone with a home indicator. Resting
+                    // the player at 56dp put it straight over that row's
+                    // icons, which is why they vanished and the bar
+                    // looked covered. It rests on top of the whole
+                    // thing, and slides down by the whole thing.
+                    .padding(
+                        bottom = navigationInset +
+                            if (route is Route.Home) Size.topBar else 0.dp,
+                    )
+
                 if (session.minimised) {
-                    val playbackState by watch.state.collectAsStateWithLifecycle()
-                    val playing = playbackState as? WatchState.Playing
                     MiniPlayer(
                         player = watch.player,
                         title = playing?.video?.title.orEmpty(),
@@ -713,54 +761,8 @@ fun App(container: AppContainer) {
                             watch.stop()
                             watching = null
                         },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            // Follows the tab bar down as it leaves. The padding
-                            // below reserves the bar's height; when the bar is
-                            // gone that reservation is a gap, and the player was
-                            // left hanging in the middle of the feed.
-                            //
-            // `offset`, not `graphicsLayer { translationY }`.
-            //
-            // Haze samples from the node's **layout** position and knows nothing
-            // about a draw-time transform, so a translated surface drew its
-            // glass at the place it would have been — which on a moving
-            // miniplayer meant no background at all, and the tab bar showing
-            // straight through it. `offset` moves the node at placement, so the
-            // position Haze reads is the position it is drawn at.
-                            .offset {
-                                IntOffset(
-                                    x = 0,
-                                    // The tab bar's *whole* height, inset
-                                    // included — that is what slides away, and
-                                    // matching only the 56dp row left the player
-                                    // hanging 34dp short of the screen edge.
-                                    y = if (route is Route.Home) {
-                                        (barsHidden * (tabBarPx + navigationInsetPx))
-                                            .roundToInt()
-                                    } else {
-                                        0
-                                    },
-                                )
-                            }
-                            // It sits *on* the tab bar, not over it — the bar is
-                            // how somebody leaves for another tab while this
-                            // keeps playing. Search and the channel page have no
-                            // tab bar, so there is nothing to clear there.
-                            //
-                            // The navigation inset **and** the tab bar's row.
-                            //
-                            // Both, because the tab bar's own row sits *above*
-                            // the inset: it runs from 34dp to 90dp off the
-                            // bottom of a phone with a home indicator. Resting
-                            // the player at 56dp put it straight over that row's
-                            // icons, which is why they vanished and the bar
-                            // looked covered. It rests on top of the whole
-                            // thing, and slides down by the whole thing.
-                            .padding(
-                                bottom = navigationInset +
-                                    if (route is Route.Home) Size.topBar else 0.dp,
-                            ),
+                        showSurface = true,
+                        modifier = miniPlayerModifier,
                     )
                 } else {
                     // Started at `false` and flipped on the first frame, which
@@ -776,6 +778,52 @@ fun App(container: AppContainer) {
                     // gesture makes by hand.
                     val rise = remember { MutableTransitionState(false) }
                     rise.targetState = true
+
+                    // The bar the picture is being dragged into, drawn from the
+                    // first pixel of the gesture and fading in with it.
+                    //
+                    // Before this the bar did not exist until the drag had
+                    // committed: what a finger uncovered was the watch layer's
+                    // own ground losing its blur, and the miniplayer appeared at
+                    // the end from nowhere. Reported as "kéo xuống thì nó không
+                    // show background của mini player" — accurately, because
+                    // there was no miniplayer to show a background for.
+                    //
+                    // Drawn *before* the layer, so it is underneath it: the
+                    // layer takes every touch while the drag is running, which
+                    // is also why the buttons here cannot be pressed by accident
+                    // on the way down. They are wired to the real callbacks
+                    // anyway, so the two call sites stay identical.
+                    //
+                    // Composed only while the drag is live — at rest this would
+                    // be a whole invisible bar laid out on every frame.
+                    if (dragProgress > 0f) {
+                        MiniPlayer(
+                            player = watch.player,
+                            title = playing?.video?.title.orEmpty(),
+                            channel = playing?.video?.channel?.name.orEmpty(),
+                            progress = playing?.playback?.progress ?: 0f,
+                            isPlaying = playing?.playback?.isPlaying == true,
+                            onExpand = { watching = session.copy(minimised = false) },
+                            onPlayPause = watch::playPause,
+                            bottomInset = navigationInset * barsHidden,
+                            onClose = {
+                                watch.stop()
+                                watching = null
+                            },
+                            // The watch screen is holding the player's one
+                            // surface, and the real picture is travelling down
+                            // into this very box — see the flag's own comment.
+                            showSurface = false,
+                            // Linear across the whole gesture. Filling in early
+                            // would leave the glass solid while the video is
+                            // still twice the width of the box it is heading
+                            // for, which is the moment the mismatch is most
+                            // visible.
+                            modifier = miniPlayerModifier
+                                .graphicsLayer { alpha = dragProgress },
+                        )
+                    }
 
                     AnimatedVisibility(
                         visibleState = rise,
@@ -795,6 +843,7 @@ fun App(container: AppContainer) {
                                 miniPlayerPx +
                                 navigationInsetPx * barsHidden,
                         topInsetPx = statusInsetPx,
+                        onDragProgress = { dragProgress = it },
                     ) {
                         WatchScreen(
                             viewModel = watch,
@@ -831,6 +880,37 @@ fun App(container: AppContainer) {
                     }
                     }
                 }
+
+            // Last child of the Box, and that is load-bearing now.
+            //
+            // As a `ModalBottomSheet` this sat wherever it was written, because a
+            // popup layer is always on top; drawn in the scene it is on top only
+            // if it is drawn last. Written where it used to be, it opened
+            // *underneath* every screen and the miniplayer.
+            //
+            // Always composed, told whether it is showing: an `if` around it
+            // removes the node the exit animation would play on, so the sheet
+            // would vanish rather than slide away.
+            ProfileSheet(
+                visible = profilesOpen,
+                profiles = profiles,
+                currentId = currentProfile?.id.orEmpty(),
+                onDismiss = { profilesOpen = false },
+                onPick = { picked ->
+                    profilesOpen = false
+                    if (picked.id != profileId) {
+                        profileId = picked.id
+                        // Everything playing belongs to the person who was
+                        // watching. Their history, their rail, their saved
+                        // shelf — leaving the video up would be one member's
+                        // evening carried into another's.
+                        watching = null
+                        trail.clear()
+                        tab = Tab.Home
+                        scope.launch { container.serverRepository.setProfileId(picked.id) }
+                    }
+                },
+            )
             }
             }
 

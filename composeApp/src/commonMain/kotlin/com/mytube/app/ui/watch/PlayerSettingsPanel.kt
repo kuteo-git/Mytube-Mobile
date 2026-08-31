@@ -14,10 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.ModalBottomSheet
 import com.mohamedrejeb.calf.ui.toggle.AdaptiveSwitch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,7 +32,11 @@ import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.model.NarrationStatus
 import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.ui.home.Space
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.unit.Dp
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.GlassSheet
+import dev.chrisbanes.haze.HazeState
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -66,10 +67,20 @@ import com.mytube.app.ui.theme.Tokens
  * How loud the voice is and which voice it is live in Settings, not here. See
  * the note at their old position below.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlayerSettingsPanel(
+fun BoxScope.PlayerSettingsPanel(
     visible: Boolean,
+    /**
+     * What the sheet's glass blurs: the watch page it opens over.
+     *
+     * Passed in rather than taken from `LocalHaze` — that one is the shell's,
+     * registered on the tab content, and the watch screen is a sibling drawn
+     * over it. A sheet reading the ambient state would frost the feed hiding
+     * behind the video instead of the page the settings belong to.
+     */
+    haze: HazeState?,
+    /** How far up the bottom of the screen the sheet must clear. */
+    bottomInset: Dp,
     subtitles: List<SubtitleTrack>,
     subtitleLanguage: String,
     narrating: Boolean,
@@ -79,28 +90,19 @@ fun PlayerSettingsPanel(
     onToggleNarration: () -> Unit,
     onToggleAutoplay: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
 
-    if (!visible) return
-
-    // Material's sheet on both platforms — see `SheetBackdrop.kt` for why Calf's
-    // native iOS sheet was tried and reverted, and why this is opaque rather
-    // than frosted.
-    //
-    // `containerColor` rather than anything drawn inside: the sheet is taller
-    // than its content by a drag handle and a navigation inset, and a background
-    // painted from within misses both. That gap was a window through to the
-    // comments behind.
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Tokens.bg,
-        // No scrim over the picture. The default dims the whole window, which
-        // would grey out the video these settings are about.
-        scrimColor = Color.Transparent,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = Tokens.text2) },
-        modifier = modifier,
+    // Glass, in the scene — see [GlassSheet] for why Material's sheet could never
+    // be frosted here, and why that is a fact about popup layers rather than a
+    // parameter nobody found.
+    GlassSheet(
+        visible = visible,
+        haze = haze,
+        // No scrim over the picture. Dimming the window would grey out the video
+        // these settings are about.
+        scrim = Color.Transparent,
+        onDismiss = onDismiss,
     ) {
         Column(
             Modifier
@@ -112,7 +114,11 @@ fun PlayerSettingsPanel(
                     start = Space.lg,
                     end = Space.lg,
                     top = Space.md,
-                    bottom = Space.xl,
+                    // The navigation inset **plus** the usual gap. Material's
+                    // sheet added the inset itself; this one is an ordinary
+                    // child of the screen, so the home indicator is the
+                    // caller's to clear.
+                    bottom = Space.xl + bottomInset,
                 ),
         ) {
             // Only when the video has any. A "Subtitles: Off" row over a video
