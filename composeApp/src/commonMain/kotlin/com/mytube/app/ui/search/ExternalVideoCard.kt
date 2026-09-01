@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +37,18 @@ import com.mohamedrejeb.calf.ui.gesture.adaptiveClickable
 import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.ui.home.BadgeBackground
 import com.mytube.app.ui.home.Radius
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import com.mytube.app.ui.home.MoreVertical
+import com.mytube.app.ui.home.Size
+import com.mytube.app.ui.shell.GlassRadius
+import com.mytube.app.ui.shell.menuSurface
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.home.formatViews
@@ -73,6 +86,16 @@ fun ExternalVideoCard(
     opening: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Opens the sheet asking which collections to put this in.
+     *
+     * The one action an upstream result has, and it is not the feed's menu:
+     * "not interested" is a statement to the ranker about a *recommendation*,
+     * and nothing recommended this. Saving one writes the catalogue row first —
+     * see `SavePlaylistViewModel.save` — so it is a round trip the sheet owns
+     * rather than two requests fired from a menu item.
+     */
+    onSaveToPlaylist: (() -> Unit)? = null,
 ) {
     val press = remember { MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
@@ -143,17 +166,21 @@ fun ExternalVideoCard(
             }
         }
 
-        Column(
+        // The dot sits at the end of the title block, as on the library card —
+        // one layout for both kinds of result, so a list containing both does
+        // not read as two lists.
+        Row(
             Modifier
                 .fillMaxWidth()
                 .background(if (pressed) Tokens.surfaceHover else Color.Transparent)
                 .padding(
                     start = Space.lg,
-                    end = Space.lg,
+                    end = if (onSaveToPlaylist == null) Space.lg else Space.xs,
                     top = Space.md,
                     bottom = Space.md,
                 ),
         ) {
+        Column(Modifier.weight(1f)) {
             Text(
                 text = video.title,
                 color = Tokens.text,
@@ -180,8 +207,50 @@ fun ExternalVideoCard(
             )
         }
 
+            if (onSaveToPlaylist != null) ExternalCardMenu(strings, onSaveToPlaylist)
+        }
+
         // The gap between cards, inside the card for the reason the feed's is:
         // the pressed fill has to reach the bottom of the text.
         Spacer(Modifier.height(Space.md))
+    }
+}
+
+/**
+ * One item, and only one.
+ *
+ * A card whose actions mean nothing draws no dot rather than a dead one — the
+ * rule this app already follows — and for an upstream result exactly one action
+ * means something. Paint rather than sampled glass, for [menuSurface]'s reasons.
+ */
+@Composable
+private fun ExternalCardMenu(strings: Strings, onSaveToPlaylist: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+
+    Box {
+        Icon(
+            imageVector = MoreVertical,
+            contentDescription = strings.moreOptions,
+            tint = Tokens.text2,
+            modifier = Modifier
+                .size(Size.iconButton)
+                .clip(CircleShape)
+                .clickable { open = true }
+                .padding(Space.sm),
+        )
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = Color.Transparent,
+            shape = GlassRadius.panel,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            modifier = Modifier.menuSurface(GlassRadius.panel),
+        ) {
+            DropdownMenuItem(
+                text = { Text(strings.saveToPlaylist, color = Tokens.text) },
+                onClick = { open = false; onSaveToPlaylist() },
+            )
+        }
     }
 }

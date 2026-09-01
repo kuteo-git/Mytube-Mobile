@@ -2,6 +2,7 @@ package com.mytube.app.domain.repository
 
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Comment
+import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Topic
@@ -195,6 +196,57 @@ interface VideoRepository {
         sortToken: String = "",
         pageToken: String = "",
     ): ChannelPage
+
+    /**
+     * The member's playlists.
+     *
+     * A non-empty [videoId] also answers *which of them already hold that
+     * video*, on every row. That is one question with two halves and it is one
+     * call: the sheet cannot draw the ticks without the lists, and cannot draw
+     * the lists without knowing which are ticked. Asking per playlist would be
+     * N requests for one bit each.
+     *
+     * The saved shelf is **not** in this list. It is the pinned set — see
+     * [Playlist] — and callers draw it themselves from [saved].
+     */
+    suspend fun playlists(videoId: String = ""): List<Playlist>
+
+    /** One playlist and a page of what is in it. */
+    suspend fun playlist(playlistId: String, pageToken: String = ""): PlaylistPage
+
+    suspend fun createPlaylist(title: String): Playlist
+
+    /**
+     * Title and description together.
+     *
+     * One method rather than a rename, because creation already carries both:
+     * a call that changes half of what creation set is one that grows a sibling
+     * the first time somebody wants the other half.
+     */
+    suspend fun updatePlaylist(playlistId: String, title: String, description: String = ""): Playlist
+
+    suspend fun deletePlaylist(playlistId: String)
+
+    /** Adding a video the list already holds succeeds and changes nothing. */
+    suspend fun addToPlaylist(playlistId: String, videoId: String)
+
+    /** Removing one that is not there succeeds too, for the same reason. */
+    suspend fun removeFromPlaylist(playlistId: String, videoId: String)
+}
+
+/**
+ * A playlist and a page of its videos.
+ *
+ * One object rather than two calls, for [ChannelPage]'s reason: the page's
+ * title and count come with the videos, and a header drawn from a second
+ * request would arrive after the list it belongs to.
+ */
+data class PlaylistPage(
+    val playlist: Playlist,
+    val videos: List<Video>,
+    val nextPageToken: String,
+) {
+    val hasMore: Boolean get() = nextPageToken.isNotEmpty()
 }
 
 data class FeedPage(

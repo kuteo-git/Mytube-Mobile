@@ -169,27 +169,6 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
     }
 
     /**
-     * Keep this video's file against the eviction sweep, or stop keeping it.
-     *
-     * Drawn first and put back if refused, the same rule the watch screen's
-     * buttons follow — this is a statement about the viewer's own shelf, and a
-     * control that waits for a round trip feels broken.
-     */
-    fun toggleSaved(video: Video) {
-        val current = _state.value as? HomeState.Ready ?: return
-        val next = !video.saved
-        _state.value = current.copy(
-            videos = current.videos.map { if (it.id == video.id) it.copy(saved = next) else it },
-        )
-        viewModelScope.launch {
-            runCatching { videos.setSaved(video.id, next) }.onFailure {
-                val now = _state.value
-                if (now is HomeState.Ready) _state.value = now.copy(videos = current.videos)
-            }
-        }
-    }
-
-    /**
      * Take it off the page, and tell the ranker.
      *
      * Removed from the list rather than greyed out. The action means "not this

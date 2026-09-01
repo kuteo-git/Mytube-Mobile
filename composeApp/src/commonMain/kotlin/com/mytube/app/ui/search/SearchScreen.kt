@@ -52,6 +52,7 @@ import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.VideoCard
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.playlist.SaveTarget
 import com.mytube.app.ui.i18n.VietnameseStrings
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -81,6 +82,14 @@ fun SearchScreen(
     onBack: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
+    /**
+     * Opens the sheet asking which collections a result belongs in.
+     *
+     * Takes a target rather than a video because this screen has two kinds of
+     * result: a library row carries an id, an upstream one carries only an
+     * address and has no catalogue row until the sheet writes one.
+     */
+    onSaveToPlaylist: (SaveTarget) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
@@ -121,6 +130,7 @@ fun SearchScreen(
         onOpenExternal = { video -> viewModel.openExternal(video, onOpenVideo) },
         onLoadMoreUpstream = viewModel::loadMoreUpstream,
         onOpenChannel = onOpenChannel,
+        onSaveToPlaylist = onSaveToPlaylist,
     )
 }
 
@@ -172,6 +182,7 @@ fun SearchContent(
      * because something did happen and it was not what they aimed at.*
      */
     onOpenChannel: (String) -> Unit,
+    onSaveToPlaylist: (SaveTarget) -> Unit = {},
 ) {
     val strings = LocalStrings.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -332,6 +343,11 @@ fun SearchContent(
                                             onOpenVideo(video.id)
                                         },
                                         onOpenChannel = { onOpenChannel(video.channel.id) },
+                                        onSave = {
+                                            onSaveToPlaylist(
+                                                SaveTarget(video.id, saved = video.saved),
+                                            )
+                                        },
                                     )
                                 }
                             }
@@ -379,6 +395,14 @@ fun SearchContent(
                             onClick = {
                                 keyboard?.hide()
                                 onOpenExternal(video)
+                            },
+                            // An upstream result has no id yet; the address is
+                            // what the sheet writes a row from on Save.
+                            onSaveToPlaylist = {
+                                keyboard?.hide()
+                                onSaveToPlaylist(
+                                    SaveTarget(videoId = "", sourceUrl = video.sourceUrl),
+                                )
                             },
                         )
                     }

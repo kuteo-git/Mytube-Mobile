@@ -94,6 +94,15 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
+    /**
+     * Opens the sheet asking which collections this video belongs in.
+     *
+     * The screen does not answer it: the sheet is hoisted to `App.kt` because
+     * six screens open the same one, and because it must be drawn last — a
+     * [com.mytube.app.ui.shell.GlassSheet] is an ordinary child of the root
+     * `Box` rather than a popup layer, so where it is written is where it sits.
+     */
+    onSaveToPlaylist: (Video) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -106,7 +115,7 @@ fun HomeScreen(
         onSelectChip = viewModel::select,
         onRetry = viewModel::refresh,
         onLoadMore = viewModel::loadMore,
-        onSaveVideo = viewModel::toggleSaved,
+        onSaveVideo = onSaveToPlaylist,
         onNotInterested = viewModel::notInterested,
         onMarkWatched = viewModel::markWatched,
         onOpenChannel = onOpenChannel,

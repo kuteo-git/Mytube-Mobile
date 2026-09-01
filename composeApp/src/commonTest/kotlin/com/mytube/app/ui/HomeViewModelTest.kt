@@ -190,5 +190,19 @@ class HomeViewModelTest {
             sortToken: String,
             pageToken: String,
         ) = throw NotImplementedError()
+
+        override suspend fun playlists(videoId: String) =
+            emptyList<com.mytube.app.domain.model.Playlist>()
+        override suspend fun playlist(playlistId: String, pageToken: String) =
+            throw NotImplementedError()
+        override suspend fun createPlaylist(title: String) = throw NotImplementedError()
+        override suspend fun updatePlaylist(
+            playlistId: String,
+            title: String,
+            description: String,
+        ) = throw NotImplementedError()
+        override suspend fun deletePlaylist(playlistId: String) = Unit
+        override suspend fun addToPlaylist(playlistId: String, videoId: String) = Unit
+        override suspend fun removeFromPlaylist(playlistId: String, videoId: String) = Unit
     }
 }

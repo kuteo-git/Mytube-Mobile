@@ -2080,11 +2080,13 @@ makes a shared recording safe.
   flat rectangle inside a sheet made of glass and the only thing on it that was
   neither. It is the same translucent pane every selected control uses, inset so
   it reads as a row picked up rather than a stripe painted behind one.
-- **The channel's sort row: measured, and half of it is not this app.** The
-  request path is right — `UCsT0YIqwnpJCM-mx7-gSA4Q` genuinely returns a
-  different order for Popular — while the channel it was reported on returns the
-  same thirty videos in the same order for all three tokens, and for `sort=`,
-  `order=` and `sortBy=` alike. **That is a question for the gateway.** What was
+- ~~**The channel's sort row: measured, and half of it is not this app.** … That
+  is a question for the gateway.~~ **Wrong, and corrected on 2026-09-01** — the
+  request path was this app's fault all along; see "An ordering is a
+  continuation" below. The measurement was real and the conclusion drawn from it
+  was not: three tokens answering identically was the *symptom*, and testing
+  `sort=`, `order=` and `sortBy=` was testing three spellings of a parameter the
+  gateway does not read at all. What was
   this app's, and is fixed, is the *lighting* — see the entry above — and the
   spacing: the header's bottom padding and the row's own top padding were both
   there, so the cluster sat 24dp below the counts and 8dp above the first card.
@@ -2099,6 +2101,8 @@ makes a shared recording safe.
   while tinting before the blur would only make a pale banner paler.
   `bannerPath` had to be carried from the DTO through the domain to get here; the
   gateway had been sending it all along.
+  **Reversed on 2026-09-01** — see below. It cost no height, which answered the
+  objection it was drawn to answer, and produced a different one.
 
 ## Search reaches YouTube again (2026-09-01)
 
@@ -2217,3 +2221,161 @@ though it were another step in.
 only page reached from another page rather than from a tab. The fix belongs in
 `depth` rather than in the transition: the direction is a fact about the pair,
 and the pair was being described wrongly.
+
+### The banner is gone again (2026-09-01)
+
+Drawn a day earlier as a blurred, tinted ground behind the channel header, on the
+argument that it costs no height. That argument was sound and the result was not:
+a channel's banner is somebody else's composition, and 24dp of blur under the
+page's own colour makes a smear whose only job is to sit behind a name that reads
+perfectly well on plain ground. Reported in three words and they were right.
+
+**`bannerPath` stays on the DTO and on the domain type.** It is what the gateway
+sends and carrying it is the mapper's job; the decision not to draw it belongs on
+the screen that would. That is also what makes drawing it again cheap, if a third
+argument ever turns up.
+
+## An ordering is a continuation (2026-09-01)
+
+Reported again, with the right instinct attached: *"tao nghĩ là api ở mobile
+sai"*. It was.
+
+The gateway reads exactly one thing — `r.URL.Query().Get("pageToken")` — and this
+app sent the ordering as `sort=` beside it, so every ordering was dropped in
+silence and answered with the default one. The web app has always sent the sort
+token **as the first page token**, and says why: *"that is how YouTube models it
+— an ordering is just another continuation."*
+
+Measured against the running server on `UCsT0YIqwnpJCM-mx7-gSA4Q`, the channel
+whose orderings genuinely differ:
+
+| | |
+|---|---|
+| `?pageToken=<popular>` | `GNZBSZD16cY, 36m1o-tM05g, …` |
+| `?sort=<popular>` | the Latest list, unchanged |
+| page two of that continuation | `A6Dkt7zyImk, …` — still Popular |
+
+- **The wire has one slot; the app has two intentions.** *"Show me this ordering
+  from the top"* replaces the list, *"show me more"* appends to it, and the
+  screen has to keep them apart. So `channelPage(channelId, sortToken,
+  pageToken)` keeps both and `channelToken` folds them at the edge, where shapes
+  are allowed to differ. A cursor wins when there is one, because it already
+  carries the ordering it was handed out inside — the third row of the table is
+  that claim, measured rather than assumed.
+- **A named function, not an expression in a request builder.** The same reason
+  `wholeSeconds` is one: nothing in the type system catches a query parameter
+  nobody reads — both are strings and both requests succeed with a 200 — so
+  `ChannelTokenTest` holds it to the three cases without a server.
+- **The lesson is about the conclusion, not the parameter.** A day earlier this
+  was measured, found to answer identically for all three orderings, and written
+  down as the gateway's problem. Trying `sort=`, `order=` and `sortBy=` was three
+  spellings of a guess; reading the eleven lines of `handleChannelVideos` would
+  have ended it. **When a request appears to be ignored, read the handler before
+  varying the request.**
+
+## The bookmark asks which collection (2026-09-01)
+
+The bookmark wrote one bit — `POST /api/videos/{id}/pinned`, *keep this file when
+the disk fills* — and there was nowhere to say **which** collection, so the
+household could not keep music apart from news. Pressing it now opens a sheet.
+
+### The database was built for this and the API was not
+
+Migration `0015_playlists.sql` created `playlists` and `playlist_items` in
+2024, with a `position` column whose comment already said it is *"appended to at
+the end when somebody adds a video here"* — and above the catalog repository's
+interface sat a doc comment for a `SetPlaylistItem` **declared nowhere**. The
+gateway exposed two GETs. Nothing in either client could create a playlist, add
+to one, or remove from one, and the running server answered `{"playlists":[]}`.
+
+So the work is in the server repository first: four RPCs, four routes, and one
+new read. That order is not a preference — neither client had anything to call.
+
+- **`GET /api/playlists?videoId=` is the whole reason the sheet is one request.**
+  Every row then carries `containsVideo`. The alternatives were costed and
+  refused: `GET /api/videos/{id}/playlists` is a second request for a screen
+  that is useless without the first, and merging on the client is N requests for
+  one bit each. Without the parameter the flag is absent and every existing
+  caller is untouched.
+- **A `when` for the tiers, an `EXISTS` for ownership — and the ownership guard
+  was wrong.** The first version of the add was
+  `INSERT … SELECT $1, $3, COALESCE(MAX(position), -1) + 1 FROM playlist_items
+  WHERE playlist_id = $1 AND EXISTS (…owner…)`. Measured against the running
+  gateway, **it inserted into another member's playlist**: an aggregate SELECT
+  with no GROUP BY returns one row however the WHERE went, so MAX of nothing is
+  NULL and the position comes out 0. The rows come `FROM playlists` now, which
+  makes "not yours" no row at all. The position is still computed inside the one
+  statement, because two clients adding at once would otherwise pick the same
+  number.
+  - Measured after: add twice → one row; two videos → positions 0 and 1; another
+    member → 404 on add, remove and delete alike; deleting the playlist takes
+    its items (`ON DELETE CASCADE`).
+- **Idempotent on purpose, both ways.** Adding what is already there and
+  removing what is not are both success: the sheet can be saved twice, and a
+  duplicate key surfacing as a failure would be the app reporting a fault where
+  the outcome is exactly what was asked for.
+
+### The sheet
+
+`SavePlaylistSheet` over `GlassSheet` — an ordinary child of the root `Box`,
+which is why `App.kt` draws it **last**, and why the sheet is hoisted there at
+all: six screens open the same one.
+
+- **Save applies the difference, one request per change.** Not one call carrying
+  the final state: a tap is one or two changes, and an endpoint that takes the
+  whole state is one that empties a playlist the day a client is wrong about
+  what was in it. Unticking really removes — a tick that does not is a control
+  that lies.
+- **The first row is not a playlist.** It is the saved shelf, the pinned set,
+  which is not a row in `playlists` — and *that* is why it cannot be renamed or
+  deleted, rather than a rule invented for the UI. Modelling it as a `Playlist`
+  with a made-up id would put a row in the list that no call can reach and make
+  every call site remember which id was magic.
+- **The pinned bit is passed in, not fetched.** The card that opened the sheet
+  already knows it (`Video.saved`), and the watch screen's pill hands it out on
+  the way in. A second request for a fact in hand is a slower sheet for nothing.
+- **A new playlist arrives ticked.** Somebody who has just named a list for this
+  video means to put it there; asking again is asking the same question twice.
+- **An upstream result ensures first, and the *returned* id is what the adds
+  use** — `SearchViewModel.openExternal`'s pattern. An empty id back is a
+  refusal wearing a success's clothes, and adding with it would write rows
+  naming no video, so it adds nothing.
+- **`LIST_MAX_HEIGHT` is measured, not chosen.** At 280dp the Save button came
+  up below the fold on a household with six playlists — the sheet caps itself at
+  45% of the screen, and the title, the button and the home indicator's inset
+  are the rest of it. 196dp is what is left.
+- **Selected is a change of kind**, and the content colour follows the surface.
+  That is the Like button's lesson and the Save pill's: six units of grey is
+  invisible as a state, and white text on the inverted pane is invisible
+  outright.
+
+### The two pages, and one row in Settings
+
+The **"Đã lưu" row became "Playlist"** — one row, not two. The shelf did not
+disappear; it is the first row *on* the playlists page, which is where it
+belongs once there is more than one collection.
+
+- `Route.Playlist` is **depth 2**, like `Route.Channel` and for that entry's
+  reason: it is reached from a page that is itself one level in, and at equal
+  depths `target >= initial` reads leaving as going deeper.
+- **Opening a video from a playlist passes the page's ids as the queue.**
+  `WatchSession.queue` already existed for the channel page, so next and
+  autoplay stayed inside the list with **no player code changed at all**.
+- **A failed removal puts the row back**, unlike the feed's "not interested".
+  That list is a ranking and the row is gone from the page either way; this page
+  *is* the playlist, so a video still in it that is not drawn is the screen
+  lying about its own contents.
+- **The overflow is absent on the shelf** rather than present and refusing.
+
+### The card menu no longer says "Saved"
+
+The row's label used to follow `video.saved` — Save, then Saved. It is
+"Lưu vào playlist" whatever the answer now, because a video already on the shelf
+can still be wanted in a collection, and the old label would say the question had
+been answered. The three per-screen `toggleSaved` methods went with it: the sheet
+is the one writer of that bit, and `WatchViewModel.markSaved` only redraws the
+pill from what the sheet applied.
+
+**Upstream cards gained a menu with exactly one item.** They had none, on the
+rule that a card whose actions mean nothing draws no dot — and one action does
+mean something here.

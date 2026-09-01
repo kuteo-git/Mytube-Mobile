@@ -69,6 +69,8 @@ fun HistoryScreen(
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
+    /** Opens the sheet asking which collections this belongs in. See `App.kt`. */
+    onSaveToPlaylist: (Video) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -80,7 +82,7 @@ fun HistoryScreen(
         onOpenSettings = onOpenSettings,
         onOpenVideo = onOpenVideo,
         onRefresh = viewModel::refresh,
-        onSaveVideo = viewModel::toggleSaved,
+        onSaveVideo = onSaveToPlaylist,
     )
 }
 

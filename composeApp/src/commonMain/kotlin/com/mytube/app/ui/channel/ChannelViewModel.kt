@@ -95,28 +95,6 @@ class ChannelViewModel(
         load(option.token, keep = current, index = index)
     }
 
-    /**
-     * Save a video, or take it off the shelf.
-     *
-     * The same optimistic rule the feed and the history follow. It was missing
-     * here entirely — the channel's cards were built without the overflow menu,
-     * so the one page where somebody browses a back catalogue was the one page
-     * with no way to keep anything from it.
-     */
-    fun toggleSaved(video: Video) {
-        val current = _state.value as? ChannelState.Ready ?: return
-        val next = !video.saved
-        _state.value = current.copy(
-            videos = current.videos.map { if (it.id == video.id) it.copy(saved = next) else it },
-        )
-        viewModelScope.launch {
-            runCatching { videos.setSaved(video.id, next) }.onFailure {
-                val now = _state.value
-                if (now is ChannelState.Ready) _state.value = now.copy(videos = current.videos)
-            }
-        }
-    }
-
     fun toggleSubscribed() {
         val current = _state.value as? ChannelState.Ready ?: return
         val next = !current.channel.subscribed

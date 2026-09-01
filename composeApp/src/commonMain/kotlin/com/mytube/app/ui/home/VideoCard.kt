@@ -345,13 +345,17 @@ fun VideoCardMenu(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            // What the button *did*, once it is done — the same
-                            // rule the watch screen's Save pill follows. Unless
-                            // the caller names it: on the saved shelf the row is
-                            // the way *off* it.
-                            saveLabel.ifEmpty {
-                                if (video.saved) strings.savedVideo else strings.saveVideo
-                            },
+                            // "Lưu vào playlist", because the press no longer
+                            // writes one bit — it opens the question that bit
+                            // was standing in for. So the label does not follow
+                            // `video.saved` any more: a video already on the
+                            // shelf can still be wanted in a collection, and
+                            // "Saved" would say the question had been answered.
+                            //
+                            // Unless the caller names it: on the saved shelf and
+                            // on a playlist page the row is the way *off* the
+                            // list, which is a different sentence.
+                            saveLabel.ifEmpty { strings.saveToPlaylist },
                             color = Tokens.text,
                         )
                     },

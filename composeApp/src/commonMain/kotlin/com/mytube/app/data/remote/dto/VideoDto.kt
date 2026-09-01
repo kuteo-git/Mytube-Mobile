@@ -6,6 +6,7 @@ import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.model.NarrationStatus
+import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.ExternalVideo
@@ -368,3 +369,46 @@ data class EnsureExternalDto(val videoId: String = "")
  */
 @Serializable
 data class ResolveChannelDto(val channel: String? = null)
+
+/**
+ * `GET /api/playlists` and `GET /api/playlists/{id}` — one collection.
+ *
+ * `containsVideo` is only meaningful when the request carried `?videoId=`; the
+ * gateway sends false otherwise, and the sheet is the only caller that asks.
+ */
+@Serializable
+data class PlaylistDto(
+    val id: String = "",
+    val title: String = "",
+    val description: String = "",
+    val itemCount: Int = 0,
+    val thumbnails: List<String> = emptyList(),
+    val containsVideo: Boolean = false,
+)
+
+@Serializable
+data class PlaylistsDto(val playlists: List<PlaylistDto> = emptyList())
+
+/** A playlist and a page of what is in it. */
+@Serializable
+data class PlaylistPageDto(
+    val playlist: PlaylistDto = PlaylistDto(),
+    val videos: List<VideoDto> = emptyList(),
+    val nextPageToken: String = "",
+)
+
+fun PlaylistDto.toDomain(): Playlist = Playlist(
+    id = id,
+    title = title,
+    description = description,
+    itemCount = itemCount,
+    containsVideo = containsVideo,
+    thumbnailPaths = thumbnails,
+)
+
+/** Create and rename take the same body: the server has one RPC for both. */
+@Serializable
+data class PlaylistBody(val title: String, val description: String = "")
+
+@Serializable
+data class PlaylistItemBody(val videoId: String)

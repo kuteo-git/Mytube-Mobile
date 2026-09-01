@@ -114,6 +114,14 @@ fun WatchScreen(
     onPlayPrevious: () -> Unit,
     hasPrevious: Boolean,
     onOpenChannel: (String) -> Unit,
+    /**
+     * Opens the sheet asking which collections this video belongs in.
+     *
+     * The Save pill used to write the pinned bit directly. It now asks the
+     * question that bit was standing in for; the sheet lives in `App.kt`
+     * because six screens open the same one.
+     */
+    onSaveToPlaylist: (saved: Boolean) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -127,7 +135,12 @@ fun WatchScreen(
         onSkip = viewModel::skip,
         onRetry = viewModel::retry,
         onReact = viewModel::react,
-        onToggleSaved = viewModel::toggleSaved,
+        // The pill carries the pinned bit outward rather than the sheet asking
+        // for it: the screen already has it, and a request for a fact in hand
+        // is a slower sheet for nothing.
+        onToggleSaved = {
+            onSaveToPlaylist((state as? WatchState.Playing)?.video?.saved == true)
+        },
         onToggleSubscribed = viewModel::toggleSubscribed,
         onToggleNarration = viewModel::toggleNarration,
         onToggleAutoplay = viewModel::toggleAutoplay,

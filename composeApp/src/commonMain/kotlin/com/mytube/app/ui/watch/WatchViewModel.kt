@@ -565,14 +565,17 @@ class WatchViewModel(
         }
     }
 
-    fun toggleSaved() {
+    /**
+     * Redraw the Save pill after the sheet has applied its changes.
+     *
+     * The pill no longer writes the pinned bit itself — pressing it opens the
+     * sheet, which asks *which* collections this belongs in and applies the
+     * difference. So this sends nothing: the request has already happened, and
+     * repeating it here would be a second writer of one fact.
+     */
+    fun markSaved(saved: Boolean) {
         val current = _state.value as? WatchState.Playing ?: return
-        val next = !current.video.saved
-        _state.value = current.copy(video = current.video.copy(saved = next))
-        viewModelScope.launch {
-            runCatching { videos.setSaved(current.video.id, next) }
-                .onFailure { revert(current) }
-        }
+        _state.value = current.copy(video = current.video.copy(saved = saved))
     }
 
     fun toggleSubscribed() {

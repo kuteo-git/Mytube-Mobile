@@ -8,6 +8,7 @@ import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.parseWebVtt
+import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
@@ -17,6 +18,7 @@ import com.mytube.app.domain.repository.ChannelPage
 import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.ServerRepository
+import com.mytube.app.domain.repository.PlaylistPage
 import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.domain.repository.VideoRepository
 
@@ -188,7 +190,7 @@ class VideoRepositoryImpl(
         // In sequence, not in parallel: the videos cannot be mapped without the
         // channel, since the listing carries none of its own.
         val detail = gateway.channel(base, user, channelId)
-        val page = gateway.channelVideos(base, user, channelId, sortToken, pageToken)
+        val page = gateway.channelVideos(base, user, channelId, channelToken(sortToken, pageToken))
         val channel = detail.channel.toDomain()
         return ChannelPage(
             channel = channel,
@@ -198,6 +200,39 @@ class VideoRepositoryImpl(
             nextPageToken = page.nextPageToken,
         )
     }
+
+    override suspend fun playlists(videoId: String): List<Playlist> =
+        gateway.playlists(requireBaseUrl(), server.profileId(), videoId)
+            .playlists.map { it.toDomain() }
+
+    override suspend fun playlist(playlistId: String, pageToken: String): PlaylistPage {
+        val page = gateway.playlist(requireBaseUrl(), server.profileId(), playlistId, pageToken)
+        return PlaylistPage(
+            playlist = page.playlist.toDomain(),
+            videos = page.videos.map { it.toDomain() },
+            nextPageToken = page.nextPageToken,
+        )
+    }
+
+    override suspend fun createPlaylist(title: String): Playlist =
+        gateway.createPlaylist(requireBaseUrl(), server.profileId(), title).toDomain()
+
+    override suspend fun updatePlaylist(
+        playlistId: String,
+        title: String,
+        description: String,
+    ): Playlist =
+        gateway.updatePlaylist(requireBaseUrl(), server.profileId(), playlistId, title, description)
+            .toDomain()
+
+    override suspend fun deletePlaylist(playlistId: String) =
+        gateway.deletePlaylist(requireBaseUrl(), server.profileId(), playlistId)
+
+    override suspend fun addToPlaylist(playlistId: String, videoId: String) =
+        gateway.addPlaylistItem(requireBaseUrl(), server.profileId(), playlistId, videoId)
+
+    override suspend fun removeFromPlaylist(playlistId: String, videoId: String) =
+        gateway.removePlaylistItem(requireBaseUrl(), server.profileId(), playlistId, videoId)
 
     /**
      * Refusing early, with a distinct type.
@@ -212,3 +247,24 @@ class VideoRepositoryImpl(
 }
 
 class ServerNotConfigured : Exception("no server address has been set")
+
+/**
+ * The one token a channel listing is asked for, from the two the caller has.
+ *
+ * The caller genuinely has two intentions to express — *"show me this ordering,
+ * from the top"* and *"show me more of what I am reading"* — and the screen has
+ * to keep them apart, because the first replaces the list and the second appends
+ * to it. The wire has one slot for both, since YouTube models an ordering as a
+ * continuation like any other.
+ *
+ * So they are folded here, at the edge, where the shapes are allowed to differ:
+ * a continuation wins when there is one, because it already carries the ordering
+ * it was handed out inside.
+ *
+ * A named function rather than an expression at the call site, so
+ * [com.mytube.app.data.ChannelTokenTest] can hold it to the three cases without
+ * a server: no order and no cursor, an order from the top, and a cursor inside
+ * an order.
+ */
+internal fun channelToken(sortToken: String, pageToken: String): String =
+    pageToken.ifEmpty { sortToken }

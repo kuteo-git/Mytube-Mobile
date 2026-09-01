@@ -309,6 +309,12 @@ fun GlassButton(
         modifier
             .height(BUTTON_HEIGHT)
             .glassControl(GlassRadius.control, selected = primary && enabled)
+            // Inside the pane, so a button sized by its label is a capsule
+            // rather than a circle with the word hanging out of both ends.
+            // Measured: "Play all" on a playlist page, before this line.
+            // A button given `fillMaxWidth` is unaffected — the padding then
+            // only insets its text.
+            .padding(horizontal = 20.dp)
             // A disabled button is dimmed rather than removed, and it still
             // occupies its place: the row it is in must not reflow when a field
             // becomes valid.

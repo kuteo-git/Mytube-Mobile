@@ -79,6 +79,13 @@ import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.deviceLanguage
 import com.mytube.app.domain.model.Profile
 import com.mytube.app.domain.repository.FeedMix
+import com.mytube.app.ui.playlist.PlaylistScreen
+import com.mytube.app.ui.playlist.PlaylistViewModel
+import com.mytube.app.ui.playlist.PlaylistsScreen
+import com.mytube.app.ui.playlist.PlaylistsViewModel
+import com.mytube.app.ui.playlist.SavePlaylistSheet
+import com.mytube.app.ui.playlist.SavePlaylistViewModel
+import com.mytube.app.ui.playlist.SaveTarget
 import com.mytube.app.ui.saved.SavedScreen
 import com.mytube.app.ui.saved.SavedViewModel
 import com.mytube.app.ui.search.SEARCH_FIELD_ROW
@@ -114,6 +121,9 @@ private sealed interface Route {
     data object Home : Route
     data object Search : Route
     data object Saved : Route
+    /** The member's collections, reached from Settings. */
+    data object Playlists : Route
+    data class Playlist(val playlistId: String) : Route
     data object History : Route
     data object Profile : Route
     /** The Vietnamese voice's levels and name, opened from Settings. */
@@ -207,6 +217,15 @@ private fun depth(route: Route): Int = when (route) {
     // arriving somewhere looks like.
     is Route.Setup -> 1
     is Route.Search, is Route.Saved -> 1
+    is Route.Playlists -> 1
+    /**
+     * Two, like [Route.Channel], and for that entry's reason.
+     *
+     * A playlist is reached *from* the playlists page, which is itself one level
+     * in. At equal depths `forward` is `target >= initial`, so leaving one would
+     * animate as another step inward.
+     */
+    is Route.Playlist -> 2
     /**
      * Two, and it is the only route that is.
      *
@@ -315,6 +334,29 @@ fun App(
             // changing tab, or stepping into settings, does not take the video
             // with it.
             var watching: WatchSession? by remember { mutableStateOf(null) }
+            // What the save sheet was opened for, or null when it is shut.
+            //
+            // Hoisted here because six screens open the same sheet — Home,
+            // history, a channel, the saved shelf, search and the watch layer —
+            // and because a `GlassSheet` is an ordinary child of the root `Box`
+            // rather than a popup: where it is written is where it sits, so it
+            // has to be written last, once, above everything.
+            var savingTarget: SaveTarget? by remember { mutableStateOf(null) }
+            // Kept while the sheet plays its exit, so the rows do not vanish
+            // mid-slide. `visible` is what the sheet animates on; this is what
+            // it draws.
+            var sheetOpen by remember { mutableStateOf(false) }
+            // Who wants to hear what the sheet applied, if anybody does.
+            //
+            // Only the watch screen does: its Save pill is lit from
+            // `video.saved`, so it has to be told. A card's menu row reads
+            // "Lưu vào playlist" whatever the answer, and has nothing to redraw.
+            var savedSink: ((Boolean) -> Unit)? by remember { mutableStateOf(null) }
+            val openSaveSheet: (SaveTarget) -> Unit = { target ->
+                savingTarget = target
+                sheetOpen = true
+                savedSink = null
+            }
             // What has been watched this sitting, oldest first.
             //
             // Held here rather than in the watch ViewModel because it is a fact
@@ -485,6 +527,10 @@ fun App(
                     // A channel, which is reached from five different places.
                     route is Route.Channel -> route = channelFrom
 
+                    // A playlist is reached from exactly one page, so unlike a
+                    // channel it needs nothing remembered.
+                    route is Route.Playlist -> route = Route.Playlists
+
                     // A screen opened from a tab.
                     route !is Route.Home -> route = Route.Home
 
@@ -634,6 +680,9 @@ fun App(
                                     onOpenSettings = { tab = Tab.Settings },
                                     onOpenVideo = { watching = WatchSession(it) },
                                     onOpenChannel = openChannel,
+                                    onSaveToPlaylist = {
+                                        openSaveSheet(SaveTarget(it.id, saved = it.saved))
+                                    },
                                 )
 
                                 Tab.Subscriptions -> SubscriptionsScreen(
@@ -658,7 +707,7 @@ fun App(
                                     onOpenServer = { route = Route.Setup },
                                     onOpenProfile = { route = Route.Profile },
                                     onOpenHistory = { route = Route.History },
-                                    onOpenSaved = { route = Route.Saved },
+                                    onOpenPlaylists = { route = Route.Playlists },
                                     profileName = currentProfile?.name.orEmpty(),
                                     onChangeMix = { next ->
                                         // Drawn immediately, sent after: a
@@ -756,6 +805,9 @@ fun App(
                         onOpenSettings = { route = Route.Setup },
                         onOpenVideo = { watching = WatchSession(it) },
                         onOpenChannel = openChannel,
+                        onSaveToPlaylist = {
+                            openSaveSheet(SaveTarget(it.id, saved = it.saved))
+                        },
                     )
 
                     is Route.Profile -> {
@@ -796,12 +848,42 @@ fun App(
                         )
                     }
 
+                    is Route.Playlists -> PlaylistsScreen(
+                        viewModel = viewModel(key = "playlists-$baseUrl-$profileId") {
+                            PlaylistsViewModel(container.videoRepository)
+                        },
+                        mediaBaseUrl = baseUrl,
+                        onBack = { route = Route.Home },
+                        onOpenSettings = { route = Route.Setup },
+                        onOpenSaved = { route = Route.Saved },
+                        onOpenPlaylist = { route = Route.Playlist(it) },
+                    )
+
+                    is Route.Playlist -> PlaylistScreen(
+                        viewModel = viewModel(key = "playlist-${current.playlistId}") {
+                            PlaylistViewModel(current.playlistId, container.videoRepository)
+                        },
+                        mediaBaseUrl = baseUrl,
+                        onBack = { route = Route.Playlists },
+                        onOpenSettings = { route = Route.Setup },
+                        // The whole page becomes the queue, so next and autoplay
+                        // stay inside the playlist. `WatchSession.queue` already
+                        // carries this for the channel page; nothing in the
+                        // player had to change.
+                        onOpenVideo = { id, queue -> watching = WatchSession(id, queue = queue) },
+                        onOpenChannel = openChannel,
+                        onDeleted = { route = Route.Playlists },
+                    )
+
                     is Route.Saved -> SavedScreen(
                     viewModel = viewModel(key = "saved-$baseUrl-$profileId") {
                         SavedViewModel(container.videoRepository)
                     },
                     mediaBaseUrl = baseUrl,
-                    onBack = { route = Route.Home },
+                    // The shelf is a row on the playlists page now, so that is
+                    // where leaving it returns to — the rule every other page
+                    // here follows: back goes to whatever listed you.
+                    onBack = { route = Route.Playlists },
                     onOpenSettings = { route = Route.Setup },
                     onOpenVideo = { watching = WatchSession(it) },
                     onOpenChannel = openChannel,
@@ -815,6 +897,7 @@ fun App(
                         onBack = { route = Route.Home },
                         onOpenVideo = { watching = WatchSession(it) },
                         onOpenChannel = openChannel,
+                        onSaveToPlaylist = openSaveSheet,
                     )
 
                     is Route.Channel -> ChannelScreen(
@@ -828,6 +911,9 @@ fun App(
                         // stays inside the list that was being read.
                         onOpenVideo = { id, queue ->
                             watching = WatchSession(id, queue = queue)
+                        },
+                        onSaveToPlaylist = {
+                            openSaveSheet(SaveTarget(it.id, saved = it.saved))
                         },
                     )
                 }
@@ -861,6 +947,7 @@ fun App(
             // above the routes.
             val browsing = route is Route.Home || route is Route.Search ||
                 route is Route.Channel || route is Route.Saved ||
+                route is Route.Playlists || route is Route.Playlist ||
                 route is Route.Voice || route is Route.Language ||
                 route is Route.History || route is Route.Profile
 
@@ -1150,9 +1237,40 @@ fun App(
                                 watching = session.copy(minimised = true)
                                 openChannel(it)
                             },
+                            onSaveToPlaylist = { saved ->
+                                openSaveSheet(SaveTarget(session.videoId, saved = saved))
+                                // The pill redraws from what the sheet applied.
+                                // `markSaved` sends nothing: the request has
+                                // already happened by then, and two writers of
+                                // one fact is how they come to disagree.
+                                savedSink = watch::markSaved
+                            },
                         )
                     }
                     }
+                }
+
+                // The save sheet, drawn last and therefore on top.
+                //
+                // Keyed on the video it was opened for, so opening it from a
+                // second card asks the server again rather than showing the
+                // first card's ticks. It stays composed while it shuts — the
+                // target is held until the exit has played, or the rows would
+                // vanish mid-slide.
+                val savingFor = savingTarget
+                if (savingFor != null) {
+                    SavePlaylistSheet(
+                        viewModel = remember(savingFor) {
+                            SavePlaylistViewModel(savingFor, container.videoRepository)
+                        },
+                        visible = sheetOpen,
+                        backdrop = backdrop,
+                        onDismiss = { sheetOpen = false },
+                        onSaved = { saved ->
+                            savedSink?.invoke(saved)
+                            sheetOpen = false
+                        },
+                    )
                 }
 
             }

@@ -172,6 +172,38 @@ interface Strings {
     val savedTitle: String
     val noSaved: String
     val noSavedDetail: String
+
+    // --- playlists ---------------------------------------------------------
+    /** The Settings row, and the title of the screen behind it. */
+    val playlists: String
+    val playlistsDetail: String
+
+    /**
+     * The menu item on a card, and the title of the sheet it opens.
+     *
+     * "Save to playlist" rather than "Save", because the press no longer writes
+     * one bit — it opens a question about which collections this belongs in.
+     */
+    val saveToPlaylist: String
+    val newPlaylist: String
+    val playlistName: String
+    val createPlaylist: String
+    val savePlaylist: String
+
+    /** Taking a video off *this* playlist page, said on the page itself. */
+    val removeFromPlaylist: String
+    val renamePlaylist: String
+    val deletePlaylist: String
+    val deletePlaylistConfirm: String
+    val noPlaylists: String
+    val noPlaylistsDetail: String
+    val emptyPlaylist: String
+    val emptyPlaylistDetail: String
+    val playAll: String
+    val cancel: String
+
+    /** "videos", after a count, on a playlist card. */
+    fun playlistCount(count: Int): String
     val feedMix: String
     val feedMixSubscribed: String
     val feedMixAffinity: String
@@ -351,6 +383,26 @@ object EnglishStrings : Strings {
     override val profileTitle = "Who is watching?"
     override val profileCurrent = "This device"
     override val savedTitle = "Saved"
+    override val playlists = "Playlists"
+    override val playlistsDetail = "Your collections, on every device"
+    override val saveToPlaylist = "Save to playlist"
+    override val newPlaylist = "New playlist"
+    override val playlistName = "Playlist name"
+    override val createPlaylist = "Create"
+    override val savePlaylist = "Save"
+    override val removeFromPlaylist = "Remove from playlist"
+    override val renamePlaylist = "Rename"
+    override val deletePlaylist = "Delete playlist"
+    override val deletePlaylistConfirm = "Delete this playlist? The videos stay in the library."
+    override val noPlaylists = "No playlists yet"
+    override val noPlaylistsDetail =
+        "The menu on any video offers to save it to a playlist, and a new one can be named there."
+    override val emptyPlaylist = "Nothing in here yet"
+    override val emptyPlaylistDetail =
+        "Videos saved to this playlist appear here, in the order they were added."
+    override val playAll = "Play all"
+    override val cancel = "Cancel"
+    override fun playlistCount(count: Int) = if (count == 1) "1 video" else "$count videos"
     override val noSaved = "Nothing saved yet"
     override val noSavedDetail =
         "Saving a video keeps its file on the disk when the library runs out of room."
@@ -499,6 +551,28 @@ object VietnameseStrings : Strings {
     override val profileTitle = "Ai đang xem?"
     override val profileCurrent = "Thiết bị này"
     override val savedTitle = "Đã lưu"
+    override val playlists = "Playlist"
+    override val playlistsDetail = "Bộ sưu tập của bạn, trên mọi thiết bị"
+    override val saveToPlaylist = "Lưu vào playlist"
+    override val newPlaylist = "Playlist mới"
+    override val playlistName = "Tên playlist"
+    override val createPlaylist = "Tạo"
+    override val savePlaylist = "Lưu"
+    override val removeFromPlaylist = "Bỏ khỏi playlist"
+    override val renamePlaylist = "Đổi tên"
+    override val deletePlaylist = "Xoá playlist"
+    override val deletePlaylistConfirm = "Xoá playlist này? Video vẫn còn trong thư viện."
+    override val noPlaylists = "Chưa có playlist nào"
+    override val noPlaylistsDetail =
+        "Menu trên mỗi video có mục lưu vào playlist, và có thể đặt tên playlist mới ngay ở đó."
+    override val emptyPlaylist = "Playlist này còn trống"
+    override val emptyPlaylistDetail =
+        "Video lưu vào playlist này sẽ hiện ở đây, theo thứ tự đã thêm."
+    override val playAll = "Phát tất cả"
+    override val cancel = "Huỷ"
+    // Vietnamese has no plural form, so one string covers both — the web app's
+    // "3 ngàys trước" is what happens when a suffix travels between languages.
+    override fun playlistCount(count: Int) = "$count video"
     override val noSaved = "Chưa lưu video nào"
     override val noSavedDetail = "Lưu một video là giữ file của nó lại khi ổ đĩa đầy."
     override val feedMix = "Trang chủ"

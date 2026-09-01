@@ -92,7 +92,7 @@ fun SettingsScreen(
     onOpenServer: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenHistory: () -> Unit,
-    onOpenSaved: () -> Unit,
+    onOpenPlaylists: () -> Unit,
     onOpenVoice: () -> Unit,
     onOpenLanguage: () -> Unit,
     onPickLanguage: (Language) -> Unit,
@@ -156,11 +156,14 @@ fun SettingsScreen(
                 )
             }
 
-            item(key = "saved") {
+            // One row, not two. The saved shelf did not disappear — it is the
+            // first row *on* the playlists page, which is where it belongs once
+            // there is more than one collection to keep things in.
+            item(key = "playlists") {
                 SettingRow(
-                    label = strings.savedTitle,
-                    value = strings.noSavedDetail,
-                    onClick = onOpenSaved,
+                    label = strings.playlists,
+                    value = strings.playlistsDetail,
+                    onClick = onOpenPlaylists,
                 )
             }
 
@@ -274,7 +277,7 @@ private fun SettingsPreview() {
             onOpenHistory = {},
             onOpenVoice = {},
             onOpenLanguage = {},
-            onOpenSaved = {},
+            onOpenPlaylists = {},
             onPickLanguage = {},
             onChangeMix = {},
         )
@@ -295,7 +298,7 @@ private fun SettingsUnconfiguredPreview() {
             onOpenHistory = {},
             onOpenVoice = {},
             onOpenLanguage = {},
-            onOpenSaved = {},
+            onOpenPlaylists = {},
             onPickLanguage = {},
             onChangeMix = {},
         )
@@ -316,7 +319,7 @@ private fun SettingsVietnamesePreview() {
             onOpenHistory = {},
                 onOpenVoice = {},
                 onOpenLanguage = {},
-                onOpenSaved = {},
+                onOpenPlaylists = {},
                 onPickLanguage = {},
                 onChangeMix = {},
             )

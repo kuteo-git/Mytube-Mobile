@@ -33,17 +33,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.SortOption
@@ -51,7 +47,6 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.ChannelAvatar
 import com.mytube.app.ui.home.VideoCard
 import com.mytube.app.ui.home.formatCount
-import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.shell.glassSource
@@ -83,6 +78,8 @@ fun ChannelScreen(
      * playing something is not a sorted list, it is a way of finding one video.
      */
     onOpenVideo: (String, List<String>) -> Unit,
+    /** Opens the sheet asking which collections this belongs in. See `App.kt`. */
+    onSaveToPlaylist: (Video) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -96,7 +93,7 @@ fun ChannelScreen(
         onSelectSort = viewModel::selectSort,
         onToggleSubscribed = viewModel::toggleSubscribed,
         onLoadMore = viewModel::loadMore,
-        onSaveVideo = viewModel::toggleSaved,
+        onSaveVideo = onSaveToPlaylist,
     )
 }
 
@@ -217,9 +214,19 @@ fun ChannelContent(
 /**
  * The channel, centred over its own uploads.
  *
- * No banner. The gateway sends a `bannerPath` and it is deliberately unused: a
- * banner is 200dp of decoration above the one thing the screen is for, and on a
- * phone it pushes the first video off the fold.
+ * **No banner**, and this is the second time that has been decided.
+ *
+ * It was left out first because a banner drawn YouTube's way is 200dp of
+ * decoration that pushes the first video off the fold. Then it was drawn as a
+ * blurred, tinted ground behind the header, costing no height — which answered
+ * the objection and produced a different one: a channel's banner is somebody
+ * else's composition, and 24dp of blur over a page's own colour makes a smear
+ * whose only job is to sit behind a name that was perfectly legible without it.
+ * Reported plainly, and it was right.
+ *
+ * `bannerPath` stays on the DTO and on the domain type. It is what the gateway
+ * sends and the mapper's job is to carry it; the decision not to draw it belongs
+ * here, on the screen that would.
  */
 @Composable
 private fun Header(
@@ -229,41 +236,6 @@ private fun Header(
     onToggleSubscribed: () -> Unit,
 ) {
     val strings = LocalStrings.current
-
-    Box(Modifier.fillMaxWidth()) {
-        // The banner, behind everything above the Subscribe button.
-        //
-        // It was left out on the reasoning that a banner is 200dp of decoration
-        // above the one thing the screen is for. That was right about a banner
-        // drawn the way YouTube draws one — a band of its own that pushes the
-        // first video off the fold — and it is not what this is: the picture
-        // fills the space the header already occupies, cropped from its centre,
-        // with the name and the counts sitting on it. It costs no height at all.
-        //
-        // Blurred, and that is what makes it usable as a ground: a channel's
-        // banner is somebody else's composition, with its own text and its own
-        // focal point, and reading a name over it needs the picture to stop
-        // being a picture.
-        if (channel.bannerPath.isNotEmpty()) {
-            AsyncImage(
-                model = imageModel(mediaBaseUrl, channel.bannerPath),
-                contentDescription = null,
-                // Filled and centre-cropped: a 6:1 banner in a 4:3 box either
-                // crops or letterboxes, and a letterbox here would be two black
-                // bands around somebody's artwork.
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .matchParentSize()
-                    .blur(BANNER_BLUR)
-                    // Dimmed after the blur, not before: the tint is what keeps
-                    // white text legible over a pale banner, and blurring a
-                    // tinted image just makes a pale one paler.
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(Tokens.bg.copy(alpha = BANNER_TINT))
-                    },
-            )
-        }
 
     Column(
         // No bottom padding: the sort row below owns the gap on both of its
@@ -308,20 +280,10 @@ private fun Header(
             fontSize = 12.sp,
             textAlign = TextAlign.Center,
         )
-        // The banner stops here — under the counts, with a gap — which is what
-        // was asked for and is also where it stops being useful: below this the
-        // page is a list, and a list needs a plain ground.
         Spacer(Modifier.height(Space.md))
         SubscribeButton(channel.subscribed, onToggleSubscribed)
     }
-    }
 }
-
-/** How far the banner is pushed out of focus so a name can sit on it. */
-private val BANNER_BLUR = 24.dp
-
-/** And how much of the page's own colour is held over it. */
-private const val BANNER_TINT = 0.45f
 
 /**
  * Latest · Popular · Oldest, as upstream named them.

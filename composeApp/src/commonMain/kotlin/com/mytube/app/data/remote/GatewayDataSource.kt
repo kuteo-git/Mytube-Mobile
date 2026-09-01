@@ -10,6 +10,11 @@ import com.mytube.app.data.remote.dto.CommentsDto
 import com.mytube.app.data.remote.dto.FeedDto
 import com.mytube.app.data.remote.dto.FeedMixDto
 import com.mytube.app.data.remote.dto.NarrationDto
+import com.mytube.app.data.remote.dto.PlaylistBody
+import com.mytube.app.data.remote.dto.PlaylistDto
+import com.mytube.app.data.remote.dto.PlaylistItemBody
+import com.mytube.app.data.remote.dto.PlaylistPageDto
+import com.mytube.app.data.remote.dto.PlaylistsDto
 import com.mytube.app.data.remote.dto.ProfilesDto
 import com.mytube.app.data.remote.dto.ResolveChannelDto
 import com.mytube.app.data.remote.dto.StreamDto
@@ -18,7 +23,9 @@ import com.mytube.app.data.remote.dto.TtsConfigDto
 import com.mytube.app.data.remote.dto.VideoDto
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.patch
 import io.ktor.client.statement.bodyAsText
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -199,19 +206,32 @@ class GatewayDataSource(private val client: HttpClient) {
             identify(userId)
         }.orThrow().body()
 
+    /**
+     * A page of a channel's uploads, in whatever order [token] names.
+     *
+     * **One token, and it goes in `pageToken`.** This used to send the ordering
+     * as `sort=` beside a `pageToken`, on the reasoning that picking an order
+     * and continuing within one are two different jobs. They are — but the
+     * gateway reads only `pageToken`, so `sort=` was dropped in silence and
+     * every ordering answered with the default one. Measured against the running
+     * server on `UCsT0YIqwnpJCM-mx7-gSA4Q`: `?pageToken=<popular>` answers
+     * `GNZBSZD16cY…` while `?sort=<popular>` answers the Latest list.
+     *
+     * YouTube models it this way and the web app follows it — *"an ordering is
+     * just another continuation"* — which is also why a `nextPageToken` needs no
+     * ordering sent beside it: measured, page two of Popular is page two **of
+     * Popular**.
+     */
     suspend fun channelVideos(
         baseUrl: String,
         userId: String,
         channelId: String,
-        sortToken: String,
-        pageToken: String,
+        token: String,
     ): ChannelVideosDto = client.get("${baseUrl.trimEnd('/')}/api/channels/$channelId/videos") {
         identify(userId)
-        // Two different tokens with two different jobs: one picks the order,
-        // the other continues within it. Sending an empty one would ask the
-        // server to parse "" as a cursor.
-        if (sortToken.isNotBlank()) parameter("sort", sortToken)
-        if (pageToken.isNotBlank()) parameter("pageToken", pageToken)
+        // Empty is left off rather than sent: the server would be asked to parse
+        // "" as a continuation.
+        if (token.isNotBlank()) parameter("pageToken", token)
     }.orThrow().body()
 
     /**
@@ -373,6 +393,86 @@ class GatewayDataSource(private val client: HttpClient) {
             identify(userId)
             contentType(ContentType.Application.Json)
             setBody(SubscribedBody(subscribed))
+        }.orThrow()
+    }
+
+    /**
+     * The member's playlists, and — when [videoId] is given — which of them
+     * already hold that video.
+     *
+     * One call rather than two, because a screen that knows the lists but not
+     * which are ticked cannot be drawn, and a screen that knows only the ticks
+     * has nothing to draw them on. `?videoId=` is what the gateway grew for
+     * this; without it the flag is absent and every other caller is unaffected.
+     */
+    suspend fun playlists(baseUrl: String, userId: String, videoId: String): PlaylistsDto =
+        client.get("${baseUrl.trimEnd('/')}/api/playlists") {
+            identify(userId)
+            if (videoId.isNotBlank()) parameter("videoId", videoId)
+        }.orThrow().body()
+
+    suspend fun playlist(
+        baseUrl: String,
+        userId: String,
+        playlistId: String,
+        pageToken: String,
+    ): PlaylistPageDto =
+        client.get("${baseUrl.trimEnd('/')}/api/playlists/$playlistId") {
+            identify(userId)
+            if (pageToken.isNotBlank()) parameter("pageToken", pageToken)
+        }.orThrow().body()
+
+    suspend fun createPlaylist(baseUrl: String, userId: String, title: String): PlaylistDto =
+        client.post("${baseUrl.trimEnd('/')}/api/playlists") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(PlaylistBody(title))
+        }.orThrow().body()
+
+    suspend fun updatePlaylist(
+        baseUrl: String,
+        userId: String,
+        playlistId: String,
+        title: String,
+        description: String,
+    ): PlaylistDto =
+        client.patch("${baseUrl.trimEnd('/')}/api/playlists/$playlistId") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(PlaylistBody(title, description))
+        }.orThrow().body()
+
+    suspend fun deletePlaylist(baseUrl: String, userId: String, playlistId: String) {
+        client.delete("${baseUrl.trimEnd('/')}/api/playlists/$playlistId") {
+            identify(userId)
+        }.orThrow()
+    }
+
+    suspend fun addPlaylistItem(
+        baseUrl: String,
+        userId: String,
+        playlistId: String,
+        videoId: String,
+    ) {
+        client.post("${baseUrl.trimEnd('/')}/api/playlists/$playlistId/items") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(PlaylistItemBody(videoId))
+        }.orThrow()
+    }
+
+    /**
+     * The video is in the path, not in a body: a DELETE carrying one is a
+     * request proxies and caches feel free to drop.
+     */
+    suspend fun removePlaylistItem(
+        baseUrl: String,
+        userId: String,
+        playlistId: String,
+        videoId: String,
+    ) {
+        client.delete("${baseUrl.trimEnd('/')}/api/playlists/$playlistId/items/$videoId") {
+            identify(userId)
         }.orThrow()
     }
 
