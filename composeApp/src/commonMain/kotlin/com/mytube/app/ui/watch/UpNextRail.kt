@@ -38,6 +38,7 @@ import com.mytube.app.ui.home.formatRelative
 import com.mytube.app.ui.home.formatViews
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
 
 /** How recently ingested still counts as new. Two days, from the web app. */
@@ -76,8 +77,7 @@ fun UpNextRail(
         Row(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Tokens.surface)
+                .glassControl(RoundedCornerShape(12.dp))
                 .clickable(onClick = onToggleCollapsed)
                 .padding(horizontal = Space.md, vertical = Space.sm),
             verticalAlignment = Alignment.CenterVertically,
@@ -141,8 +141,7 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
         fontWeight = FontWeight.Medium,
         maxLines = 1,
         modifier = Modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(if (selected) Tokens.text else Tokens.surface)
+            .glassControl(RoundedCornerShape(percent = 50), selected = selected)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp),
     )

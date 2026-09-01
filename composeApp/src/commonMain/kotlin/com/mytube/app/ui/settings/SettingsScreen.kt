@@ -15,8 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,7 +47,8 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
-import com.mytube.app.ui.shell.LevelSlider
+import com.mytube.app.ui.shell.GlassSlider
+import com.mytube.app.ui.shell.GlassTextField
 import com.mytube.app.ui.shell.ScreenTitle
 import com.mytube.app.ui.shell.tabContentPadding
 import com.mytube.app.ui.theme.MytubeTheme
@@ -91,7 +90,11 @@ fun SettingsScreen(
     /** Null until the server has answered, or if it cannot. */
     feedMix: FeedMix?,
     onOpenServer: () -> Unit,
+    onOpenProfile: () -> Unit,
+    onOpenHistory: () -> Unit,
     onOpenSaved: () -> Unit,
+    onOpenVoice: () -> Unit,
+    onOpenLanguage: () -> Unit,
     onPickLanguage: (Language) -> Unit,
     onChangeMix: (FeedMix) -> Unit,
     /** How loud the voice is, as a fraction of the video's own level. */
@@ -100,6 +103,8 @@ fun SettingsScreen(
     duckLevel: Float = DEFAULT_DUCK_LEVEL,
     /** The household's speech voice, or empty when the server did not answer. */
     voice: String = "",
+    /** Who this device is watching as, or empty before the server has answered. */
+    profileName: String = "",
     onVoiceLevel: (Float) -> Unit = {},
     onDuckLevel: (Float) -> Unit = {},
     onVoice: (String) -> Unit = {},
@@ -124,6 +129,33 @@ fun SettingsScreen(
                 )
             }
 
+            // Who is watching. It was the avatar in the top bar, which is where
+            // YouTube puts it and where it was wrong for this app: that corner
+            // is the most-looked-at part of the screen and this is a question
+            // answered about once a month, in a household of four people who all
+            // know which one they are. Here it states its own answer — the row
+            // reads the member's name without anybody pressing it.
+            item(key = "profile") {
+                SettingRow(
+                    label = strings.settingsProfile,
+                    value = profileName.ifEmpty { strings.profileTitle },
+                    onClick = onOpenProfile,
+                )
+            }
+
+            // History, which was a tab. See [Tab]: what earns a place on the
+            // bottom bar is what you move between while browsing, and this is a
+            // list you open to find one video again. It sits directly above
+            // Saved because the two are the same kind of thing — a shelf this
+            // device keeps.
+            item(key = "history") {
+                SettingRow(
+                    label = strings.historyTitle,
+                    value = strings.historyDetail,
+                    onClick = onOpenHistory,
+                )
+            }
+
             item(key = "saved") {
                 SettingRow(
                     label = strings.savedTitle,
@@ -141,140 +173,36 @@ fun SettingsScreen(
             // the machine, like Storage and Activity — both of which this app
             // leaves on the web for the same reason.
 
-            item(key = "narration-heading") {
-                SectionHeading(strings.narration)
+            item(key = "voice") {
+                SettingRow(
+                    label = strings.narration,
+                    // The voice's own name, or what to do about not having one.
+                    // The row states the answer; the screen behind it holds the
+                    // three controls that set it.
+                    value = voice.ifEmpty { strings.voiceNameHint },
+                    onClick = onOpenVoice,
+                )
             }
 
-            item(key = "voice-level") {
-                LevelRow(strings.voiceLevel, voiceLevel, onVoiceLevel)
-            }
-
-            item(key = "duck-level") {
-                LevelRow(strings.videoLevelWhileSpeaking, duckLevel, onDuckLevel)
-            }
-
-            item(key = "voice-name") {
-                VoiceField(voice, onVoice)
-            }
-
-            item(key = "language-heading") {
-                SectionHeading(strings.settingsLanguage)
-            }
-
-            items(Language.entries.size) { index ->
-                val option = Language.entries[index]
-                LanguageRow(
-                    // Named in its own words, always. Somebody who pressed the
-                    // wrong row is looking at an interface they cannot read, and
-                    // "English" written in English is the way back out.
-                    label = when (option) {
+            item(key = "language") {
+                SettingRow(
+                    label = strings.settingsLanguage,
+                    // Named in its own words, on the row as well as in the list
+                    // behind it. Somebody who set the wrong one is looking at an
+                    // interface they cannot read, and this is the line that says
+                    // which one they are in.
+                    value = when (language) {
                         Language.English -> strings.languageEnglish
                         Language.Vietnamese -> strings.languageVietnamese
                     },
-                    selected = option == language,
-                    onClick = { onPickLanguage(option) },
+                    onClick = onOpenLanguage,
                 )
             }
         }
     }
 }
 
-/**
- * One level, named, with its figure beside it.
- *
- * The number is shown as a percentage because that is what the control means —
- * a fraction of the video's own volume — and because a slider with no readout
- * cannot be returned to a setting somebody liked. It goes above 100%:
- * synthesised speech is quieter than film audio and the voice legitimately needs
- * to sit over it.
- *
- * Continuous rather than stepped. This is a level matched by ear, and a notched
- * control makes the one setting that sounds right unreachable.
- */
-@Composable
-private fun LevelRow(label: String, value: Float, onChange: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.xs)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(label, color = Tokens.text, fontSize = 14.sp)
-            Text("${(value * 100).roundToInt()}%", color = Tokens.text2, fontSize = 13.sp)
-        }
-        LevelSlider(
-            value = value,
-            onValueChange = onChange,
-            valueRange = 0f..MAX_LEVEL,
-        )
-    }
-}
-
-/**
- * The voice the speech service is asked for, typed rather than chosen.
- *
- * A list would be right for exactly one provider. The gateway's own note says
- * why: OpenAI publishes no endpoint that lists voices, every service imitating
- * its API brings its own names, and a menu would refuse a voice that exists the
- * day a provider adds one.
- *
- * Committed when the field is finished with, not on every keystroke. This is a
- * *server* setting shared with every screen in the house, and each save stops
- * the clips already synthesised from being reused — sending one per letter typed
- * would throw that cache away eight times to change a voice once.
- */
-@Composable
-private fun VoiceField(voice: String, onVoice: (String) -> Unit) {
-    val strings = LocalStrings.current
-    // Keyed on what the server said, so a voice that arrives after this screen
-    // is drawn replaces an untouched field rather than being ignored.
-    var typed by remember(voice) { mutableStateOf(voice) }
-
-    OutlinedTextField(
-        value = typed,
-        onValueChange = { typed = it },
-        singleLine = true,
-        label = { Text(strings.voiceName, fontSize = 13.sp) },
-        supportingText = { Text(strings.voiceNameHint, fontSize = 11.sp) },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { onVoice(typed.trim()) }),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Tokens.text,
-            unfocusedTextColor = Tokens.text,
-            focusedBorderColor = Tokens.brand,
-            unfocusedBorderColor = Tokens.line,
-            focusedLabelColor = Tokens.text2,
-            unfocusedLabelColor = Tokens.text2,
-            cursorColor = Tokens.brand,
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Space.lg, vertical = Space.sm)
-            // Leaving the field is finishing with it, the same as pressing Done.
-            // Without this a voice typed and then left behind by a tap elsewhere
-            // is typed and lost, which reads as the setting refusing to save.
-            .onFocusChanged { if (!it.isFocused && typed.trim() != voice) onVoice(typed.trim()) },
-    )
-}
-
-/** The ceiling both sliders share. Above 1 on purpose — see [LevelRow]. */
 private const val MAX_LEVEL = 2f
-
-@Composable
-private fun SectionHeading(text: String) {
-    Text(
-        text = text,
-        color = Tokens.text2,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(
-            start = Space.lg,
-            end = Space.lg,
-            top = Space.lg,
-            bottom = Space.xs,
-        ),
-    )
-}
 
 @Composable
 private fun SettingRow(label: String, value: String, onClick: () -> Unit) {
@@ -331,32 +259,6 @@ private val ChevronRightIcon: ImageVector
         }
     }.build()
 
-@Composable
-private fun LanguageRow(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = Space.lg, vertical = Space.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, color = Tokens.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
-        // A tick on the chosen row and nothing on the other, which is how every
-        // list of this kind on iOS marks its choice — and how the Settings app
-        // itself does. It replaced a pair of dots, one lit and one grey: two
-        // marks for one answer, and the unlit one reads as a second, disabled
-        // option rather than as "not this".
-        if (selected) {
-            Icon(
-                imageVector = TickIcon,
-                contentDescription = null,
-                tint = Tokens.brand,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
-
 // --- previews ---------------------------------------------------------------
 
 @Preview
@@ -368,6 +270,10 @@ private fun SettingsPreview() {
             language = Language.English,
             feedMix = FeedMix(60, 20, 20, fixedPercent = 28),
             onOpenServer = {},
+            onOpenProfile = {},
+            onOpenHistory = {},
+            onOpenVoice = {},
+            onOpenLanguage = {},
             onOpenSaved = {},
             onPickLanguage = {},
             onChangeMix = {},
@@ -385,6 +291,10 @@ private fun SettingsUnconfiguredPreview() {
             language = Language.English,
             feedMix = null,
             onOpenServer = {},
+            onOpenProfile = {},
+            onOpenHistory = {},
+            onOpenVoice = {},
+            onOpenLanguage = {},
             onOpenSaved = {},
             onPickLanguage = {},
             onChangeMix = {},
@@ -402,6 +312,10 @@ private fun SettingsVietnamesePreview() {
                 language = Language.Vietnamese,
                 feedMix = FeedMix(60, 20, 20, fixedPercent = 28),
                 onOpenServer = {},
+            onOpenProfile = {},
+            onOpenHistory = {},
+                onOpenVoice = {},
+                onOpenLanguage = {},
                 onOpenSaved = {},
                 onPickLanguage = {},
                 onChangeMix = {},
@@ -410,23 +324,3 @@ private fun SettingsVietnamesePreview() {
     }
 }
 
-
-/** The tick beside the chosen language. Two strokes, the shape every list uses. */
-private val TickIcon: ImageVector by lazy {
-    ImageVector.Builder(
-        name = "Tick",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        path(
-            stroke = SolidColor(Color.White),
-            strokeLineWidth = 2.6f,
-            strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round,
-            strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round,
-        ) {
-            moveTo(5f, 12.5f); lineTo(10f, 17.5f); lineTo(19f, 6.5f)
-        }
-    }.build()
-}

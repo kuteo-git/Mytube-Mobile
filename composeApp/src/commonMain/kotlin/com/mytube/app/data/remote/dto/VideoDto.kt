@@ -8,6 +8,7 @@ import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.model.NarrationStatus
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Topic
+import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -61,6 +62,7 @@ data class ChannelDto(
     val name: String = "",
     val handle: String = "",
     val avatarPath: String = "",
+    val bannerPath: String = "",
     val subscribed: Boolean = false,
     val subscriberCount: Long = 0,
 )
@@ -149,6 +151,7 @@ fun ChannelDto.toDomain(): Channel = Channel(
     name = name,
     handle = handle,
     avatarPath = avatarPath,
+    bannerPath = bannerPath,
     subscribed = subscribed,
     subscriberCount = subscriberCount,
 )
@@ -308,3 +311,60 @@ data class FixedSharesDto(
     val rewatch: Int = 0,
     val freshSubscribed: Int = 0,
 )
+
+/**
+ * One result from `GET /api/discover` — a video on YouTube.
+ *
+ * Every field defaulted, as every DTO here is: the wire really can omit one, and
+ * a parse failure is the worst possible answer to a legal response.
+ */
+@Serializable
+data class ExternalVideoDto(
+    val id: String = "",
+    val title: String = "",
+    val channelName: String = "",
+    val durationSeconds: Int = 0,
+    val viewCount: Long = 0,
+    val thumbnailUrl: String = "",
+    val sourceUrl: String = "",
+    val inLibrary: Boolean = false,
+)
+
+@Serializable
+data class DiscoverDto(val videos: List<ExternalVideoDto> = emptyList())
+
+/**
+ * The wire's shape into the app's.
+ *
+ * Nothing is computed here and that is the point: the gateway sends exactly the
+ * eight fields this screen draws, so the mapper's whole job is to stop the
+ * `@Serializable` annotation from travelling any further inward.
+ */
+fun ExternalVideoDto.toDomain(): ExternalVideo = ExternalVideo(
+    id = id,
+    title = title,
+    channelName = channelName,
+    durationSeconds = durationSeconds,
+    viewCount = viewCount,
+    thumbnailUrl = thumbnailUrl,
+    sourceUrl = sourceUrl,
+    inLibrary = inLibrary,
+)
+
+/** The gateway's answer to "make a row for this so the player can open it". */
+@Serializable
+data class EnsureExternalRequest(val url: String)
+
+@Serializable
+data class EnsureExternalDto(val videoId: String = "")
+
+/**
+ * `GET /api/channels/resolve` — which channel a pasted address names.
+ *
+ * **Nullable, and that is the answer.** The gateway is asked about every query
+ * and most queries are not addresses, so it replies `{"channel":null}` rather
+ * than with an error. This is a DTO, where absence is allowed to be real; the
+ * mapper turns it into an empty string, which is what the app reasons about.
+ */
+@Serializable
+data class ResolveChannelDto(val channel: String? = null)

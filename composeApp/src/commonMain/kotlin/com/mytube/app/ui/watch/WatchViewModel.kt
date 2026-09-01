@@ -181,7 +181,7 @@ sealed interface WatchState {
  * sharing one decoder.
  */
 class WatchViewModel(
-    private val videoId: String,
+    videoId: String,
     /**
      * Whether this video was arrived at by advancing rather than by being
      * chosen, in which case it starts at zero.
@@ -192,7 +192,7 @@ class WatchViewModel(
      * flag exists to prevent. A default here buys one short call site and pays
      * for it with a fault nothing can catch.
      */
-    private val startAtBeginning: Boolean,
+    startAtBeginning: Boolean,
     /**
      * Whether to start playing as soon as the stream is ready.
      *
@@ -207,7 +207,7 @@ class WatchViewModel(
      * default here buys one short call site and pays for it with a video that
      * silently plays, or silently does not, at a call site nobody updated.
      */
-    private val autoPlay: Boolean,
+    autoPlay: Boolean,
     /**
      * Advance to this video, because the last one played to its end.
      *
@@ -236,6 +236,28 @@ class WatchViewModel(
     private val queue: List<String> = emptyList(),
     playerFactory: VideoPlayerFactory,
 ) : ViewModel() {
+
+    /**
+     * Which video this is, and it can change without this object being replaced.
+     *
+     * It used to be a constructor `val`, one instance per video, and that is
+     * what broke autoplay with the screen off. Advancing meant a **new**
+     * `WatchViewModel`, and a new one is built by `remember` — which is
+     * composition, and composition on iOS stops when the app leaves the
+     * foreground. So the sound ran to the end of a video and stopped, and the
+     * next one appeared only when somebody unlocked the phone and looked.
+     *
+     * Background audio is the one thing §1 of the charter says this app exists
+     * for, so the sitting has to be able to move on without a frame being drawn.
+     */
+    private var videoId: String = videoId
+
+    /** See [advanceTo]. Set per video, not once per object. */
+    private var startAtBeginning: Boolean = startAtBeginning
+    private var autoPlay: Boolean = autoPlay
+
+    /** What the app's own session should be showing. */
+    val currentVideoId: String get() = videoId
 
     val player: VideoPlayer = playerFactory.create()
 
@@ -287,7 +309,44 @@ class WatchViewModel(
         if (current.isLive) return
         if (current.nextId.isEmpty()) return
         advanced = true
+        // Loaded here, **not** by whoever owns the route.
+        //
+        // The callback still fires, because the session and the trail are the
+        // route's business — but it is told after the fact, and it may be told
+        // while nothing is being composed at all. What must not depend on a
+        // frame is the loading of the next video, and that is this line.
+        advanceTo(current.nextId, fromTheStart = true)
         onFinished(current.nextId)
+    }
+
+    /**
+     * Play a different video without replacing this object.
+     *
+     * Called from two places and they are the same act: the end of a video with
+     * autoplay on, and the route telling this that its session moved on. The
+     * second is idempotent — it checks the id first — so the two cannot load the
+     * same video twice when composition catches up with a background advance.
+     */
+    fun advanceTo(next: String, fromTheStart: Boolean) {
+        if (next.isEmpty() || next == videoId) return
+        // The finished video's last position, before its id is gone. Same
+        // reasoning as `close()`: the moment somebody stops watching something
+        // is the report that matters most.
+        report(force = true)
+        narrationPoll?.cancel()
+        narrationPoll = null
+        videoId = next
+        // Advancing means "play me the next thing", so it starts at zero;
+        // *choosing* one means "play me this", which resumes where the server
+        // says the household left it. The distinction is the caller's, and it is
+        // the one that stops "previous" restarting a video somebody was half way
+        // through.
+        startAtBeginning = fromTheStart
+        // Always. Every path into this is somebody asking for a video to play.
+        autoPlay = true
+        advanced = false
+        lastReported = 0.0
+        load()
     }
 
     fun retry() = load()

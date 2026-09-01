@@ -24,6 +24,17 @@ sealed interface ChannelState {
         val videos: List<Video>,
         val sortOptions: List<SortOption>,
         val sortToken: String,
+        /**
+         * Which option is lit, by **position** rather than by token.
+         *
+         * The tokens are not stable: every answer carries a fresh set, and the
+         * one that was sent matches none of them. Lighting by token therefore
+         * left the row with nothing lit the moment a sort landed — measured on
+         * the simulator, and the reason pressing Popular read as doing nothing
+         * at all. The order is the server's and it does not change within a
+         * channel, so the position is the thing that survives the round trip.
+         */
+        val sortIndex: Int = 0,
         val nextPageToken: String,
         val loadingMore: Boolean = false,
         /**
@@ -62,18 +73,26 @@ class ChannelViewModel(
         load(sortToken = "")
     }
 
-    fun retry() = load((_state.value as? ChannelState.Ready)?.sortToken.orEmpty())
+    fun retry() {
+        val current = _state.value as? ChannelState.Ready
+        load(current?.sortToken.orEmpty(), index = current?.sortIndex ?: 0)
+    }
 
     fun selectSort(option: SortOption) {
         val current = _state.value as? ChannelState.Ready ?: return
-        if (current.sortToken == option.token) return
+        val index = current.sortOptions.indexOf(option)
+        if (index < 0 || index == current.sortIndex) return
         // Lit immediately, and the token recorded now rather than when the
         // answer lands. Without this the row stayed on the old segment for the
         // length of a round trip to YouTube, so a second press on the same
         // option started a second request — which is most of why the page
         // appeared to keep coming back sorted by Latest.
-        _state.value = current.copy(sortToken = option.token, sorting = true)
-        load(option.token, keep = current)
+        _state.value = current.copy(
+            sortToken = option.token,
+            sortIndex = index,
+            sorting = true,
+        )
+        load(option.token, keep = current, index = index)
     }
 
     /**
@@ -144,7 +163,7 @@ class ChannelViewModel(
      * current page when re-sorting, which is what stops the whole screen
      * blanking to change the order of a list already on it.
      */
-    private fun load(sortToken: String, keep: ChannelState.Ready? = null) {
+    private fun load(sortToken: String, keep: ChannelState.Ready? = null, index: Int = 0) {
         if (keep == null) _state.value = ChannelState.Loading
         viewModelScope.launch {
             _state.value = runCatching { videos.channelPage(channelId, sortToken) }.fold(
@@ -155,6 +174,7 @@ class ChannelViewModel(
                         videos = it.videos,
                         sortOptions = it.sortOptions,
                         sortToken = sortToken,
+                        sortIndex = index,
                         nextPageToken = it.nextPageToken,
                     )
                 },

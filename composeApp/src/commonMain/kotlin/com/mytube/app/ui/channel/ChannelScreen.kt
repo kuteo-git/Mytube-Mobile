@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.mohamedrejeb.calf.ui.progress.AdaptiveCircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -34,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -53,12 +54,15 @@ import com.mytube.app.ui.home.formatCount
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
+import com.mytube.app.ui.shell.glassSource
 import com.mytube.app.ui.shell.EmptyState
+import com.mytube.app.ui.shell.FeedSkeleton
 import com.mytube.app.ui.shell.TabScaffold
-import com.mytube.app.ui.shell.tabContentPadding
+import com.mytube.app.ui.shell.DetailBack
+import com.mytube.app.ui.shell.detailContentPadding
 import com.mytube.app.ui.theme.MytubeTheme
+import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
-import com.mytube.app.ui.watch.BackIcon
 import com.mytube.app.ui.watch.SubscribeButton
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
@@ -111,7 +115,8 @@ fun ChannelContent(
 ) {
     val strings = LocalStrings.current
 
-    Box(Modifier.fillMaxSize()) {
+    // Recorded, so the miniplayer floating over this page is glass here too.
+    Box(Modifier.fillMaxSize().glassSource()) {
     TabScaffold(
         loading = state is ChannelState.Loading,
         needsServer = state is ChannelState.NeedsServer,
@@ -145,12 +150,8 @@ fun ChannelContent(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                // Dimmed while a different order is on its way. It says the
-                // press was heard without taking the page away — which is what
-                // dropping to a full-screen skeleton did, and why re-sorting
-                // read as the channel reloading from scratch.
-                .graphicsLayer { alpha = if (ready.sorting) 0.45f else 1f },
-            contentPadding = tabContentPadding(),
+                ,
+            contentPadding = detailContentPadding(),
         ) {
             item(key = "header") {
                 Header(ready.channel, ready.videoCount, mediaBaseUrl, onToggleSubscribed)
@@ -158,17 +159,33 @@ fun ChannelContent(
 
             if (ready.sortOptions.isNotEmpty()) {
                 item(key = "sorts") {
-                    SortRow(ready.sortOptions, ready.sortToken, onSelectSort)
+                    SortRow(ready.sortOptions, ready.sortIndex, onSelectSort)
                 }
             }
 
-            if (ready.videos.isEmpty()) {
+            // While a different order is on its way the *list* is a skeleton and
+            // the header is not.
+            //
+            // The page used to dim to 0.45 whole, which says "something is
+            // happening" and not *what* — and it left the old order legible
+            // underneath, so the first thing to change when the answer arrived
+            // was a list somebody was already reading. The header, the avatar
+            // and the sort row are not being reloaded, so they stay solid; the
+            // videos are, and they are drawn as what is coming.
+            if (ready.sorting) {
+                // No top padding of its own: it stands exactly where the first
+                // card stands, so the page does not jump by a gap's height when
+                // the answer lands.
+                item(key = "sorting") { FeedSkeleton(cards = 3) }
+            }
+
+            if (ready.videos.isEmpty() && !ready.sorting) {
                 item(key = "empty") {
                     EmptyState(strings.nothingHere, strings.noResultsDetail)
                 }
             }
 
-            items(ready.videos, key = { it.id }) { video ->
+            items(if (ready.sorting) emptyList() else ready.videos, key = { it.id }) { video ->
                 VideoCard(
                     video = video,
                     mediaBaseUrl = mediaBaseUrl,
@@ -192,24 +209,10 @@ fun ChannelContent(
     // bar and no tab bar, so without it a channel that would not load is a dead
     // end — and Android's system back leaves the app entirely, while iOS has no
     // system back at all. The way out has to be on the screen.
-    Box(
-        Modifier
-            .align(Alignment.TopStart)
-            .padding(top = statusBarTop(), start = Space.xs)
-            .size(48.dp)
-            .clip(CircleShape)
-            .clickable(onClick = onBack),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(BackIcon, strings.back, tint = Tokens.text, modifier = Modifier.size(24.dp))
-    }
+    DetailBack(onBack, strings.back)
     }
 }
 
-/** The status bar's height, so the arrow clears the clock. */
-@Composable
-private fun statusBarTop() =
-    WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
 /**
  * The channel, centred over its own uploads.
@@ -227,8 +230,48 @@ private fun Header(
 ) {
     val strings = LocalStrings.current
 
+    Box(Modifier.fillMaxWidth()) {
+        // The banner, behind everything above the Subscribe button.
+        //
+        // It was left out on the reasoning that a banner is 200dp of decoration
+        // above the one thing the screen is for. That was right about a banner
+        // drawn the way YouTube draws one — a band of its own that pushes the
+        // first video off the fold — and it is not what this is: the picture
+        // fills the space the header already occupies, cropped from its centre,
+        // with the name and the counts sitting on it. It costs no height at all.
+        //
+        // Blurred, and that is what makes it usable as a ground: a channel's
+        // banner is somebody else's composition, with its own text and its own
+        // focal point, and reading a name over it needs the picture to stop
+        // being a picture.
+        if (channel.bannerPath.isNotEmpty()) {
+            AsyncImage(
+                model = imageModel(mediaBaseUrl, channel.bannerPath),
+                contentDescription = null,
+                // Filled and centre-cropped: a 6:1 banner in a 4:3 box either
+                // crops or letterboxes, and a letterbox here would be two black
+                // bands around somebody's artwork.
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .matchParentSize()
+                    .blur(BANNER_BLUR)
+                    // Dimmed after the blur, not before: the tint is what keeps
+                    // white text legible over a pale banner, and blurring a
+                    // tinted image just makes a pale one paler.
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(Tokens.bg.copy(alpha = BANNER_TINT))
+                    },
+            )
+        }
+
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.lg),
+        // No bottom padding: the sort row below owns the gap on both of its
+        // sides. Two paddings meeting in the middle is how the row ended up with
+        // 24dp above it and 8 below — reported as the cluster sitting high.
+        Modifier
+            .fillMaxWidth()
+            .padding(start = Space.lg, end = Space.lg, top = Space.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         ChannelAvatar(
@@ -265,10 +308,20 @@ private fun Header(
             fontSize = 12.sp,
             textAlign = TextAlign.Center,
         )
+        // The banner stops here — under the counts, with a gap — which is what
+        // was asked for and is also where it stops being useful: below this the
+        // page is a list, and a list needs a plain ground.
         Spacer(Modifier.height(Space.md))
         SubscribeButton(channel.subscribed, onToggleSubscribed)
     }
+    }
 }
+
+/** How far the banner is pushed out of focus so a name can sit on it. */
+private val BANNER_BLUR = 24.dp
+
+/** And how much of the page's own colour is held over it. */
+private const val BANNER_TINT = 0.45f
 
 /**
  * Latest · Popular · Oldest, as upstream named them.
@@ -278,27 +331,30 @@ private fun Header(
  * guessing which of the three it is, and being wrong the day a fourth appears.
  */
 @Composable
-private fun SortRow(options: List<SortOption>, selected: String, onSelect: (SortOption) -> Unit) {
+private fun SortRow(options: List<SortOption>, selected: Int, onSelect: (SortOption) -> Unit) {
     Row(
         Modifier
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = Space.lg, vertical = Space.sm),
+            // Equal above and below, and the header contributes neither.
+            .padding(horizontal = Space.lg, vertical = Space.lg),
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
     ) {
-        options.forEach { option ->
-            // The default order has an empty token, so the first option is lit
-            // when nothing has been chosen — otherwise the row opens with no
-            // segment marked and the list looks unsorted.
-            val lit = option.token == selected ||
-                (selected.isEmpty() && option == options.first())
+        options.forEachIndexed { index, option ->
+            // Lit by **position**, not by token.
+            //
+            // Every answer carries a fresh set of tokens, so the one that was
+            // sent matches none of the ones that come back — the row ended up
+            // with nothing lit the moment a sort landed, which is exactly what
+            // "pressing Popular does nothing" looks like. The order is the
+            // server's own and is stable within a channel.
+            val lit = index == selected
             Text(
                 text = option.label,
                 color = if (lit) Tokens.bg else Tokens.text,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(percent = 50))
-                    .background(if (lit) Tokens.text else Tokens.surface)
+                    .glassControl(RoundedCornerShape(percent = 50), selected = lit)
                     .clickable { onSelect(option) }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
             )

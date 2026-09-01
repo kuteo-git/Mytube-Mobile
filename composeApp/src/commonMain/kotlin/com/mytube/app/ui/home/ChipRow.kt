@@ -24,6 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.GlassRadius
+import com.mytube.app.ui.shell.liquidGlass
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -52,8 +54,7 @@ fun ChipRow(
             Row(
                 modifier = Modifier
                     .height(Size.chip)
-                    .clip(RoundedCornerShape(Radius.chip))
-                    .background(if (isSelected) Tokens.invertBg else Tokens.surface)
+                    .liquidGlass(GlassRadius.control, selected = isSelected)
                     .clickable { onSelect(chip) }
                     .padding(horizontal = Space.md),
                 verticalAlignment = Alignment.CenterVertically,

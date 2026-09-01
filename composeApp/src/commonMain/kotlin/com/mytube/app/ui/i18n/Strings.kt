@@ -98,6 +98,17 @@ interface Strings {
     val dislike: String
     val saveVideo: String
     val savedVideo: String
+
+    /**
+     * Taking a video off the shelf, said on the shelf itself.
+     *
+     * The same action as [saveVideo] and a different word, because the row it is
+     * on is a different claim: in a feed the menu offers to keep something, and
+     * on the saved shelf every row is already kept — so an item reading "Saved"
+     * there states what is already true and gives no verb to press. Reported
+     * from the phone.
+     */
+    val removeFromSaved: String
     val subscribe: String
     val subscribed: String
     val upNext: String
@@ -110,6 +121,14 @@ interface Strings {
     val noResults: String
     val noResultsDetail: String
     val searchPrompt: String
+    /** The heading over results that are already on this disk. */
+    val inLibrary: String
+    /** The heading over results that are still on YouTube. */
+    val onYouTube: String
+    /** Said under that heading when the upstream search itself failed. */
+    val youtubeUnreachable: String
+    /** Said under that heading when YouTube has nothing more to give. */
+    val noMoreResults: String
 
     // --- narration ---------------------------------------------------------
     val narration: String
@@ -162,7 +181,6 @@ interface Strings {
     // --- navigation --------------------------------------------------------
     val navHome: String
     val navSubscriptions: String
-    val navHistory: String
     val navSettings: String
     val search: String
 
@@ -176,11 +194,15 @@ interface Strings {
 
     // --- history -----------------------------------------------------------
     val historyTitle: String
+    /** What the History row in Settings says under its name. */
+    val historyDetail: String
     val noHistory: String
     val noHistoryDetail: String
 
     // --- settings ----------------------------------------------------------
     val settingsServer: String
+    /** The Profile row in Settings, which used to be the avatar in the bar. */
+    val settingsProfile: String
     val settingsLanguage: String
     /** The name of each language, always written in that language. */
     val languageEnglish: String
@@ -275,6 +297,7 @@ object EnglishStrings : Strings {
     override val dislike = "Dislike"
     override val saveVideo = "Save"
     override val savedVideo = "Saved"
+    override val removeFromSaved = "Remove"
     override val subscribe = "Subscribe"
     override val subscribed = "Subscribed"
     override val upNext = "Up next"
@@ -285,6 +308,10 @@ object EnglishStrings : Strings {
     override val noResults = "Nothing here matches"
     override val noResultsDetail = "Try fewer words, or the name of the channel."
     override val searchPrompt = "Titles and channels in this library."
+    override val inLibrary = "In your library"
+    override val onYouTube = "On YouTube"
+    override val youtubeUnreachable = "Could not reach YouTube"
+    override val noMoreResults = "Nothing more on YouTube"
 
     override val narration = "Vietnamese voice"
     override fun narrationPreparing(done: Int, total: Int) = "Preparing $done/$total"
@@ -336,7 +363,6 @@ object EnglishStrings : Strings {
 
     override val navHome = "Home"
     override val navSubscriptions = "Subscriptions"
-    override val navHistory = "History"
     override val navSettings = "Settings"
     override val search = "Search"
 
@@ -347,10 +373,12 @@ object EnglishStrings : Strings {
     override val subscribers = "subscribers"
 
     override val historyTitle = "Watch history"
+    override val historyDetail = "Everything this member has played, newest first."
     override val noHistory = "Nothing watched yet"
     override val noHistoryDetail = "Videos you play show up here, most recent first."
 
     override val settingsServer = "Server address"
+    override val settingsProfile = "Profile"
     override val settingsLanguage = "Language"
     override val languageEnglish = "English"
     override val languageVietnamese = "Tiếng Việt"
@@ -423,6 +451,7 @@ object VietnameseStrings : Strings {
     override val dislike = "Không thích"
     override val saveVideo = "Lưu"
     override val savedVideo = "Đã lưu"
+    override val removeFromSaved = "Bỏ lưu"
     override val subscribe = "Đăng ký"
     override val subscribed = "Đã đăng ký"
     override val upNext = "Xem tiếp"
@@ -433,6 +462,10 @@ object VietnameseStrings : Strings {
     override val noResults = "Không có gì khớp"
     override val noResultsDetail = "Thử ít chữ hơn, hoặc gõ tên kênh."
     override val searchPrompt = "Tìm theo tên video và tên kênh trong thư viện."
+    override val inLibrary = "Trong thư viện"
+    override val onYouTube = "Trên YouTube"
+    override val youtubeUnreachable = "Không tới được YouTube"
+    override val noMoreResults = "Hết kết quả trên YouTube"
 
     override val narration = "Thuyết minh"
     override fun narrationPreparing(done: Int, total: Int) = "Đang chuẩn bị $done/$total"
@@ -477,7 +510,6 @@ object VietnameseStrings : Strings {
 
     override val navHome = "Trang chủ"
     override val navSubscriptions = "Kênh đăng ký"
-    override val navHistory = "Đã xem"
     override val navSettings = "Cài đặt"
     override val search = "Tìm kiếm"
 
@@ -488,10 +520,12 @@ object VietnameseStrings : Strings {
     override val subscribers = "người đăng ký"
 
     override val historyTitle = "Đã xem"
+    override val historyDetail = "Mọi video người này đã mở, mới nhất lên trước."
     override val noHistory = "Chưa xem gì"
     override val noHistoryDetail = "Video bạn mở sẽ nằm ở đây, mới nhất lên trước."
 
     override val settingsServer = "Địa chỉ máy chủ"
+    override val settingsProfile = "Người xem"
     override val settingsLanguage = "Ngôn ngữ"
     // Each language is named in its own words, always. Somebody who pressed the
     // wrong row is looking at an interface they cannot read, and "English"

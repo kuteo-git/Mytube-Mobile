@@ -17,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
-import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.watch.MiniPlayer
 import com.mytube.app.ui.watch.WatchState
 import androidx.compose.animation.AnimatedContent
@@ -45,20 +44,25 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mytube.app.AppContainer
 import com.mytube.app.ui.home.HomeScreen
+import com.mytube.app.ui.home.Chip
 import com.mytube.app.ui.home.ChipRow
+import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.HomeState
 import com.mytube.app.ui.home.HomeViewModel
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.shell.AppShell
-import com.mytube.app.ui.shell.LocalHaze
+import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.shell.LocalBackdrop
+import com.mytube.app.ui.shell.LocalNativeGlass
+import com.mytube.app.ui.shell.NativeGlassBridge
+import com.mytube.app.ui.shell.NativeGlassRegistry
 import com.mytube.app.ui.shell.LocalMiniPlayerShowing
 import com.mytube.app.ui.shell.edgeBack
 import kotlin.math.roundToInt
 import com.mytube.app.ui.shell.rememberBarsVisible
-import com.mytube.app.ui.shell.ProfileSheet
 import com.mytube.app.ui.shell.Tab
 import com.mytube.app.ui.watch.WatchLayer
-import dev.chrisbanes.haze.rememberHazeState
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.mytube.app.ui.watch.WatchScreen
 import com.mytube.app.ui.watch.WatchViewModel
 import com.mytube.app.ui.settings.ServerSetupScreen
@@ -77,9 +81,13 @@ import com.mytube.app.domain.model.Profile
 import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.ui.saved.SavedScreen
 import com.mytube.app.ui.saved.SavedViewModel
+import com.mytube.app.ui.search.SEARCH_FIELD_ROW
 import com.mytube.app.ui.search.SearchScreen
 import com.mytube.app.ui.search.SearchViewModel
+import com.mytube.app.ui.settings.LanguageScreen
+import com.mytube.app.ui.settings.ProfileScreen
 import com.mytube.app.ui.settings.SettingsScreen
+import com.mytube.app.ui.settings.VoiceScreen
 import com.mytube.app.ui.subscriptions.SubscriptionsScreen
 import com.mytube.app.ui.subscriptions.SubscriptionsViewModel
 import androidx.compose.runtime.rememberCoroutineScope
@@ -106,6 +114,12 @@ private sealed interface Route {
     data object Home : Route
     data object Search : Route
     data object Saved : Route
+    data object History : Route
+    data object Profile : Route
+    /** The Vietnamese voice's levels and name, opened from Settings. */
+    data object Voice : Route
+    /** Which language the app reads in, opened from Settings. */
+    data object Language : Route
     data class Channel(val channelId: String) : Route
 }
 
@@ -116,8 +130,33 @@ private sealed interface Route {
  * playing while you go elsewhere — modelling it as a destination is what made
  * leaving the screen the same act as stopping the video.
  */
+/**
+ * One more than the last, and nothing else is asked of it.
+ *
+ * Not a timestamp: two sessions opened in the same millisecond would share one,
+ * and the whole point of this number is that two sittings never do. Not a UUID
+ * either — this never leaves the process.
+ */
+private var sittings = 0L
+
+private fun nextSittingId(): Long = ++sittings
+
 private data class WatchSession(
     val videoId: String,
+    /**
+     * The sitting this video belongs to, and what the player is keyed on.
+     *
+     * A sitting outlives the video in it. Autoplay moves `videoId` on while the
+     * same `WatchViewModel` keeps the same connection to the same player, which
+     * is what lets a video advance with the screen off — building a new one is
+     * `remember`, and `remember` is composition, and composition stops when the
+     * app leaves the foreground.
+     *
+     * Generated once per `WatchSession(...)` and carried through `copy`, so
+     * "open this video" starts a new sitting and "the last one finished" does
+     * not.
+     */
+    val sittingId: Long = nextSittingId(),
     val minimised: Boolean = false,
     /** Arrived at by pressing next, so it opens at zero rather than resuming. */
     val startAtBeginning: Boolean = false,
@@ -159,8 +198,36 @@ private const val ROUTE_MILLIS = 260
  * into from one.
  */
 private fun depth(route: Route): Int = when (route) {
-    is Route.Deciding, is Route.Setup, is Route.Home -> 0
-    is Route.Search, is Route.Saved, is Route.Channel -> 1
+    is Route.Deciding, is Route.Home -> 0
+    // One level in, like every other row in Settings. It was ground with Home,
+    // on the reasoning that it is where the app starts before there is a
+    // library — and the consequence was that leaving it slid the wrong way, the
+    // one screen in the menu whose animation disagreed with its neighbours. A
+    // fresh install now slides in from the right on first launch, which is what
+    // arriving somewhere looks like.
+    is Route.Setup -> 1
+    is Route.Search, is Route.Saved -> 1
+    /**
+     * Two, and it is the only route that is.
+     *
+     * A channel is the one page reached *from* another page at depth 1 — from a
+     * search result, from the saved shelf, from watch history — as well as from
+     * Home. With it at 1 those pairs had equal depth, and `forward` is
+     * `target >= initial`: leaving a channel for the history page it was opened
+     * from counted as going *deeper*, so back slid the wrong way. Reported
+     * exactly that way.
+     *
+     * Depth is what the direction is read from, so the fix belongs here rather
+     * than in the transition: the channel genuinely is one level under whatever
+     * listed it.
+     */
+    is Route.Channel -> 2
+    // Opened from Settings, beside Saved and for the same reason it is there:
+    // a shelf this device keeps, not somewhere you move between while browsing.
+    is Route.History, is Route.Profile -> 1
+    // Opened from Settings, which is a tab — so one level in, the same as the
+    // saved shelf beside them in that menu.
+    is Route.Voice, is Route.Language -> 1
 }
 
 /**
@@ -172,7 +239,30 @@ private fun depth(route: Route): Int = when (route) {
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-fun App(container: AppContainer) {
+fun App(
+    container: AppContainer,
+    /**
+     * Whether the platform draws the tab bar rather than Compose.
+     *
+     * True only from `MainViewController` on iOS 26, where the bar is a SwiftUI
+     * view carrying the system's Liquid Glass. `MainActivity` does not pass it,
+     * so the Android shell is the one it always was — the parameter exists so
+     * that is provable from one line rather than argued about.
+     *
+     * See [ShellBridge] for what crosses, and for why the Compose tree is *not*
+     * split into one controller per tab the way JetBrains' guide does it.
+     */
+    /**
+     * Whether a platform layer over this scene draws the glass on the player.
+     *
+     * True on iOS 26 alone. It used to be `nativeTabBar` and to mean two things
+     * — a SwiftUI tab bar *and* the player's panes — and the two came apart: the
+     * bar went back to Compose because its three siblings could never leave it,
+     * while the player's controls have to stay platform-drawn because they sit
+     * over a video Compose cannot sample.
+     */
+    nativeGlass: Boolean = false,
+) {
     // Null until the stored choice has been read. Nothing is drawn before then:
     // showing English for a frame to somebody who chose Vietnamese is the exact
     // flicker the web app avoided by reading its preference at module load.
@@ -188,9 +278,37 @@ fun App(container: AppContainer) {
 
     val chosen = language ?: return
 
-    CompositionLocalProvider(LocalStrings provides chosen.strings) {
+    CompositionLocalProvider(
+        LocalStrings provides chosen.strings,
+        // The same flag, read where the glass is rather than passed to it. It is
+        // one fact about the shell — whether a platform layer is drawing over
+        // this scene — and the entry point is the only thing that knows it.
+        LocalNativeGlass provides nativeGlass,
+    ) {
         MytubeTheme {
             var route: Route by remember { mutableStateOf(Route.Deciding) }
+            // Where a channel page was opened from, so back returns there.
+            //
+            // Every other page in this app is reached from exactly one place —
+            // Saved and Language from Settings, search from the tab bar — so
+            // "back" is Home for all of them and always right. A channel is
+            // reached from a feed card, a search result, the saved shelf, watch
+            // history and the watch screen, and sending all five back to Home
+            // throws away the list somebody was reading.
+            //
+            // One level, deliberately: this is a *var*, not a stack, and the
+            // second channel opened from inside a channel overwrites the first.
+            // A stack would model a history nothing here creates — the only way
+            // to that second channel is through a video, and opening a video
+            // leaves this route standing rather than pushing onto it.
+            var channelFrom: Route by remember { mutableStateOf(Route.Home) }
+            // The one way to a channel, so the two lines never come apart. Five
+            // call sites set the route directly and four of them would have
+            // forgotten this one.
+            val openChannel: (String) -> Unit = { id ->
+                channelFrom = route
+                route = Route.Channel(id)
+            }
             var tab by remember { mutableStateOf(Tab.Home) }
             var baseUrl by remember { mutableStateOf("") }
             // Null when nothing is playing. Held above the routes so that
@@ -277,11 +395,17 @@ fun App(container: AppContainer) {
             }
             var profiles: List<Profile> by remember { mutableStateOf(emptyList()) }
             var profileId by remember { mutableStateOf("") }
-            var profilesOpen by remember { mutableStateOf(false) }
             LaunchedEffect(baseUrl) {
                 if (baseUrl.isNotBlank()) {
-                    profiles = container.serverRepository.profiles()
-                    profileId = container.serverRepository.profileId()
+                    // Guarded. An unguarded throw here cancels the effect and
+                    // takes `profileId` with it — so a server that was asleep
+                    // for the two seconds after launch left the household with
+                    // no members and an avatar that did nothing, for the rest of
+                    // the run.
+                    runCatching { container.serverRepository.profiles() }
+                        .onSuccess { profiles = it }
+                    profileId = runCatching { container.serverRepository.profileId() }
+                        .getOrDefault(profileId)
                 }
             }
             // Who this device actually is, which is not always who it has
@@ -339,6 +463,17 @@ fun App(container: AppContainer) {
             val backable = watching?.minimised == false ||
                 route !is Route.Home ||
                 tab != Tab.Home
+            // The glass over the picture, pushed to the same platform layer
+                // that draws the tab bar.
+                //
+                // Watched here rather than in `GlassPane` because the platform
+                // wants the whole collection at once: several panes appear and
+                // disappear together when the controls fade, and pushing one at
+                // a time would send the layer through states no frame of the app
+                // is ever in.
+                val panes = NativeGlassRegistry.panes.values.sortedBy { it.id }
+            LaunchedEffect(panes) { NativeGlassBridge.onPanes?.invoke(panes) }
+
             BackHandler(backable) {
                 val session = watching
                 when {
@@ -346,6 +481,9 @@ fun App(container: AppContainer) {
                     // sound carries on, which is what the drag down does too.
                     session != null && !session.minimised ->
                         watching = session.copy(minimised = true)
+
+                    // A channel, which is reached from five different places.
+                    route is Route.Channel -> route = channelFrom
 
                     // A screen opened from a tab.
                     route !is Route.Home -> route = Route.Home
@@ -366,11 +504,24 @@ fun App(container: AppContainer) {
             // chip row and the miniplayer. Owned here because the miniplayer is
             // drawn beside the shell rather than inside it, so a state created
             // in the shell would not reach it.
-            val haze = rememberHazeState()
+            // The app's own page, recorded once so every floating surface can
+            // sample it: the two bars, the chip row, the miniplayer and the
+            // sheets. Owned here because the miniplayer is drawn beside the
+            // shell rather than inside it, so one created in the shell would not
+            // reach it.
+            //
+            // The background is drawn *into* the backdrop before the content.
+            // Without it the recording has transparent pixels wherever a screen
+            // does not paint, and the glass shows them as holes — which is the
+            // first thing the library's own guide warns about.
+            val backdrop = rememberLayerBackdrop {
+                drawRect(Tokens.bg)
+                drawContent()
+            }
 
             CompositionLocalProvider(
                 LocalMiniPlayerShowing provides (watching?.minimised == true),
-                LocalHaze provides haze,
+                LocalBackdrop provides backdrop,
             ) {
             Box(Modifier.fillMaxSize()) {
                 // Screens arrive and leave the way they do on the platforms this
@@ -418,6 +569,10 @@ fun App(container: AppContainer) {
                     is Route.Setup -> ServerSetupScreen(
                         viewModel = viewModel { ServerSetupViewModel(container.serverRepository) },
                         onDone = { route = Route.Home },
+                        // A way out only once there is a library to go back to.
+                        // On a fresh install this screen *is* the app, and an
+                        // arrow there would lead nowhere.
+                        onBack = if (baseUrl.isEmpty()) null else ({ route = Route.Home }),
                     )
 
                     // The four tabs and the watch screen are one branch. The
@@ -470,11 +625,6 @@ fun App(container: AppContainer) {
                             tab = picked
                         },
                         onSearch = { route = Route.Search },
-                        // Never passed at all before this: AppShell had the
-                        // parameter and a default, and a default is exactly what
-                        // hides a missing argument.
-                        profileInitial = currentProfile?.name.orEmpty(),
-                        onOpenProfiles = { if (profiles.size > 1) profilesOpen = true },
                     ) {
                             when (tab) {
                                 Tab.Home -> HomeScreen(
@@ -483,7 +633,7 @@ fun App(container: AppContainer) {
                                     mediaBaseUrl = baseUrl,
                                     onOpenSettings = { tab = Tab.Settings },
                                     onOpenVideo = { watching = WatchSession(it) },
-                                    onOpenChannel = { route = Route.Channel(it) },
+                                    onOpenChannel = openChannel,
                                 )
 
                                 Tab.Subscriptions -> SubscriptionsScreen(
@@ -498,17 +648,7 @@ fun App(container: AppContainer) {
                                     // pretending. Drawn anyway: the list is the
                                     // answer to "who do I follow", which is most of
                                     // what this tab is for.
-                                    onOpenChannel = { route = Route.Channel(it) },
-                                )
-
-                                Tab.History -> HistoryScreen(
-                                    listState = tabScroll.getValue(Tab.History),
-                                    viewModel = viewModel(key = "history-$baseUrl-$profileId") {
-                                        HistoryViewModel(container.videoRepository)
-                                    },
-                                    mediaBaseUrl = baseUrl,
-                                    onOpenSettings = { tab = Tab.Settings },
-                                    onOpenVideo = { watching = WatchSession(it) },
+                                    onOpenChannel = openChannel,
                                 )
 
                                 Tab.Settings -> SettingsScreen(
@@ -516,7 +656,10 @@ fun App(container: AppContainer) {
                                     language = chosen,
                                     feedMix = feedMix,
                                     onOpenServer = { route = Route.Setup },
+                                    onOpenProfile = { route = Route.Profile },
+                                    onOpenHistory = { route = Route.History },
                                     onOpenSaved = { route = Route.Saved },
+                                    profileName = currentProfile?.name.orEmpty(),
                                     onChangeMix = { next ->
                                         // Drawn immediately, sent after: a
                                         // slider that waits for a round trip
@@ -567,9 +710,90 @@ fun App(container: AppContainer) {
                                             container.serverRepository.setLanguage(picked.code)
                                         }
                                     },
+                                    onOpenVoice = { route = Route.Voice },
+                                    onOpenLanguage = { route = Route.Language },
                                 )
                             }
                         }
+                    }
+
+                    is Route.Voice -> VoiceScreen(
+                        voiceLevel = voiceLevel,
+                        duckLevel = duckLevel,
+                        voice = voice,
+                        onVoiceLevel = { level ->
+                            voiceLevel = level
+                            scope.launch { container.preferencesRepository.setVoiceLevel(level) }
+                        },
+                        onDuckLevel = { level ->
+                            duckLevel = level
+                            scope.launch { container.preferencesRepository.setDuckLevel(level) }
+                        },
+                        onVoice = { name ->
+                            voice = name
+                            scope.launch {
+                                runCatching { container.serverRepository.setTtsVoice(name) }
+                            }
+                        },
+                        onBack = { route = Route.Home },
+                    )
+
+                    is Route.Language -> LanguageScreen(
+                        language = chosen,
+                        onPick = { picked ->
+                            language = picked
+                            scope.launch { container.serverRepository.setLanguage(picked.code) }
+                        },
+                        onBack = { route = Route.Home },
+                    )
+
+                    is Route.History -> HistoryScreen(
+                        viewModel = viewModel(key = "history-$baseUrl-$profileId") {
+                            HistoryViewModel(container.videoRepository)
+                        },
+                        mediaBaseUrl = baseUrl,
+                        onBack = { route = Route.Home },
+                        onOpenSettings = { route = Route.Setup },
+                        onOpenVideo = { watching = WatchSession(it) },
+                        onOpenChannel = openChannel,
+                    )
+
+                    is Route.Profile -> {
+                        // Asked again on arrival rather than trusting the fetch
+                        // at launch.
+                        //
+                        // That one is unguarded and runs while the app is
+                        // starting, so a server still waking up leaves the
+                        // household with no members — which used to leave the
+                        // avatar in the bar doing nothing for the rest of the
+                        // run. A page cannot shrug like that: opening it is
+                        // asking the question, so it asks the server too.
+                        LaunchedEffect(baseUrl) {
+                            runCatching { container.serverRepository.profiles() }
+                                .onSuccess { profiles = it }
+                        }
+                        ProfileScreen(
+                            profiles = profiles,
+                            currentId = currentProfile?.id.orEmpty(),
+                            onPick = { picked ->
+                                if (picked.id != profileId) {
+                                    profileId = picked.id
+                                    // Everything playing belongs to the person
+                                    // who was watching. Their history, their
+                                    // rail, their saved shelf — leaving the
+                                    // video up would be one member's evening
+                                    // carried into another's.
+                                    watching = null
+                                    trail.clear()
+                                    tab = Tab.Home
+                                    scope.launch {
+                                        container.serverRepository.setProfileId(picked.id)
+                                    }
+                                }
+                                route = Route.Home
+                            },
+                            onBack = { route = Route.Home },
+                        )
                     }
 
                     is Route.Saved -> SavedScreen(
@@ -580,7 +804,7 @@ fun App(container: AppContainer) {
                     onBack = { route = Route.Home },
                     onOpenSettings = { route = Route.Setup },
                     onOpenVideo = { watching = WatchSession(it) },
-                    onOpenChannel = { route = Route.Channel(it) },
+                    onOpenChannel = openChannel,
                 )
 
                 is Route.Search -> SearchScreen(
@@ -590,6 +814,7 @@ fun App(container: AppContainer) {
                         mediaBaseUrl = baseUrl,
                         onBack = { route = Route.Home },
                         onOpenVideo = { watching = WatchSession(it) },
+                        onOpenChannel = openChannel,
                     )
 
                     is Route.Channel -> ChannelScreen(
@@ -597,7 +822,7 @@ fun App(container: AppContainer) {
                             ChannelViewModel(current.channelId, container.videoRepository)
                         },
                         mediaBaseUrl = baseUrl,
-                        onBack = { route = Route.Home },
+                        onBack = { route = channelFrom },
                         onOpenSettings = { route = Route.Setup },
                         // The channel's own order comes with the video, so next
                         // stays inside the list that was being read.
@@ -628,8 +853,16 @@ fun App(container: AppContainer) {
             // Not on the setup screen. Somebody typing an address is fixing the
             // connection this video came through, and a bar playing over that
             // form is in the way of the one thing that screen is for.
+            // Everywhere but the setup form. Somebody typing an address is
+            // fixing the connection this video came through, and a bar playing
+            // over that form is in the way of the one thing that screen is for.
+            // The settings details are not that: they are pages, and the sound
+            // carrying on across them is the whole point of holding the session
+            // above the routes.
             val browsing = route is Route.Home || route is Route.Search ||
-                route is Route.Channel || route is Route.Saved
+                route is Route.Channel || route is Route.Saved ||
+                route is Route.Voice || route is Route.Language ||
+                route is Route.History || route is Route.Profile
 
             if (session != null && browsing) {
                 // `remember` and a DisposableEffect, not `viewModel()`. That
@@ -640,7 +873,7 @@ fun App(container: AppContainer) {
                 // This is only correct because the activity declares
                 // `configChanges` for rotation and so is never recreated under
                 // it.
-                val watch = remember(session.videoId) {
+                val watch = remember(session.sittingId) {
                     WatchViewModel(
                         videoId = session.videoId,
                         startAtBeginning = session.startAtBeginning,
@@ -651,18 +884,35 @@ fun App(container: AppContainer) {
                         narration = container.narrationRepository,
                         preferences = container.preferencesRepository,
                         queue = session.queue,
+                        // Told after the fact: the ViewModel has already loaded
+                        // the next video by the time this runs — see
+                        // `advanceTo` — and this is the route catching up with
+                        // it. `copy`, not a new session, or the key above would
+                        // change and the player would be torn down and rebuilt
+                        // mid-song.
                         onFinished = { next ->
-                            trail.add(session.videoId)
-                            watching = WatchSession(
-                                next,
+                            trail.add(watching?.videoId ?: session.videoId)
+                            watching = watching?.copy(
+                                videoId = next,
                                 startAtBeginning = true,
-                                queue = session.queue,
                             )
                         },
                         playerFactory = container.playerFactory,
                     )
                 }
                 DisposableEffect(watch) { onDispose { watch.close() } }
+
+                // The session is the truth and the ViewModel follows it.
+                //
+                // Two things move `session.videoId`: pressing next or picking
+                // from the rail, which happen while the app is on screen, and
+                // autoplay, which may happen while it is not. `advanceTo`
+                // checks the id first, so the second case — where the ViewModel
+                // moved first and told the route afterwards — costs nothing
+                // here.
+                LaunchedEffect(session.videoId) {
+                    watch.advanceTo(session.videoId, session.startAtBeginning)
+                }
 
                 // Settings is a tab, so the sliders can be moved while this is
                 // still playing in the miniplayer. Without this the player keeps
@@ -738,8 +988,15 @@ fun App(container: AppContainer) {
                     // looked covered. It rests on top of the whole
                     // thing, and slides down by the whole thing.
                     .padding(
-                        bottom = navigationInset +
-                            if (route is Route.Home) Size.topBar else 0.dp,
+                        bottom = navigationInset + when {
+                            route is Route.Home -> Size.topBar
+                            // The search screen's field now owns the bottom of
+                            // that screen, the same way the tab bar owns Home's.
+                            // Without this the bar rests across the one control
+                            // that screen exists for.
+                            route is Route.Search -> SEARCH_FIELD_ROW
+                            else -> 0.dp
+                        },
                     )
 
                 if (session.minimised) {
@@ -849,24 +1106,41 @@ fun App(container: AppContainer) {
                             viewModel = watch,
                             mediaBaseUrl = baseUrl,
                             onBack = { watching = session.copy(minimised = true) },
-                            onOpenVideo = { watching = WatchSession(it) },
+                            // Picked from the rail: the same sitting, resumed
+                            // rather than restarted.
+                            onOpenVideo = {
+                                trail.add(session.videoId)
+                                watching = session.copy(
+                                    videoId = it,
+                                    startAtBeginning = false,
+                                )
+                            },
                             // Advancing starts the next video at the beginning;
                             // choosing one resumes it. Two different acts, and
                             // the difference is what stops "next" dropping
                             // somebody into the middle of a track.
+                            // `copy`, so the sitting — and with it the player and
+                            // its connection — survives moving between videos.
+                            // A new `WatchSession` here would rebuild the
+                            // ViewModel and tear the sound down between two
+                            // tracks that are meant to run on.
                             onAdvanceTo = {
                                 trail.add(session.videoId)
-                                watching = WatchSession(
-                                    it,
+                                watching = session.copy(
+                                    videoId = it,
                                     startAtBeginning = true,
-                                    queue = session.queue,
                                 )
                             },
                             onPlayPrevious = {
                                 val previous = trail.removeLastOrNull()
                                 // Resumed, not restarted: going back means
                                 // returning to where you were.
-                                if (previous != null) watching = WatchSession(previous)
+                                if (previous != null) {
+                                    watching = session.copy(
+                                        videoId = previous,
+                                        startAtBeginning = false,
+                                    )
+                                }
                             },
                             hasPrevious = trail.isNotEmpty(),
                             onOpenChannel = {
@@ -874,43 +1148,13 @@ fun App(container: AppContainer) {
                                 // a channel from the watch screen does not end
                                 // what somebody was listening to.
                                 watching = session.copy(minimised = true)
-                                route = Route.Channel(it)
+                                openChannel(it)
                             },
                         )
                     }
                     }
                 }
 
-            // Last child of the Box, and that is load-bearing now.
-            //
-            // As a `ModalBottomSheet` this sat wherever it was written, because a
-            // popup layer is always on top; drawn in the scene it is on top only
-            // if it is drawn last. Written where it used to be, it opened
-            // *underneath* every screen and the miniplayer.
-            //
-            // Always composed, told whether it is showing: an `if` around it
-            // removes the node the exit animation would play on, so the sheet
-            // would vanish rather than slide away.
-            ProfileSheet(
-                visible = profilesOpen,
-                profiles = profiles,
-                currentId = currentProfile?.id.orEmpty(),
-                onDismiss = { profilesOpen = false },
-                onPick = { picked ->
-                    profilesOpen = false
-                    if (picked.id != profileId) {
-                        profileId = picked.id
-                        // Everything playing belongs to the person who was
-                        // watching. Their history, their rail, their saved
-                        // shelf — leaving the video up would be one member's
-                        // evening carried into another's.
-                        watching = null
-                        trail.clear()
-                        tab = Tab.Home
-                        scope.launch { container.serverRepository.setProfileId(picked.id) }
-                    }
-                },
-            )
             }
             }
 

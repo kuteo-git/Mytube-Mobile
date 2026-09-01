@@ -25,6 +25,7 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDate
 import com.mytube.app.ui.home.formatViews
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -48,8 +49,7 @@ fun DescriptionBox(video: Video, modifier: Modifier = Modifier) {
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Tokens.surface)
+            .glassControl(RoundedCornerShape(12.dp))
             .then(if (expanded) Modifier else Modifier.clickable { expanded = true })
             .padding(Space.md),
     ) {

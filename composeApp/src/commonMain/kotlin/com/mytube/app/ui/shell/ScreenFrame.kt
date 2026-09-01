@@ -7,6 +7,14 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -16,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -31,7 +40,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
@@ -44,6 +52,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
@@ -77,8 +92,81 @@ import com.mytube.app.ui.theme.Tokens
 @Composable
 fun tabContentPadding(): PaddingValues = tabContentPadding(LocalMiniPlayerShowing.current)
 
+/**
+ * The same, for a page opened from a menu rather than a tab.
+ *
+ * Saved, History and a channel have no tab bar and no chip row; what they have
+ * at the top is [DetailTopRow]'s arrow, drawn over the content, and at the
+ * bottom nothing but the miniplayer when there is one. They used to borrow
+ * `tabContentPadding`, which was right about the top by coincidence — the arrow
+ * row is exactly `Size.topBar` — and wrong about the bottom by a tab bar's
+ * height.
+ */
+@Composable
+fun detailContentPadding(): PaddingValues = PaddingValues(
+    top = detailTopChrome(),
+    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+        (if (LocalMiniPlayerShowing.current) Size.miniPlayer else 0.dp) + Space.md,
+)
+
+/**
+ * The way out of a page reached from a menu, drawn over whatever it shows.
+ *
+ * Every such page needs one and needs it over *every* state, or a page that will
+ * not load is a dead end: Android's system back leaves the app, and iOS has no
+ * system back at all. Five screens wrote this same 48dp box, and five copies of
+ * a control are five controls that drift apart.
+ */
+@Composable
+fun BoxScope.DetailBack(onBack: () -> Unit, label: String) {
+    Box(
+        Modifier
+            .align(Alignment.TopStart)
+            .padding(
+                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+                start = Space.xs,
+            )
+            .size(48.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onBack),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(DetailBackIcon, label, tint = Tokens.text, modifier = Modifier.size(24.dp))
+    }
+}
+
+/** The status inset plus the row [DetailTopRow]'s arrow sits in. */
+@Composable
+private fun detailTopChrome(): Dp =
+    WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + Size.topBar
+
+/**
+ * Whatever chrome a screen has at the top, whichever kind of screen it is.
+ *
+ * Inside the shell that is the measured bar; outside it, the back arrow's row.
+ * The skeleton needs it and cannot know which of the two it is being drawn in —
+ * `TabScaffold` is used by tabs and by the two pages opened from Settings alike.
+ */
+@Composable
+private fun topChrome(): Dp {
+    val bar = LocalTopBarHeight.current
+    return if (bar > 0.dp) bar else detailTopChrome()
+}
+
 /** Whether the miniplayer bar is on screen, for the padding above to read. */
 val LocalMiniPlayerShowing = staticCompositionLocalOf { false }
+
+/**
+ * How tall the top bar turned out to be, measured by [AppShell].
+ *
+ * It used to be a constant — the status inset plus 56dp — and that was true
+ * while every tab carried the same bar. It is not any more: the bar's logo,
+ * search box and avatar have all left it, so what remains is the status inset
+ * plus whatever a tab pins under it. On Home that is the chip row; on the other
+ * two it is nothing at all, and reserving 56dp there left a band of empty page
+ * above the first row of every list.
+ */
+val LocalTopBarHeight = compositionLocalOf { 0.dp }
 
 /**
  * How far the floating bars have slid out of the way: 0 down, 1 gone.
@@ -96,7 +184,10 @@ val LocalBarsHidden = compositionLocalOf { 0f }
 
 @Composable
 private fun tabContentPadding(miniPlayer: Boolean): PaddingValues = PaddingValues(
-    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + Size.topBar,
+    // Measured, not computed. See [LocalTopBarHeight]: the bar's height is now a
+    // property of what the tab pinned in it, and only the bar can know that. The
+    // status inset is inside the measurement, because the bar reserves it.
+    top = LocalTopBarHeight.current,
     // The tab bar, and the miniplayer sitting on it when there is one.
     //
     // Without the second term the bar covers whatever is last in the list, and
@@ -178,8 +269,7 @@ fun TabScaffold(
             // screen says "wait"; this says what is coming, and the page then
             // fills in rather than appearing.
             loading -> Column(
-                Modifier.fillMaxSize().padding(top = tabContentPadding()
-                    .calculateTopPadding()),
+                Modifier.fillMaxSize().padding(top = topChrome()),
             ) { FeedSkeleton() }
 
             needsServer -> Centered {
@@ -211,43 +301,79 @@ private fun Centered(content: @Composable () -> Unit) {
 }
 
 /**
- * The pull-to-refresh spinner, clear of the floating top bar.
+ * Where a pull-to-refresh gesture is up to, published for the shell to draw.
  *
- * It exists because the three tabs passed `indicator = {}` — which does not move
- * the indicator out of the way, it **removes it**. The gesture worked and
- * refreshed the list, and nothing on screen ever said so: a pull that produces
- * no spinner reads as a pull that did nothing, so people pull again.
+ * # Why the indicator is not drawn where it is used
  *
- * The offset is the same arithmetic as [tabContentPadding] and for the same
- * reason: the bar is 56dp *plus* the status bar, and it floats over the list.
+ * It has to be **outside the layer the shell records**. A sampled backdrop that
+ * is itself inside that recording asks Skia to filter an image that contains the
+ * filter, and the answer is not a wrong picture — it is a crash. Measured on the
+ * simulator, on launch, the first time this was given `liquidGlass` while it
+ * still lived inside the list:
+ *
+ * ```
+ * EXC_BAD_ACCESS  Could not determine thread index for stack guard region
+ * SkRasterPipeline::run … SkBlurImageFilter::onGetOutputLayerBounds …
+ * ```
+ *
+ * — a stack overflow inside the image-filter bounds walk. The charter's rule
+ * about a control "sampling a recording of itself" was written as an appearance
+ * problem; this is what it actually costs.
+ *
+ * So the screens say *where the pull has got to* and `AppShell` — which draws
+ * the bars, and is a sibling of the recording rather than inside it — draws the
+ * pane. The same arrangement, and the same reason, as the bars themselves.
  */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun BoxScope.TabRefreshIndicator(state: PullToRefreshState, isRefreshing: Boolean) {
-    // `offset`, not `padding`.
-    //
-    // Padding puts the indicator inside a smaller box, and the indicator draws
-    // itself *above* its own origin while the finger is pulling — so the top of
-    // the disc was clipped by the padding box for the whole of the gesture, and
-    // what a reader saw was a spinner with its head cut off. An offset moves
-    // where it draws without changing what may be drawn.
-    //
-    // The distance is the same arithmetic as [tabContentPadding], and for the
-    // same reason: the bar is 56dp *plus* the status bar, and it floats over the
-    // list. A little more, so the disc clears the bar rather than touching it.
-    val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
-        Size.topBar + Space.sm
-    val offsetPx = with(LocalDensity.current) { top.roundToPx() }
+internal object PullGlass {
+    var fraction by mutableFloatStateOf(0f)
+    var refreshing by mutableStateOf(false)
 
-    PullToRefreshDefaults.Indicator(
-        state = state,
-        isRefreshing = isRefreshing,
-        containerColor = Tokens.surface,
-        color = Tokens.text,
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .offset { IntOffset(0, offsetPx) },
-    )
+    /** How far down the pane goes, over and above the bar it hangs under. */
+    var extraTop by mutableStateOf(0.dp)
+}
+
+/**
+ * Publish the pull, and draw nothing.
+ *
+ * `indicator = {}` on a `PullToRefreshBox` does not move an indicator, it
+ * removes one — the fault this function was written to fix, recorded in the
+ * charter. So it still occupies the slot, and what it puts there is a report
+ * rather than a picture.
+ */
+@Composable
+fun BoxScope.TabRefreshIndicator(
+    state: PullToRefreshState,
+    isRefreshing: Boolean,
+    /**
+     * Anything above this list that the bar's own measurement does not cover.
+     *
+     * Nothing does today: the chip row used to need `Size.chipRow` here, because
+     * it was pinned under a bar whose height the indicator assumed rather than
+     * measured, and the pane came out behind the chips — a disc peeking out from
+     * under "Gaming". The bar reports its real height now, chips included.
+     */
+    extraTop: Dp = 0.dp,
+) {
+    // Read **here**, in composition, and not inside the effect.
+    //
+    // A state read inside `SideEffect` subscribes nothing: the effect runs after
+    // a recomposition, it does not cause one. So the pane was only ever updated
+    // when something *else* recomposed this slot — which happens constantly
+    // while a finger is dragging a list, and stops the instant it lifts. The
+    // pane then kept the last fraction it had been handed and stayed on screen.
+    // Reported as the loading not hiding.
+    val distance = state.distanceFraction
+    SideEffect {
+        PullGlass.fraction = distance
+        PullGlass.refreshing = isRefreshing
+        PullGlass.extraTop = extraTop
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            PullGlass.fraction = 0f
+            PullGlass.refreshing = false
+        }
+    }
 }
 
 /**
@@ -369,22 +495,202 @@ fun FeedSkeleton(modifier: Modifier = Modifier, cards: Int = 3) {
  * Reading direction rather than position: hiding below a fixed scroll depth is
  * the rule that makes the bars vanish while somebody is reading half way down a
  * feed and stay gone while they scroll *back*, which is exactly when the tabs are
- * wanted. `lastScrolledForward` is the list's own answer to "which way did the
- * last movement go", so the bars leave on the way down and return on the way up.
+ * wanted.
  *
  * Always shown at the very top. A feed that opens with no top bar looks like a
  * screen that failed to draw its chrome.
  *
- * `derivedStateOf` because these three read from the scroll on every frame of
- * every fling, and without it the whole shell recomposes at 60fps to answer a
- * boolean that changes twice a minute.
+ * # Direction alone is not enough, and it was reported as jitter
+ *
+ * This used to be `listState.lastScrolledForward`, which is the list's own
+ * answer to "which way did the last movement go" — and it answers that about
+ * **the last pixel**. A finger resting on a moving list wobbles by a pixel or
+ * two in both directions, so the bars came back and left again under a thumb
+ * that was, as far as its owner was concerned, holding still.
+ *
+ * The fix is not a debounce or a throttle. Both of those are about *time*, and
+ * nothing here is too fast — a bar that appeared 200ms after the wobble would be
+ * the same fault, late. What is wrong is that a movement of any size counts as a
+ * change of mind, so the answer is a **distance the movement has to cover before
+ * it counts**: [DIRECTION_THRESHOLD] of travel in one direction flips the bars,
+ * and travel the other way has to cover that distance again to flip them back.
+ *
+ * Distance accumulates and resets on a reversal rather than summing, so a slow
+ * drift never adds up to a flip and a decisive flick always does.
  */
 @Composable
 fun rememberBarsVisible(listState: LazyListState): Boolean {
-    val visible by remember(listState) {
-        derivedStateOf {
-            !listState.canScrollBackward || !listState.lastScrolledForward
+    val threshold = with(LocalDensity.current) { DIRECTION_THRESHOLD.toPx() }
+    // At the top the bars are always up, whatever the last movement was. Kept as
+    // `derivedStateOf` for the reason it always was: this is read on every frame
+    // of every fling, and without it the whole shell recomposes at 60fps to
+    // answer a boolean that changes twice a minute.
+    val atTop by remember(listState) {
+        derivedStateOf { !listState.canScrollBackward }
+    }
+    var hidden by remember(listState) { mutableStateOf(false) }
+
+    LaunchedEffect(listState, threshold) {
+        var previous = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        // How far the list has travelled in the current direction. Reset, not
+        // added to, when the direction changes.
+        var travelled = 0f
+
+        snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { position ->
+            val (index, offset) = position
+            val (wasIndex, wasOffset) = previous
+            previous = position
+
+            // Within one item the offset is a real distance. Across items it is
+            // not — the next item has its own height and its own zero — so a
+            // crossing counts as one decisive movement in that direction rather
+            // than as a number this cannot know.
+            val delta = when {
+                index == wasIndex -> (offset - wasOffset).toFloat()
+                index > wasIndex -> threshold
+                else -> -threshold
+            }
+            if (delta == 0f) return@collect
+
+            travelled = if (travelled == 0f || (travelled > 0f) == (delta > 0f)) {
+                travelled + delta
+            } else {
+                delta
+            }
+
+            if (travelled >= threshold) hidden = true
+            if (travelled <= -threshold) hidden = false
         }
     }
-    return visible
+
+    return atTop || !hidden
+}
+
+/**
+ * How far a list has to move one way before the bars believe it.
+ *
+ * 48dp — about a finger's width, and a third of a card's thumbnail. Small enough
+ * that a deliberate short flick still hides the chrome, large enough that
+ * nothing a resting thumb does reaches it.
+ */
+private val DIRECTION_THRESHOLD = 48.dp
+
+/**
+ * A screen opened *from* another one: a title, a way back, and content.
+ *
+ * # Why this exists
+ *
+ * Settings was one long page — an address, a shelf, two sliders, a text field
+ * and a list of languages, all scrolling past each other under one title. What
+ * belongs on a phone's settings screen is a **menu**: a row per thing, and the
+ * thing itself on its own screen. That is what the platform's own Settings does,
+ * and it is what makes a row's value legible at a glance without reading the
+ * control that sets it.
+ *
+ * # The back arrow is drawn over the content, and it has to be
+ *
+ * These screens have no tab bar. Android's system back leaves the app and iOS
+ * has no system back at all, so a detail that would not load is otherwise a dead
+ * end — the same argument the channel page and the saved shelf each record, and
+ * the third time is when it becomes a function.
+ */
+@Composable
+fun DetailScaffold(
+    title: String,
+    onBack: () -> Unit,
+    backLabel: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(color = Tokens.bg, modifier = Modifier.fillMaxSize()) {
+        // Recorded, so the miniplayer floating over this page is glass here too.
+        Box(Modifier.fillMaxSize().glassSource()) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        top = WindowInsets.statusBars.asPaddingValues()
+                            .calculateTopPadding() + Size.topBar,
+                        bottom = Space.xxl,
+                    ),
+                content = content,
+            )
+
+            DetailTopRow(title, onBack, backLabel, Modifier.align(Alignment.TopStart))
+        }
+    }
+}
+
+/**
+ * The arrow and the title, for a page whose content is a plain column.
+ *
+ * The title sits beside the arrow rather than above it: at this size a screen
+ * with one subject does not need a heading the width of the page, and the row is
+ * what says where the way out is.
+ *
+ * A page whose content is a *list* uses [DetailBack] with a `ScreenTitle` as the
+ * list's first item instead — the heading then scrolls away with the thing it
+ * heads, which is what Saved, History, a channel and the search results all do.
+ */
+@Composable
+private fun DetailTopRow(
+    title: String,
+    onBack: () -> Unit,
+    backLabel: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier
+            .padding(
+                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+            )
+            .fillMaxWidth()
+            .height(Size.topBar)
+            .padding(horizontal = Space.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = DetailBackIcon,
+                contentDescription = backLabel,
+                tint = Tokens.text,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        Text(
+            text = title,
+            color = Tokens.text,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+/** The same chevron the channel page and the saved shelf carry. */
+private val DetailBackIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "DetailBack",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(15.5f, 4f)
+            lineTo(7.5f, 12f)
+            lineTo(15.5f, 20f)
+            lineTo(17f, 18.5f)
+            lineTo(10.5f, 12f)
+            lineTo(17f, 5.5f)
+            close()
+        }
+    }.build()
 }

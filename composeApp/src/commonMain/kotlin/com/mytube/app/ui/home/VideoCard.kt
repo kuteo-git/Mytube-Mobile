@@ -43,6 +43,8 @@ import coil3.compose.AsyncImage
 import com.mohamedrejeb.calf.ui.gesture.adaptiveClickable
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.i18n.Strings
+import com.mytube.app.ui.shell.GlassRadius
+import com.mytube.app.ui.shell.menuSurface
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -77,6 +79,14 @@ fun VideoCard(
      * rather than a dead one.
      */
     onSave: (() -> Unit)? = null,
+    /**
+     * What the save row is called, when "Save" is the wrong word for it.
+     *
+     * Empty everywhere but the saved shelf, where every row is already kept and
+     * the menu was offering "Saved" — a statement of what is already true, with
+     * no verb to press.
+     */
+    saveLabel: String = "",
     onNotInterested: (() -> Unit)? = null,
     /**
      * Open the channel this video belongs to.
@@ -246,7 +256,7 @@ fun VideoCard(
             // The overflow button. On the web it appears on hover or focus;
             // a phone has neither, so it is always there — which is what the
             // web app itself shows on a phone.
-            VideoCardMenu(video, strings, onSave, onNotInterested)
+            VideoCardMenu(video, strings, onSave, saveLabel, onNotInterested)
         }
 
         // The gap between cards. Smaller than the web's 40px because the meta
@@ -300,6 +310,7 @@ fun VideoCardMenu(
     video: Video,
     strings: Strings,
     onSave: (() -> Unit)?,
+    saveLabel: String = "",
     onNotInterested: (() -> Unit)?,
     onMarkWatched: (() -> Unit)? = null,
 ) {
@@ -317,18 +328,30 @@ fun VideoCardMenu(
                 .clickable { menuOpen = true }
                 .padding(Space.sm),
         )
+        // Paint, and dark. Two roads to real glass are closed here: a popup has
+        // its own coordinate space, so a sampled backdrop reads the wrong slice
+        // of the app, and this anchor sits inside the layer the shell records,
+        // where sampling crashes Skia outright. See [menuSurface].
         DropdownMenu(
             expanded = menuOpen,
             onDismissRequest = { menuOpen = false },
-            containerColor = Tokens.surface,
+            containerColor = Color.Transparent,
+            shape = GlassRadius.panel,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            modifier = Modifier.menuSurface(GlassRadius.panel),
         ) {
             if (onSave != null) {
                 DropdownMenuItem(
                     text = {
                         Text(
                             // What the button *did*, once it is done — the same
-                            // rule the watch screen's Save pill follows.
-                            if (video.saved) strings.savedVideo else strings.saveVideo,
+                            // rule the watch screen's Save pill follows. Unless
+                            // the caller names it: on the saved shelf the row is
+                            // the way *off* it.
+                            saveLabel.ifEmpty {
+                                if (video.saved) strings.savedVideo else strings.saveVideo
+                            },
                             color = Tokens.text,
                         )
                     },
@@ -364,7 +387,7 @@ object Size {
      * that has to know is every scrolling screen — and a constant defined next
      * to its only *reader* is one nobody finds when they add the next screen.
      */
-    val miniPlayer = 66.dp
+    val miniPlayer = 70.dp
     val chip = 32.dp
 
     /**

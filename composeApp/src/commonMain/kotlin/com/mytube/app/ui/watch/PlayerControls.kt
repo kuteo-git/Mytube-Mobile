@@ -2,6 +2,7 @@ package com.mytube.app.ui.watch
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -56,6 +57,11 @@ import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.i18n.LocalStrings
+import androidx.compose.runtime.CompositionLocalProvider
+import com.mytube.app.ui.shell.GlassItem
+import com.mytube.app.ui.shell.LocalGlassVisible
+import com.mytube.app.ui.shell.GlassPane
+import com.mytube.app.ui.shell.GlassPaneShape
 import com.mytube.app.ui.shell.glassSurface
 import com.mytube.app.ui.theme.Tokens
 
@@ -68,6 +74,21 @@ import com.mytube.app.ui.theme.Tokens
  * they come back only when somebody taps, which costs a tap.
  */
 private const val HIDE_AFTER_MILLIS = 5_000L
+
+/**
+ * How long the controls take to come and go.
+ *
+ * Explicit rather than the default spring, because **`PlayerGlass.swift` runs
+ * the same fade for the panes it draws** and a spring has no duration to agree
+ * with. It is the second number written down twice in this app for that reason,
+ * the first being the bars' 220ms in `ShellBridge`, and like that one both
+ * copies say so.
+ *
+ * What it fixes was reported from the phone: in fullscreen the seek bar faded
+ * out and the buttons stayed a beat longer, because the platform pane left only
+ * when Compose disposed it — after its own fade had finished.
+ */
+private const val CONTROLS_FADE_MILLIS = 200
 
 /** How far the skip buttons jump. The number every player on the device uses. */
 const val SKIP_SECONDS = 10.0
@@ -126,6 +147,17 @@ fun PlayerControls(
     hasPrevious: Boolean,
     hasSubtitles: Boolean,
     subtitlesOn: Boolean,
+    /**
+     * Whether the player's own settings sheet is up.
+     *
+     * Read for one thing only, and only where a platform layer draws the glass:
+     * that layer is above everything Compose renders, so in fullscreen — the one
+     * arrangement where the sheet overlaps the picture — the controls would
+     * float on top of the sheet they opened. Reported from the phone exactly
+     * that way. Nothing changes on Android, where the sheet is Compose and drawn
+     * last, which is what puts it above them already.
+     */
+    settingsOpen: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -190,11 +222,40 @@ fun PlayerControls(
         // plain on a phone: the transport discs sit in the middle of the frame,
         // which is the half of the picture somebody dragging the bar is trying
         // to see.
-        AnimatedVisibility(visible && !scrubbing, enter = fadeIn(), exit = fadeOut()) {
-            // A scrim, not a solid. White glyphs over a bright frame are
-            // unreadable, and darkening the whole picture to fix that is
-            // punishing the video for the controls.
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))) {
+        // Provided once, read by all seven panes. See [LocalGlassVisible].
+        //
+        // The outer value is *and*-ed rather than replaced: the watch screen
+        // turns it off for the whole drag to the miniplayer, and this composable
+        // knows nothing about that gesture. Replacing it would light the buttons
+        // back up halfway down the screen.
+        CompositionLocalProvider(
+            LocalGlassVisible provides (
+                LocalGlassVisible.current &&
+                    visible &&
+                    !scrubbing &&
+                    !(fullscreen && settingsOpen)
+                ),
+        ) {
+        AnimatedVisibility(
+            visible && !scrubbing && !(fullscreen && settingsOpen),
+            enter = fadeIn(tween(CONTROLS_FADE_MILLIS)),
+            exit = fadeOut(tween(CONTROLS_FADE_MILLIS)),
+        ) {
+            // No scrim.
+            //
+            // There was one — black at 0.4 over the whole frame — and the note
+            // beside it already said what was wrong with it: *"white glyphs over
+            // a bright frame are unreadable, and darkening the whole picture to
+            // fix that is punishing the video for the controls."* It was the
+            // answer available before the controls were made of glass. Now every
+            // glyph on this screen sits on a pane of its own, so the pane can do
+            // the work the scrim was doing and the picture is left alone.
+            //
+            // That is why the chevron and the fullscreen title gained panes in
+            // the same change: they were the two things still floating bare, and
+            // they were legible only because the whole frame was being dimmed
+            // for them.
+            Box(Modifier.fillMaxSize()) {
 
                 // Top row: collapse on the left, subtitles and settings on the
                 // right. This is the arrangement YouTube's own player uses, and
@@ -218,19 +279,40 @@ fun PlayerControls(
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ControlButton(
-                        // A chevron down, not a back arrow: this collapses the
-                        // video to the miniplayer rather than closing it, and
-                        // an arrow would promise the opposite.
-                        icon = ChevronIcon,
-                        label = strings.back,
-                        onClick = onBack,
-                    )
+                    GlassPane("player-back", GlassPaneShape.Capsule) {
+                        GlassItem(
+                            id = "back",
+                            symbol = "chevron.down",
+                            onPress = onBack,
+                        ) {
+                            ControlButton(
+                                // A chevron down, not a back arrow: this
+                                // collapses the video to the miniplayer rather
+                                // than closing it, and an arrow would promise
+                                // the opposite.
+                                icon = ChevronIcon,
+                                label = strings.back,
+                                width = 48.dp,
+                                onClick = onBack,
+                            )
+                        }
+                    }
                     if (fullscreen) {
                         // `weight` on the text rather than on a Spacer, so a long
                         // title is truncated instead of pushing the cluster on the
                         // right off the edge of a landscape phone.
-                        Column(Modifier.weight(1f).padding(horizontal = Space.sm)) {
+                        GlassPane(
+                            id = "player-title",
+                            shape = GlassPaneShape.Capsule,
+                            modifier = Modifier.weight(1f).padding(horizontal = Space.sm),
+                        ) {
+                        Column(Modifier.padding(horizontal = Space.md, vertical = 6.dp)) {
+                            GlassItem(
+                                id = "title",
+                                text = title,
+                                pointSize = 15.0,
+                                bold = true,
+                            ) {
                             Text(
                                 text = title,
                                 color = Color.White,
@@ -239,6 +321,13 @@ fun PlayerControls(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            }
+                            GlassItem(
+                                id = "title-channel",
+                                text = channel,
+                                pointSize = 13.0,
+                                opacity = 0.7,
+                            ) {
                             Text(
                                 text = channel,
                                 color = Color.White.copy(alpha = 0.7f),
@@ -246,6 +335,8 @@ fun PlayerControls(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            }
+                        }
                         }
                     } else {
                         Spacer(Modifier.weight(1f))
@@ -258,10 +349,15 @@ fun PlayerControls(
                     // is also where the extra width comes from — the gear was
                     // reported as hard to hit, and each button inside is 56dp
                     // wide against the 48 it had.
-                    Row(
-                        Modifier.glassSurface(RoundedCornerShape(percent = 50)),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                    //
+                    // And it is the first pane whose glass the *platform* draws
+                    // where it can — see [GlassPane]. The layout below is
+                    // unchanged and still Compose's; on iOS 26 it is measured,
+                    // placed, and painted by SwiftUI instead, which is the only
+                    // arrangement in which this pane can actually blur the video
+                    // behind it.
+                    GlassPane("player-top-right", GlassPaneShape.Capsule) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                     if (hasSubtitles) {
                         // On is marked by an underline, not a second glyph.
                         //
@@ -271,6 +367,12 @@ fun PlayerControls(
                         // letters turned white with the box and the button
                         // became a solid white square. Anything two-toned inside
                         // an `Icon` has the same fault waiting in it.
+                        GlassItem(
+                            id = "cc",
+                            symbol = "captions.bubble",
+                            on = subtitlesOn,
+                            onPress = { onToggleSubtitles(); lastTouch++ },
+                        ) {
                         Box(contentAlignment = Alignment.BottomCenter) {
                             ControlButton(
                                 icon = CaptionsIcon,
@@ -287,12 +389,20 @@ fun PlayerControls(
                                 )
                             }
                         }
+                        }
                     }
-                    ControlButton(
-                        icon = SettingsGearIcon,
-                        label = strings.settingsInPlayer,
-                        onClick = { onOpenSettings(); lastTouch++ },
-                    )
+                    GlassItem(
+                        id = "gear",
+                        symbol = "gearshape",
+                        onPress = { onOpenSettings(); lastTouch++ },
+                    ) {
+                        ControlButton(
+                            icon = SettingsGearIcon,
+                            label = strings.settingsInPlayer,
+                            onClick = { onOpenSettings(); lastTouch++ },
+                        )
+                    }
+                    }
                     }
                 }
 
@@ -308,12 +418,16 @@ fun PlayerControls(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     DiscButton(
+                        id = "previous",
+                        symbol = "backward.end.fill",
                         icon = PreviousIcon,
                         label = strings.playPrevious,
                         enabled = hasPrevious,
                         onClick = { onPlayPrevious(); lastTouch++ },
                     )
                     DiscButton(
+                        id = "play",
+                        symbol = if (playback.isPlaying) "pause.fill" else "play.fill",
                         icon = if (playback.isPlaying) PauseIcon else PlayIcon,
                         label = if (playback.isPlaying) strings.pause else strings.play,
                         enabled = true,
@@ -321,6 +435,8 @@ fun PlayerControls(
                         onClick = { onPlayPause(); lastTouch++ },
                     )
                     DiscButton(
+                        id = "next",
+                        symbol = "forward.end.fill",
                         icon = NextIcon,
                         label = strings.playNext,
                         enabled = hasNext,
@@ -356,48 +472,73 @@ fun PlayerControls(
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    GlassPane("player-clock", GlassPaneShape.Capsule) {
                     Row(
-                        Modifier
-                            .glassSurface(RoundedCornerShape(percent = 50))
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (isLive) {
+                            GlassItem(
+                                id = "live-dot",
+                                dot = true,
+                                // The brand red travels rather than being named
+                                // on the far side: one definition, in `Tokens`.
+                                tintArgb = Tokens.brand.value.toLong() ushr 32,
+                            ) {
                             Box(
                                 Modifier.size(8.dp).clip(CircleShape)
                                     .background(Tokens.brand),
                             )
+                            }
                             Spacer(Modifier.width(Space.sm))
+                            GlassItem(
+                                id = "live-label",
+                                text = strings.live,
+                                pointSize = 13.0,
+                                bold = true,
+                            ) {
                             Text(
                                 text = strings.live,
                                 color = Color.White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                             )
+                            }
                         } else {
-                            Text(
-                                text = formatDuration(playback.positionSeconds.toInt()) +
-                                    " / " + formatDuration(playback.durationSeconds.toInt()),
-                                color = Color.White,
-                                fontSize = 13.sp,
+                            val clock = formatDuration(playback.positionSeconds.toInt()) +
+                                " / " + formatDuration(playback.durationSeconds.toInt())
+                            GlassItem(id = "clock", text = clock, pointSize = 13.0) {
+                            Text(text = clock, color = Color.White, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    GlassPane("player-zoom", GlassPaneShape.Capsule) {
+                        GlassItem(
+                            id = "zoom",
+                            symbol = if (fullscreen) {
+                                "arrow.down.right.and.arrow.up.left"
+                            } else {
+                                "arrow.up.left.and.arrow.down.right"
+                            },
+                            onPress = { onToggleFullscreen(); lastTouch++ },
+                        ) {
+                            ControlButton(
+                                icon = if (fullscreen) ShrinkIcon else ExpandIcon,
+                                label = if (fullscreen) {
+                                    strings.exitFullscreen
+                                } else {
+                                    strings.fullscreen
+                                },
+                                width = 48.dp,
+                                onClick = { onToggleFullscreen(); lastTouch++ },
                             )
                         }
                     }
-                    Spacer(Modifier.weight(1f))
-                    Box(Modifier.glassSurface(CircleShape)) {
-                        ControlButton(
-                            icon = if (fullscreen) ShrinkIcon else ExpandIcon,
-                            label = if (fullscreen) {
-                                strings.exitFullscreen
-                            } else {
-                                strings.fullscreen
-                            },
-                            width = 48.dp,
-                            onClick = { onToggleFullscreen(); lastTouch++ },
-                        )
-                    }
                 }
             }
+        }
         }
 
         // Outside the picture the bar lives outside the scrim, so it is there
@@ -449,8 +590,8 @@ fun PlayerControls(
                 // about whether the player is on screen.
                 AnimatedVisibility(
                     visible = visible || scrubbing,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
+                    enter = fadeIn(tween(CONTROLS_FADE_MILLIS)),
+                    exit = fadeOut(tween(CONTROLS_FADE_MILLIS)),
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) {
                     seekBar()
@@ -494,25 +635,46 @@ fun PlayerControls(
  */
 @Composable
 private fun DiscButton(
+    id: String,
+    symbol: String,
     icon: ImageVector,
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
     size: androidx.compose.ui.unit.Dp = 52.dp,
 ) {
-    Box(
-        Modifier
-            .size(size)
-            .glassSurface(CircleShape)
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = Color.White.copy(alpha = if (enabled) 1f else 0.35f),
-            modifier = Modifier.size(size * 0.46f),
-        )
+    // A pane each, rather than one pane behind all three. They are three
+    // separate discs with 28dp of picture between them, which is the reference's
+    // arrangement — a single pane would be a bar, and the video would stop
+    // showing between the buttons.
+    GlassPane("player-$id", GlassPaneShape.Capsule) {
+        GlassItem(
+            id = id,
+            symbol = symbol,
+            // The glyph inside a disc is proportional to it, which is how the
+            // 64dp play button reads as the larger one rather than as a bigger
+            // circle around the same mark.
+            pointSize = (size.value * 0.46f).toDouble(),
+            opacity = if (enabled) 1.0 else 0.35,
+            // Faint *and* dead. A disabled control that still reported presses
+            // would be the dead button §5 of the server charter forbids, in the
+            // one shape nothing on screen distinguishes.
+            onPress = if (enabled) onClick else null,
+        ) {
+            Box(
+                Modifier
+                    .size(size)
+                    .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = Color.White.copy(alpha = if (enabled) 1f else 0.35f),
+                    modifier = Modifier.size(size * 0.46f),
+                )
+            }
+        }
     }
 }
 

@@ -5,6 +5,7 @@ import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Topic
+import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
 
 /**
@@ -53,8 +54,42 @@ interface VideoRepository {
 
     suspend fun video(id: String): Video
 
-    /** Videos matching a query, from this library and from YouTube. */
+    /** Videos in *this library* matching a query. */
     suspend fun search(query: String): List<Video>
+
+    /**
+     * Videos on YouTube matching a query.
+     *
+     * A second call rather than a second half of [search], because the two are
+     * two round trips with two failure modes: the library answers off a local
+     * index in milliseconds, and this one drives yt-dlp against the internet.
+     * Folding them together would make a screen that cannot show the half that
+     * worked.
+     *
+     * Upstream has **no cursor**. Asking for more means asking for a larger
+     * page, and the answer is complete when it comes back shorter than [limit].
+     */
+    suspend fun discover(query: String, limit: Int): List<ExternalVideo>
+
+    /**
+     * Make a catalogue row for an upstream video, and answer with its id.
+     *
+     * Only metadata is written; the download starts when the player asks how to
+     * play it, exactly as for any other video. Nothing can open an upstream
+     * result without this — the watch screen loads by id, and there is no row to
+     * load until somebody asks for one.
+     */
+    suspend fun ensureExternal(sourceUrl: String): String
+
+    /**
+     * The channel a pasted address names, or empty when the query is not one.
+     *
+     * Empty rather than null, and the reason is §3's: nothing inward of the
+     * mapper is nullable, so "this was not an address" is a value the caller
+     * checks rather than a case it can forget. The gateway is asked about every
+     * query — most of them are not addresses, and it says so with a 200.
+     */
+    suspend fun resolveChannel(query: String): String
 
     /** The categories with videos in them, most populated first. */
     suspend fun topics(): List<Topic>

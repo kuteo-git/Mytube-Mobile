@@ -45,7 +45,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.mytube.app.ui.theme.Tokens
-import dev.chrisbanes.haze.HazeState
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -95,7 +95,7 @@ fun BoxScope.GlassSheet(
      * which is a sibling of the shell and registers its own. A sheet that read
      * the ambient one would frost the feed hiding behind the video.
      */
-    haze: HazeState?,
+    backdrop: LayerBackdrop?,
     /**
      * What sits between the sheet and the app.
      *
@@ -142,11 +142,19 @@ fun BoxScope.GlassSheet(
     val offset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var sheetHeight by remember { mutableStateOf(0f) }
-    // 45% of whatever the app is drawn into, so the video or the feed the sheet
-    // opens over is still the larger half of the screen.
-    val maxHeight = LocalWindowInfo.current.containerSize.height.let { px ->
-        with(LocalDensity.current) { (px * MAX_HEIGHT_FRACTION).toDp() }
-    }
+    // A fraction of whatever the app is drawn into, so the video or the feed the
+    // sheet opens over is still the larger part of the screen.
+    //
+    // **Two fractions, because a landscape phone has no height to give.** 45% of
+    // a portrait screen is about 380dp and holds this panel comfortably; 45% of
+    // a phone turned sideways is about 175dp, and the settings sheet came up
+    // with most of itself below the fold — reported from fullscreen, where the
+    // player is the one place this app ever *is* landscape. The thing being
+    // protected is what is behind the sheet, and behind it there is a video
+    // whose subject is in the middle of the frame either way.
+    val container = LocalWindowInfo.current.containerSize
+    val fraction = if (container.width > container.height) LANDSCAPE_FRACTION else MAX_HEIGHT_FRACTION
+    val maxHeight = with(LocalDensity.current) { (container.height * fraction).toDp() }
 
     // Reset each time it opens. The `Animatable` lives in the caller's
     // composition, so a sheet dragged shut and reopened would otherwise come
@@ -182,13 +190,18 @@ fun BoxScope.GlassSheet(
                 .align(Alignment.BottomCenter)
                 .offset { IntOffset(0, offset.value.roundToInt()) }
                 .onSizeChanged { sheetHeight = it.height.toFloat() }
-                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                .clip(GlassRadius.sheet),
         ) {
             // The glass, sized by the sheet rather than sizing it — the same
             // `matchParentSize` rule [BarBackdrop] records: a backdrop that
             // applies `fillMaxSize` inside is measured against the incoming
             // constraints and grows to the whole screen.
-            GlassBackdrop(Modifier.matchParentSize(), haze, fromTop = true)
+            GlassBackdrop(
+                Modifier.matchParentSize(),
+                backdrop,
+                fromTop = true,
+                shape = GlassRadius.sheet,
+            )
 
             Column(Modifier.fillMaxWidth()) {
                 // The drag handle, and the only place the drag is read.
@@ -270,5 +283,8 @@ private const val DISMISS_FRACTION = 0.33f
  */
 private val MAX_WIDTH = 480.dp
 
-/** How much of the screen the sheet may take, in either orientation. */
+/** How much of a portrait screen the sheet may take. */
 private const val MAX_HEIGHT_FRACTION = 0.45f
+
+/** And of a landscape one, where the same content needs a bigger share. */
+private const val LANDSCAPE_FRACTION = 0.8f

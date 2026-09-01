@@ -3,11 +3,15 @@ package com.mytube.app.data.remote
 import com.mytube.app.data.remote.dto.ChannelDetailDto
 import com.mytube.app.data.remote.dto.ChannelVideosDto
 import com.mytube.app.data.remote.dto.ChannelsDto
+import com.mytube.app.data.remote.dto.DiscoverDto
+import com.mytube.app.data.remote.dto.EnsureExternalDto
+import com.mytube.app.data.remote.dto.EnsureExternalRequest
 import com.mytube.app.data.remote.dto.CommentsDto
 import com.mytube.app.data.remote.dto.FeedDto
 import com.mytube.app.data.remote.dto.FeedMixDto
 import com.mytube.app.data.remote.dto.NarrationDto
 import com.mytube.app.data.remote.dto.ProfilesDto
+import com.mytube.app.data.remote.dto.ResolveChannelDto
 import com.mytube.app.data.remote.dto.StreamDto
 import com.mytube.app.data.remote.dto.TopicsDto
 import com.mytube.app.data.remote.dto.TtsConfigDto
@@ -70,6 +74,45 @@ class GatewayDataSource(private val client: HttpClient) {
             identify(userId)
             parameter("q", query)
         }.orThrow().body<FeedDto>().videos
+
+    /**
+     * Upstream search.
+     *
+     * `limit` is on the query string and there is no page token, because the
+     * gateway has none to give: yt-dlp's `ytsearchN:` takes a count, so a second
+     * page is the same search asked for at a larger size.
+     */
+    suspend fun discover(
+        baseUrl: String,
+        userId: String,
+        query: String,
+        limit: Int,
+    ): DiscoverDto =
+        client.get("${baseUrl.trimEnd('/')}/api/discover") {
+            identify(userId)
+            parameter("q", query)
+            parameter("limit", limit)
+        }.orThrow().body()
+
+    suspend fun ensureExternal(baseUrl: String, userId: String, sourceUrl: String): String =
+        client.post("${baseUrl.trimEnd('/')}/api/videos/external") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(EnsureExternalRequest(url = sourceUrl))
+        }.orThrow().body<EnsureExternalDto>().videoId
+
+    /**
+     * Which channel a pasted address names, or empty.
+     *
+     * Cheap for the library's own channels — the gateway answers 1,626 of 1,690
+     * of them out of the catalogue with no upstream request at all — and it
+     * writes down what it had to ask for, so the channel page has a row to read.
+     */
+    suspend fun resolveChannel(baseUrl: String, userId: String, query: String): String =
+        client.get("${baseUrl.trimEnd('/')}/api/channels/resolve") {
+            identify(userId)
+            parameter("q", query)
+        }.orThrow().body<ResolveChannelDto>().channel.orEmpty()
 
     suspend fun topics(baseUrl: String, userId: String): TopicsDto =
         client.get("${baseUrl.trimEnd('/')}/api/topics") { identify(userId) }.orThrow().body()

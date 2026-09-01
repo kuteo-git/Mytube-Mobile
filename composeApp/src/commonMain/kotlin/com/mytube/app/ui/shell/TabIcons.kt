@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 /**
- * The four tab icons, outlined.
+ * The three tab icons, outlined.
  *
  * Outlines rather than filled shapes, matching the web app's Lucide set, and
  * written out rather than pulled from `material-icons-extended` — several
@@ -35,7 +35,6 @@ private fun stroke(name: String, body: PathBuilder.() -> Unit) =
 internal fun tabIcon(tab: Tab): ImageVector = when (tab) {
     Tab.Home -> HomeIcon
     Tab.Subscriptions -> SubscriptionsIcon
-    Tab.History -> HistoryIcon
     Tab.Settings -> SettingsIcon
 }
 
@@ -72,18 +71,6 @@ private val SubscriptionsIcon: ImageVector by lazy {
         curveTo(18.5f, 10.4f, 17.6f, 11.6f, 16.3f, 12.1f)
         moveTo(18.2f, 14.3f)
         curveTo(20.2f, 15f, 21.5f, 16.6f, 21.5f, 19f)
-    }
-}
-
-private val HistoryIcon: ImageVector by lazy {
-    stroke("History") {
-        moveTo(12f, 3f)
-        curveTo(7f, 3f, 3f, 7f, 3f, 12f)
-        curveTo(3f, 17f, 7f, 21f, 12f, 21f)
-        curveTo(17f, 21f, 21f, 17f, 21f, 12f)
-        curveTo(21f, 7f, 17f, 3f, 12f, 3f)
-        close()
-        moveTo(12f, 7f); lineTo(12f, 12f); lineTo(15.5f, 14f)
     }
 }
 

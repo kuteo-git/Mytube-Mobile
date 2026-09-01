@@ -75,7 +75,23 @@ calf = "0.8.0"
 # project builds against 36 — the only platform on the machine, and bumping it
 # means another SDK download onto a disk that has already been cleared twice for
 # this project. 1.7.0 declares no floor and carries the same iOS blur.
-haze = "1.7.0"
+# An alpha, and it is the only version this project can take. Said plainly
+# because "alpha" is a fact about support, not about the code.
+#
+#   2.0.1  Kotlin 2.4.10, Compose 1.12.0, minCompileSdk 37
+#   2.0.0  Kotlin 2.3.21, Compose 1.11.0, minCompileSdk 37
+#   2.0.0-alpha03  Kotlin 2.3.10, Compose 1.10.1, minCompileSdk 36
+#
+# The two releases require **compileSdk 37**, which is past what AGP 8.11.1
+# supports at all — and AGP cannot move, because AGP 9.x is incompatible with the
+# KMP plugin outright. Compose 1.12.0 wants AGP 9.1 for the same reason. So the
+# newest usable version is the last one published before the library moved to a
+# toolchain this project is locked out of.
+#
+# Its own floors are below ours, which is the safe direction: a 2.3.20 compiler
+# reads a klib built by 2.3.10, and Compose 1.11.0 is newer than the 1.10.1 it
+# was built against.
+backdrop = "2.0.0-alpha03"
 
 [libraries]
 # Needed for WindowInsetsControllerCompat, which is how fullscreen hides the
@@ -110,8 +126,7 @@ lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifec
 
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 calf-ui = { module = "com.mohamedrejeb.calf:calf-ui", version.ref = "calf" }
-haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
-haze-materials = { module = "dev.chrisbanes.haze:haze-materials", version.ref = "haze" }
+backdrop = { module = "io.github.kyant0:backdrop", version.ref = "backdrop" }
 # Coil does not bring its own networking; it is told which engine to use, and
 # here that is the Ktor client the rest of the app already has.
 coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }

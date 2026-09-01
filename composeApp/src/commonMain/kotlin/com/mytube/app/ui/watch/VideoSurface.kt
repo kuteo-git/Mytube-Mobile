@@ -26,4 +26,17 @@ import com.mytube.app.domain.repository.VideoPlayer
  * composition root makes impossible.
  */
 @Composable
-expect fun VideoSurface(player: VideoPlayer, modifier: Modifier)
+expect fun VideoSurface(
+    player: VideoPlayer,
+    modifier: Modifier,
+    /**
+     * Whether the picture fills its box, cropping what does not fit.
+     *
+     * False everywhere the video is the thing being watched: a letterbox is
+     * honest, and cropping a film to a phone's shape throws away the edges of
+     * every shot. True in exactly one place — the miniplayer's round window,
+     * where a 16:9 picture fitted inside a circle is a stripe with two black
+     * caps, and where nobody is watching the edges anyway.
+     */
+    fill: Boolean = false,
+)

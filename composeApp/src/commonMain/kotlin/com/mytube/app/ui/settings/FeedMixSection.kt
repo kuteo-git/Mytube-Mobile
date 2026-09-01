@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -16,6 +14,7 @@ import androidx.compose.ui.unit.sp
 import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.GlassSlider
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -72,15 +71,10 @@ private fun MixSlider(label: String, percent: Int, onChange: (Int) -> Unit) {
                 fontWeight = FontWeight.Medium,
             )
         }
-        Slider(
+        GlassSlider(
             value = percent.toFloat(),
             onValueChange = { onChange(it.toInt()) },
             valueRange = 0f..100f,
-            colors = SliderDefaults.colors(
-                thumbColor = Tokens.brand,
-                activeTrackColor = Tokens.brand,
-                inactiveTrackColor = Tokens.surfaceHover,
-            ),
         )
     }
 }

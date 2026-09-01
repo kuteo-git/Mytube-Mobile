@@ -16,6 +16,6 @@ import com.mytube.app.domain.repository.VideoPlayer
  * the space it will occupy on a phone — without pretending anything plays.
  */
 @Composable
-actual fun VideoSurface(player: VideoPlayer, modifier: Modifier) {
+actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) {
     Box(modifier.background(Color.Black))
 }

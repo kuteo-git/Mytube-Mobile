@@ -36,7 +36,8 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.unit.Dp
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.GlassSheet
-import dev.chrisbanes.haze.HazeState
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -78,7 +79,7 @@ fun BoxScope.PlayerSettingsPanel(
      * over it. A sheet reading the ambient state would frost the feed hiding
      * behind the video instead of the page the settings belong to.
      */
-    haze: HazeState?,
+    backdrop: LayerBackdrop?,
     /** How far up the bottom of the screen the sheet must clear. */
     bottomInset: Dp,
     subtitles: List<SubtitleTrack>,
@@ -98,7 +99,7 @@ fun BoxScope.PlayerSettingsPanel(
     // parameter nobody found.
     GlassSheet(
         visible = visible,
-        haze = haze,
+        backdrop = backdrop,
         // No scrim over the picture. Dimming the window would grey out the video
         // these settings are about.
         scrim = Color.Transparent,
@@ -233,8 +234,7 @@ private fun TrackChip(label: String, selected: Boolean, onClick: () -> Unit) {
         fontSize = 13.sp,
         fontWeight = FontWeight.Medium,
         modifier = Modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(if (selected) Tokens.text else Tokens.surfaceHover)
+            .glassControl(RoundedCornerShape(percent = 50), selected = selected)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 7.dp),
     )

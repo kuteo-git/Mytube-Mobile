@@ -153,6 +153,9 @@ class HomeViewModelTest {
 
         override suspend fun video(id: String) = throw NotImplementedError()
         override suspend fun search(query: String) = throw NotImplementedError()
+        override suspend fun discover(query: String, limit: Int) = throw NotImplementedError()
+        override suspend fun ensureExternal(sourceUrl: String) = throw NotImplementedError()
+        override suspend fun resolveChannel(query: String) = ""
 
         // The home screen fetches four things at once. A fake that throws for
         // three of them would test error handling rather than the feed, so these

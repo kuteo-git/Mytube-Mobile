@@ -58,6 +58,26 @@ fun StreamDto.toDomain(baseUrl: String, maxHeight: Int): Stream = when {
         url = baseUrl.trimEnd('/') + hls.url + capQuery(hls.url, maxHeight),
         height = if (hls.height > 0) hls.height else maxHeight,
     )
+    // The file on the server's own disk, and **the last thing tried**.
+    //
+    // §2 of the charter put this in phase 3 and the consequence was measured on
+    // the phone: a video the household had *downloaded* — `mediaState READY`, so
+    // the server answers with this tier and nothing else — came back as "YouTube
+    // will not hand this over". That is the same fault `live` had, in the same
+    // place, and it is the worse half of it: the file is on disk, in this house,
+    // and the app blamed an upstream refusal for it.
+    //
+    // Last rather than first because the tiers are not equivalent. HLS is
+    // adaptive and carries the phone's 720 ceiling on the URL; this is one whole
+    // file at whatever height was downloaded, usually 1080. On the house wifi
+    // that is fine, and it is still the wrong default when the server has
+    // offered a ladder.
+    //
+    // No `?max=`. There is nothing to cap: it is a file, not a playlist.
+    local != null && local.url.isNotBlank() -> Stream.Playable(
+        url = baseUrl.trimEnd('/') + local.url,
+        height = if (local.height > 0) local.height else maxHeight,
+    )
     else -> Stream.NothingPlayable
 }
 

@@ -28,6 +28,7 @@ import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -61,23 +62,27 @@ fun WatchActions(
             .padding(horizontal = Space.lg),
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
     ) {
-        // Like and dislike are **one pill with a divider**, and the like carries
-        // its count. Two separate pills is what this was, and beside the web app
-        // it reads as two unrelated opinions rather than one control with two
-        // directions — which is what they are: pressing either clears the other.
+        // Like and dislike are **one pill with a divider**. Two separate pills
+        // is what this was, and beside the web app it reads as two unrelated
+        // opinions rather than one control with two directions — which is what
+        // they are: pressing either clears the other.
+        //
+        // **No count.** It carried the like count, because the web app's does
+        // and because an empty space where a number belongs reads as a number
+        // that failed to load. On a phone that reasoning loses to the row it is
+        // in: this row scrolls sideways, and the widest thing in it was a figure
+        // nobody presses. The count is a fact about *other people*, and it is
+        // still on the page — under the title, beside the date — where facts
+        // about the video live. What is left here is two thumbs, which is what
+        // the control is for.
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(percent = 50))
-                .background(Tokens.surface),
+                .glassControl(RoundedCornerShape(percent = 50)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PillHalf(
                 icon = if (video.reaction == Reaction.Like) ThumbFilledIcon else ThumbIcon,
                 label = strings.like,
-                // The count sits beside the thumb, as it does on the web. Zero
-                // is drawn rather than hidden: an empty space where a number
-                // belongs reads as a number that failed to load.
-                trailing = video.likeCount.toString(),
                 onClick = { onReact(Reaction.Like) },
             )
             Box(
@@ -89,7 +94,6 @@ fun WatchActions(
             PillHalf(
                 icon = if (video.reaction == Reaction.Dislike) ThumbFilledIcon else ThumbIcon,
                 label = strings.dislike,
-                trailing = "",
                 flipped = true,
                 onClick = { onReact(Reaction.Dislike) },
             )
@@ -126,14 +130,17 @@ fun WatchActions(
 private fun PillHalf(
     icon: ImageVector,
     label: String,
-    trailing: String,
     onClick: () -> Unit,
     flipped: Boolean = false,
 ) {
     Row(
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            // 16 rather than 14, now that there is only a glyph between them.
+            // The padding *is* the target here: a 20dp thumb with 14dp either
+            // side was a 48dp half only because the count was making up the
+            // width on one of them, and the two halves were different sizes.
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -144,10 +151,6 @@ private fun PillHalf(
                 .size(20.dp)
                 .scale(scaleX = 1f, scaleY = if (flipped) -1f else 1f),
         )
-        if (trailing.isNotEmpty()) {
-            Spacer(Modifier.width(Space.sm))
-            Text(trailing, color = Tokens.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        }
     }
 }
 
@@ -167,8 +170,7 @@ fun SubscribeButton(subscribed: Boolean, onClick: () -> Unit, modifier: Modifier
         fontSize = 14.sp,
         fontWeight = FontWeight.Medium,
         modifier = modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(if (subscribed) Tokens.surfaceHover else Tokens.text)
+            .glassControl(RoundedCornerShape(percent = 50), selected = !subscribed)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
     )
@@ -182,10 +184,20 @@ private fun ActionPill(
     onClick: () -> Unit,
     flipped: Boolean = false,
 ) {
+    // The content follows the surface.
+    //
+    // `glassControl(selected = true)` swaps to the app's **inverted** surface —
+    // solid and light — because a state has to be a different kind of surface
+    // rather than a slightly different shade of the same one. What that means
+    // for anything drawn on it is that white ink disappears: Save in its saved
+    // state was a blank white pill with an invisible bookmark and an invisible
+    // word on it, which is how it was reported. Every selected surface in this
+    // app owes its content the same swap.
+    val ink = if (active) Tokens.invertText else Tokens.text
+
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(if (active) Tokens.surfaceHover else Tokens.surface)
+            .glassControl(RoundedCornerShape(percent = 50), selected = active)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -193,13 +205,13 @@ private fun ActionPill(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = Tokens.text,
+            tint = ink,
             modifier = Modifier
                 .size(20.dp)
                 .scale(scaleX = 1f, scaleY = if (flipped) -1f else 1f),
         )
         Spacer(Modifier.width(Space.sm))
-        Text(label, color = Tokens.text, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
     Spacer(Modifier.height(0.dp))
 }

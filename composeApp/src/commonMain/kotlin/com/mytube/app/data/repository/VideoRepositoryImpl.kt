@@ -3,6 +3,7 @@ package com.mytube.app.data.repository
 import com.mytube.app.data.remote.GatewayDataSource
 import com.mytube.app.data.remote.dto.toDomain
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.SubtitleCue
@@ -75,6 +76,16 @@ class VideoRepositoryImpl(
 
     override suspend fun search(query: String): List<Video> =
         gateway.search(requireBaseUrl(), server.profileId(), query).map { it.toDomain() }
+
+    override suspend fun discover(query: String, limit: Int): List<ExternalVideo> =
+        gateway.discover(requireBaseUrl(), server.profileId(), query, limit)
+            .videos.map { it.toDomain() }
+
+    override suspend fun ensureExternal(sourceUrl: String): String =
+        gateway.ensureExternal(requireBaseUrl(), server.profileId(), sourceUrl)
+
+    override suspend fun resolveChannel(query: String): String =
+        gateway.resolveChannel(requireBaseUrl(), server.profileId(), query)
 
     override suspend fun topics(): List<Topic> =
         gateway.topics(requireBaseUrl(), server.profileId()).topics.map { it.toDomain() }

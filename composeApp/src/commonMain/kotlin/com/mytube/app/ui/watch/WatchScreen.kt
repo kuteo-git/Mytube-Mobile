@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -62,10 +63,13 @@ import com.mytube.app.ui.home.todayISO
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.theme.MytubeTheme
+import com.mytube.app.ui.shell.LocalGlassVisible
 import com.mytube.app.ui.shell.WatchSkeleton
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import com.mytube.app.ui.theme.Tokens
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.rememberHazeState
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
@@ -180,6 +184,19 @@ fun WatchContent(
     // many pixels the picture has to cross to reach the bar.
     val drag = LocalDragProgress.current
     val travel = LocalDragTravel.current
+    // Where the picture has to arrive across the screen, in this layer's own
+    // pixels. Measured rather than assumed — see the picture's modifier below.
+    val density = LocalDensity.current
+    var pictureBoxWidth by remember { mutableStateOf(0f) }
+    val miniThumbWidthPx = with(density) { MINI_THUMB_HEIGHT.toPx() }
+    // The window is inset from the capsule's top edge, and `travel` ends at that
+    // edge. Without this the picture stopped a thumb's padding short of the
+    // circle it was heading for and jumped the last 8dp in one frame.
+    val miniThumbTopPx = with(density) { MINI_THUMB_PAD.toPx() }
+    val miniThumbLeftPx = with(density) { MINI_THUMB_LEFT.toPx() }
+    val miniThumbFraction =
+        if (pictureBoxWidth > 0f) (miniThumbWidthPx / pictureBoxWidth).coerceIn(0f, 1f) else 0.3f
+
     val openShare = rememberShare()
     val share: () -> Unit = {
         val id = (state as? WatchState.Playing)?.video?.id.orEmpty()
@@ -202,7 +219,10 @@ fun WatchContent(
     // tab content, and the watch screen is a sibling drawn *over* it — a sheet
     // reading it would frost the feed hiding behind this page rather than the
     // page itself. Everything above the sheet in this screen is inside it.
-    val sheetHaze = rememberHazeState()
+    val sheetBackdrop = rememberLayerBackdrop {
+        drawRect(Tokens.bg)
+        drawContent()
+    }
 
     // A Box, so the sheet can be a full-screen overlay of this screen.
     //
@@ -214,7 +234,7 @@ fun WatchContent(
     Column(
         Modifier
             .fillMaxSize()
-            .hazeSource(sheetHaze)
+            .layerBackdrop(sheetBackdrop)
             .background(if (fullscreen) Tokens.bg else Tokens.bg.copy(alpha = 1f - drag)),
     ) {
         // No status-bar gap in fullscreen — there is no status bar, and the gap
@@ -247,7 +267,10 @@ fun WatchContent(
             if (fullscreen) {
                 Modifier.fillMaxSize().background(Color.Black)
             } else {
-                Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .onSizeChanged { pictureBoxWidth = it.width.toFloat() }
             },
         ) {
         Box(
@@ -259,19 +282,47 @@ fun WatchContent(
                     // translationY rather than padding: this runs on every frame
                     // of a finger drag, and a layout pass per frame is the one
                     // thing that makes a gesture feel heavy.
-                    .graphicsLayer { translationY = drag * travel }
+                    .graphicsLayer {
+                        translationY = drag * (travel + miniThumbTopPx)
+                        // And sideways, because the bar is a floating capsule
+                        // now: its picture starts a margin plus a padding in
+                        // from the screen's edge, not at zero. Without this the
+                        // video lands to the left of the box it is heading for
+                        // and snaps across at the end.
+                        translationX = drag * miniThumbLeftPx
+                    }
                     // `drag` is 0 whenever nothing is being dragged, so this is
-                    // the ordinary 16:9 box the rest of the time. Left-aligned,
-                    // because the left edge is where the bar's thumbnail sits.
-                    .fillMaxWidth(lerp(1f, MINI_THUMB_FRACTION, drag))
-                    .aspectRatio(16f / 9f)
+                    // the ordinary 16:9 box the rest of the time.
+                    //
+                    // The end fraction is measured, not guessed: it is the
+                    // capsule's own window against this layer's actual width, so
+                    // it is right on a phone and on a tablet without a second
+                    // constant to keep in step.
+                    .fillMaxWidth(lerp(1f, miniThumbFraction, drag))
+                    // And the shape travels too, 16:9 to square, because what it
+                    // is landing in is a circle. Without this the picture
+                    // arrives as a wide frame and is replaced by a round one in
+                    // a single frame — the handover the whole gesture exists to
+                    // hide. The surface crops from the moment the drag starts,
+                    // for the same reason.
+                    .aspectRatio(lerp(16f / 9f, 1f, drag))
+                    // And the corners round as it goes, 0 to a circle.
+                    //
+                    // The box is square by the end — that is what the aspect
+                    // ratio above does — so a 50% corner is a circle exactly
+                    // when it arrives, and anything less than the whole journey
+                    // means the last frame swaps a rounded rectangle for a round
+                    // window. `percent` rather than a radius in dp for the same
+                    // reason: the box is shrinking, and a fixed radius would be
+                    // a different proportion of it in every frame.
+                    .clip(RoundedCornerShape(percent = (50f * drag).roundToInt()))
                     .background(Color.Black)
             },
             contentAlignment = Alignment.Center,
         ) {
             when (state) {
                 is WatchState.Playing -> if (player != null) {
-                    VideoSurface(player, Modifier.fillMaxSize())
+                    VideoSurface(player, Modifier.fillMaxSize(), fill = drag > 0f)
 
                     // Everything drawn *on* the picture goes as soon as the drag
                     // starts, and quickly — gone by a sixth of the journey.
@@ -282,6 +333,15 @@ fun WatchContent(
                     // transport discs end up larger than the picture they are
                     // over. What a dragging finger should see is the video
                     // travelling, not a control bar riding it down.
+                    // The same disappearance, said again for the panes the
+                    // platform draws.
+                    //
+                    // `graphicsLayer` fades what *Compose* renders, and on iOS 26
+                    // the controls over the picture are not that — they are drawn
+                    // above the whole scene by SwiftUI, where an alpha set here
+                    // cannot reach them. Reported from the phone: the video shrank
+                    // away and the buttons rode down over it at full strength.
+                    CompositionLocalProvider(LocalGlassVisible provides (drag == 0f)) {
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -321,6 +381,7 @@ fun WatchContent(
                         onBack = { if (fullscreen) fullscreen = false else onBack() },
                         onToggleFullscreen = { fullscreen = !fullscreen },
                         onOpenSettings = { settingsOpen = !settingsOpen },
+                        settingsOpen = settingsOpen,
                         onPlayNext = onPlayNext,
                         onPlayPrevious = onPlayPrevious,
                         // The CC button is a shortcut, not a replacement for
@@ -341,6 +402,7 @@ fun WatchContent(
                         hasSubtitles = state.video.subtitles.isNotEmpty(),
                         subtitlesOn = state.subtitleLanguage.isNotEmpty(),
                     )
+                    }
                     }
                 }
 
@@ -507,7 +569,7 @@ fun WatchContent(
     if (state is WatchState.Playing) {
         PlayerSettingsPanel(
                 visible = settingsOpen,
-                haze = sheetHaze,
+                backdrop = sheetBackdrop,
                 bottomInset = WindowInsets.navigationBars
                     .asPaddingValues()
                     .calculateBottomPadding(),

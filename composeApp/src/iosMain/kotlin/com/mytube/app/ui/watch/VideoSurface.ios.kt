@@ -12,6 +12,7 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.readValue
 import kotlinx.cinterop.useContents
 import platform.AVFoundation.AVLayerVideoGravityResizeAspect
+import platform.AVFoundation.AVLayerVideoGravityResizeAspectFill
 import platform.AVFoundation.AVPlayerLayer
 import platform.CoreGraphics.CGRect
 import platform.CoreGraphics.CGRectMake
@@ -69,7 +70,7 @@ private class VideoContainer(private val playerLayer: AVPlayerLayer) :
 
 @OptIn(ExperimentalForeignApi::class)
 @Composable
-actual fun VideoSurface(player: VideoPlayer, modifier: Modifier) {
+actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) {
     val av = (player as? AvVideoPlayer)?.av ?: return
 
     // Remembered rather than found again with `sublayers.firstOrNull() as?
@@ -82,7 +83,15 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier) {
             // Aspect, not aspect-fill: a 16:9 video in a 16:9 box is unaffected,
             // and a vertical one is letterboxed rather than having its sides cut
             // off. The server publishes both.
-            videoGravity = AVLayerVideoGravityResizeAspect
+            // Aspect *fill* crops to the layer's bounds; aspect fits inside it.
+            // The same choice Android makes with RESIZE_MODE_ZOOM, and it has to
+            // be the layer's own property rather than a transform on the view:
+            // an interop layer that is scaled is not a resized one.
+            videoGravity = if (fill) {
+                AVLayerVideoGravityResizeAspectFill
+            } else {
+                AVLayerVideoGravityResizeAspect
+            }
             backgroundColor = UIColor.blackColor.CGColor
         }
     }

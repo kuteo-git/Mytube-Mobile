@@ -247,7 +247,11 @@ private fun Feed(
         onRefresh = onRefresh,
         state = refreshState,
         modifier = Modifier.fillMaxSize(),
-        indicator = { TabRefreshIndicator(refreshState, state.refreshing) },
+        indicator = {
+            // Below the chips, not behind them: this tab is the one with a
+            // second row pinned under the bar.
+            TabRefreshIndicator(refreshState, state.refreshing)
+        },
     ) {
         // Pinned under the top bar rather than scrolled with the feed.
         //
@@ -270,18 +274,14 @@ private fun Feed(
             modifier = Modifier.fillMaxSize(),
             // The list scrolls *under* both bars — that is what makes them feel
             // like glass over content rather than walls — but its content must
-            // start below the top bar and end above the tab bar. Insets alone are
-            // not enough: those describe the system's bars, not this app's.
-            // The chip row is pinned, so the list has to start below it as well
-            // as below the top bar. This is the fourth thing in this app to need
-            // the bar's height and the second to need the row's — both live in
-            // `Size`, and nothing here computes either.
-            contentPadding = PaddingValues(
-                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
-                    Size.topBar + Size.chipRow,
-                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
-                    Size.topBar,
-            ),
+            // start below the top bar and end above the tab bar.
+            //
+            // The shared arithmetic, not a copy of it. This copy added the top
+            // bar's 56dp to the chip row's height, which was right while the bar
+            // was a capsule with the chips underneath it. The chips *are* the
+            // bar now, and the sum left an empty 56dp band between them and the
+            // first thing in the feed.
+            contentPadding = tabContentPadding(),
         ) {
             // The rail scrolls away with the feed rather than sticking. It is a
             // shelf to glance at on the way past, not a fixture.
