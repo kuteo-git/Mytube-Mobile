@@ -107,6 +107,15 @@ fun BoxScope.GlassSheet(
      */
     scrim: Color,
     onDismiss: () -> Unit,
+    /**
+     * How much of a portrait screen this sheet may take.
+     *
+     * A parameter because the two sheets hold different things: the player's is
+     * two switches and a row of chips over a video that must stay the subject,
+     * and the save sheet is a *list* somebody scans — at the player's share it
+     * showed three rows of a dozen.
+     */
+    maxHeightFraction: Float = MAX_HEIGHT_FRACTION,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // Driven by a transition state rather than by `visible` directly, so both
@@ -153,7 +162,8 @@ fun BoxScope.GlassSheet(
     // protected is what is behind the sheet, and behind it there is a video
     // whose subject is in the middle of the frame either way.
     val container = LocalWindowInfo.current.containerSize
-    val fraction = if (container.width > container.height) LANDSCAPE_FRACTION else MAX_HEIGHT_FRACTION
+    val fraction =
+        if (container.width > container.height) LANDSCAPE_FRACTION else maxHeightFraction
     val maxHeight = with(LocalDensity.current) { (container.height * fraction).toDp() }
 
     // Reset each time it opens. The `Animatable` lives in the caller's
@@ -201,6 +211,7 @@ fun BoxScope.GlassSheet(
                 backdrop,
                 fromTop = true,
                 shape = GlassRadius.sheet,
+                tint = TINT_MODAL,
             )
 
             Column(Modifier.fillMaxWidth()) {

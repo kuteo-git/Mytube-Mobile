@@ -72,6 +72,9 @@ class SavePlaylistViewModel(
     private var original: Set<String> = emptySet()
     private var originallySaved = target.saved
 
+    /** The catalogue id an upstream result was written as, once it has been. */
+    private var ensured: String? = null
+
     init {
         load()
     }
@@ -97,11 +100,15 @@ class SavePlaylistViewModel(
     fun nameChanged(name: String) = update { it.copy(newName = name) }
 
     /**
-     * Make the playlist, and leave it ticked.
+     * Make the playlist, put this video in it, and leave the row ticked.
      *
-     * Somebody who has just named a list for this video means to put the video
-     * in it; making them tick the row they invented would be asking the same
-     * question twice.
+     * **Both acts, on one press.** Somebody who names a list for this video has
+     * said where the video goes; leaving the add to a second press of Save would
+     * make a named-but-empty playlist the outcome of cancelling — and the sheet
+     * is closed over the alert, so that second press is not even on screen.
+     *
+     * The row is then ticked *and* part of [original], so pressing Save
+     * afterwards sends nothing about it rather than adding it twice.
      */
     fun create() {
         val ready = _state.value as? SaveSheetState.Ready ?: return
@@ -109,19 +116,52 @@ class SavePlaylistViewModel(
         if (name.isEmpty()) return
         _state.value = ready.copy(creating = false, newName = "", saving = true)
         viewModelScope.launch {
-            runCatching { videos.createPlaylist(name) }.fold(
-                onSuccess = { made ->
-                    update { current ->
-                        current.copy(
-                            playlists = current.playlists + made,
-                            ticked = current.ticked + made.id,
-                            saving = false,
-                        )
-                    }
-                },
-                onFailure = { update { it.copy(saving = false, creating = true, newName = name) } },
-            )
+            val made = runCatching { videos.createPlaylist(name) }.getOrElse {
+                // Back to the alert with what was typed still in it: a name
+                // retyped from memory is the worst thing to ask of somebody
+                // whose request has just failed.
+                update { it.copy(saving = false, creating = true, newName = name) }
+                return@launch
+            }
+            val videoId = resolveVideoId()
+            if (videoId.isNotEmpty()) {
+                runCatching { videos.addToPlaylist(made.id, videoId) }
+                    .onSuccess { original = original + made.id }
+            }
+            update { current ->
+                current.copy(
+                    // First, not last. The sheet's list is capped and scrolls,
+                    // so appending put a playlist somebody had just named below
+                    // the fold — measured, and the whole point of showing the
+                    // sheet again is that they can see it happened. It is also
+                    // the server's own order: it lists by `updated_at`, and a
+                    // playlist just made is the most recently touched.
+                    playlists = listOf(made.copy(itemCount = 1)) + current.playlists,
+                    ticked = current.ticked + made.id,
+                    saving = false,
+                )
+            }
         }
+    }
+
+    /**
+     * The catalogue id to write playlist rows against.
+     *
+     * For an upstream result there is none until one is made — the row is
+     * written first and its answer names the video, which is
+     * `SearchViewModel.openExternal`'s pattern. Empty means the gateway could
+     * not resolve the address: a refusal wearing a success's clothes, and adding
+     * with it would write rows naming no video.
+     *
+     * Remembered, so creating a playlist and then pressing Save does not write
+     * the same catalogue row twice.
+     */
+    private suspend fun resolveVideoId(): String {
+        if (!target.isExternal) return target.videoId
+        ensured?.let { return it }
+        val id = runCatching { videos.ensureExternal(target.sourceUrl) }.getOrElse { "" }
+        ensured = id
+        return id
     }
 
     /**
@@ -138,17 +178,7 @@ class SavePlaylistViewModel(
         }
         _state.value = ready.copy(saving = true)
         viewModelScope.launch {
-            // An upstream result has no catalogue row yet, and every add below
-            // needs its id. The pattern is `SearchViewModel.openExternal`'s: the
-            // row is written first, and only its answer names the video.
-            val videoId = if (target.isExternal) {
-                runCatching { videos.ensureExternal(target.sourceUrl) }.getOrElse { "" }
-            } else {
-                target.videoId
-            }
-            // The gateway answers 200 with an empty id when it could not resolve
-            // the address — a refusal wearing a success's clothes. Adding to
-            // playlists with it would write rows naming no video.
+            val videoId = resolveVideoId()
             if (videoId.isEmpty()) {
                 update { it.copy(saving = false) }
                 return@launch

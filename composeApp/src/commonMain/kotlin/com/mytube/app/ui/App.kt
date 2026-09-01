@@ -216,8 +216,17 @@ private fun depth(route: Route): Int = when (route) {
     // fresh install now slides in from the right on first launch, which is what
     // arriving somewhere looks like.
     is Route.Setup -> 1
-    is Route.Search, is Route.Saved -> 1
+    is Route.Search -> 1
     is Route.Playlists -> 1
+    /**
+     * Two, with [Route.Playlist], and for the same reason.
+     *
+     * The shelf used to be reached from Settings and was ground-plus-one like
+     * every other row there. It is a row on the playlists page now — equal
+     * depth, and `forward` is `target >= initial`, so leaving it slid the wrong
+     * way. Reported the day it moved.
+     */
+    is Route.Saved -> 2
     /**
      * Two, like [Route.Channel], and for that entry's reason.
      *
@@ -370,6 +379,11 @@ fun App(
             // screen dies with it, which is why every trip to another tab and
             // back put the feed at the top again.
             val tabScroll = Tab.entries.associateWith { rememberLazyListState() }
+            // The playlists page's scroll, for the tabs' reason: a collection
+            // opens over it, so the page is not composed while one is open and a
+            // state remembered inside it would die there. Reported as coming
+            // back from a playlist and finding the list at the top.
+            val playlistsScroll = rememberLazyListState()
             // How far the shell's bars have slid away, animated here rather than
             // inside the shell.
             //
@@ -437,6 +451,15 @@ fun App(
             }
             var profiles: List<Profile> by remember { mutableStateOf(emptyList()) }
             var profileId by remember { mutableStateOf("") }
+            // Hoisted out of the route, because two screens act on one list: the
+            // page shows it, and a playlist deleted from *inside* a collection
+            // has to leave it. Held in the activity's store by `viewModel()`, it
+            // outlives the route — so without being told, the deleted row stayed
+            // on the page, opened nothing, and was gone only after a restart.
+            // Reported exactly that way.
+            val playlists = viewModel(key = "playlists-$baseUrl-$profileId") {
+                PlaylistsViewModel(container.videoRepository)
+            }
             LaunchedEffect(baseUrl) {
                 if (baseUrl.isNotBlank()) {
                     // Guarded. An unguarded throw here cancels the effect and
@@ -849,10 +872,9 @@ fun App(
                     }
 
                     is Route.Playlists -> PlaylistsScreen(
-                        viewModel = viewModel(key = "playlists-$baseUrl-$profileId") {
-                            PlaylistsViewModel(container.videoRepository)
-                        },
+                        viewModel = playlists,
                         mediaBaseUrl = baseUrl,
+                        listState = playlistsScroll,
                         onBack = { route = Route.Home },
                         onOpenSettings = { route = Route.Setup },
                         onOpenSaved = { route = Route.Saved },
@@ -872,7 +894,13 @@ fun App(
                         // player had to change.
                         onOpenVideo = { id, queue -> watching = WatchSession(id, queue = queue) },
                         onOpenChannel = openChannel,
-                        onDeleted = { route = Route.Playlists },
+                        onDeleted = { deleted ->
+                            // Told rather than refetched: the page knows which
+                            // row went, and asking the server again would draw
+                            // the old list for as long as that round trip takes.
+                            playlists.forget(deleted)
+                            route = Route.Playlists
+                        },
                     )
 
                     is Route.Saved -> SavedScreen(
@@ -1264,6 +1292,7 @@ fun App(
                             SavePlaylistViewModel(savingFor, container.videoRepository)
                         },
                         visible = sheetOpen,
+                        mediaBaseUrl = baseUrl,
                         backdrop = backdrop,
                         onDismiss = { sheetOpen = false },
                         onSaved = { saved ->

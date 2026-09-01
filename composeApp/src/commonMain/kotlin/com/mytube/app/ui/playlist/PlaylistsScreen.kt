@@ -16,11 +16,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +42,7 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.DetailBack
+import com.mytube.app.ui.shell.LocalBackdrop
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.shell.GlassRadius
@@ -61,6 +65,13 @@ import com.mytube.app.ui.theme.Tokens
 fun PlaylistsScreen(
     viewModel: PlaylistsViewModel,
     mediaBaseUrl: String,
+    /**
+     * Owned by the caller, because this screen is not composed while a playlist
+     * is open — a `rememberLazyListState` here dies with it, and coming back
+     * from a collection put the list at the top again. The same fault the tabs
+     * had, and the same fix.
+     */
+    listState: LazyListState,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSaved: () -> Unit,
@@ -68,9 +79,15 @@ fun PlaylistsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    // Asked again on arrival, quietly. The ViewModel is held in the activity's
+    // store and outlives this route, so a playlist made from the sheet on Home
+    // would otherwise be missing here until the app was restarted.
+    LaunchedEffect(Unit) { viewModel.refresh() }
+
     PlaylistsContent(
         state = state,
         mediaBaseUrl = mediaBaseUrl,
+        listState = listState,
         onBack = onBack,
         onOpenSettings = onOpenSettings,
         onOpenSaved = onOpenSaved,
@@ -87,6 +104,7 @@ fun PlaylistsScreen(
 fun PlaylistsContent(
     state: PlaylistsState,
     mediaBaseUrl: String,
+    listState: LazyListState = rememberLazyListState(),
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSaved: () -> Unit,
@@ -99,6 +117,13 @@ fun PlaylistsContent(
 ) {
     val strings = LocalStrings.current
 
+    // Two boxes, and the nesting is load-bearing. `glassSource` registers the
+    // inner one as the layer every floating pane samples — so an alert drawn
+    // *inside* it samples a recording of itself, which is not a bad look but a
+    // crash: `SkBlurImageFilter::onGetOutputLayerBounds` recurses until the
+    // stack goes. The charter records it from the pull-to-refresh pane, and
+    // this is the second time it has been paid for.
+    Box(Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().glassSource()) {
         TabScaffold(
             loading = state is PlaylistsState.Loading,
@@ -113,7 +138,11 @@ fun PlaylistsContent(
         ) {
             val ready = state as? PlaylistsState.Ready ?: return@TabScaffold
 
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = detailContentPadding()) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                state = listState,
+                contentPadding = detailContentPadding(),
+            ) {
                 item(key = "title") {
                     // The "+" is in the title row, not at the end of the list.
                     // A member with twelve collections would otherwise have to
@@ -123,7 +152,7 @@ fun PlaylistsContent(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         ScreenTitle(strings.playlists, Modifier.weight(1f))
-                        if (!ready.creating) {
+                        run {
                             Icon(
                                 imageVector = PlusIcon,
                                 contentDescription = strings.newPlaylist,
@@ -140,28 +169,6 @@ fun PlaylistsContent(
                     }
                 }
 
-                if (ready.creating) {
-                    item(key = "new-name") {
-                        Column(Modifier.padding(horizontal = Space.lg, vertical = Space.sm)) {
-                            GlassTextField(
-                                value = ready.newName,
-                                onValueChange = onNameChanged,
-                                placeholder = strings.playlistName,
-                            )
-                            Spacer(Modifier.height(Space.sm))
-                            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                                GlassButton(
-                                    label = strings.createPlaylist,
-                                    onClick = onCreate,
-                                    primary = true,
-                                    enabled = ready.newName.isNotBlank(),
-                                    modifier = Modifier.padding(end = Space.xs),
-                                )
-                                GlassButton(strings.cancel, onCancelCreating)
-                            }
-                        }
-                    }
-                }
 
                 // The saved shelf, first and fixed. It is not one of the rows
                 // below and never arrives in that list — see `Playlist`.
@@ -187,7 +194,7 @@ fun PlaylistsContent(
                     )
                 }
 
-                if (ready.playlists.isEmpty() && !ready.creating) {
+                if (ready.playlists.isEmpty()) {
                     item(key = "empty") {
                         EmptyState(strings.noPlaylists, strings.noPlaylistsDetail)
                     }
@@ -196,6 +203,20 @@ fun PlaylistsContent(
         }
 
         DetailBack(onBack, strings.back)
+        }
+
+        // Outside the recorded node, and last, so it is over the page rather
+        // than sampling it.
+        PlaylistNameAlert(
+            visible = (state as? PlaylistsState.Ready)?.creating == true,
+            title = strings.newPlaylist,
+            name = (state as? PlaylistsState.Ready)?.newName.orEmpty(),
+            backdrop = LocalBackdrop.current,
+            confirmLabel = strings.createPlaylist,
+            onNameChanged = onNameChanged,
+            onDismiss = onCancelCreating,
+            onConfirm = onCreate,
+        )
     }
 }
 

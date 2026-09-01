@@ -2379,3 +2379,105 @@ pill from what the sheet applied.
 **Upstream cards gained a menu with exactly one item.** They had none, on the
 rule that a card whose actions mean nothing draws no dot — and one action does
 mean something here.
+
+## The alert is glass too, and one of them crashed the app (2026-09-02)
+
+Reported in one batch after the first playlists build reached the phone. The
+interesting half is not the alert; it is where an alert may be drawn.
+
+### A sampled backdrop inside the recorded layer is still a crash
+
+The charter already records this from the pull-to-refresh pane — *"a stack
+overflow inside Skia's image-filter bounds walk. The filter contains itself and
+the walk never ends"* — and it was paid for a second time here. `GlassAlert` was
+written as the last child of each screen's own
+`Box(Modifier.fillMaxSize().glassSource())`, which is exactly the node that
+registers the layer every floating pane samples. Measured: pressing **Rename**
+dropped the app to the springboard, twice, with nothing in the console.
+
+The fix is the shape `PullGlass` already found: the alert is a **sibling** of the
+recorded box, not a child of it. Two boxes, and the nesting is load-bearing.
+
+The save sheet never had the fault because it is drawn from `App.kt`, outside the
+recording — which is why the same material worked there and crashed one screen
+over.
+
+### Everything a question needs, rebuilt
+
+`GlassAlert` is not `AlertDialog` for the reason `GlassSheet` is not
+`ModalBottomSheet`: a popup layer has its own coordinate space and a sampled
+backdrop in one reads the slice of the app from the top of the screen. So the
+scrim, tap-outside, back, and both halves of the animation are written here.
+
+- **`imePadding` goes on the centring box, not on the pane.** What has to move is
+  the *space the pane is centred in*. Padding the pane keeps it centred on the
+  whole screen and merely pushes it up at the end, which on a short phone leaves
+  the field under the keyboard — the one thing an alert with a field must never
+  do. Measured with the software keyboard up: the pane sits in the middle of what
+  is left.
+- **The caret goes to the end of a prefilled name.** A `String`-valued
+  `BasicTextField` focuses at position **zero**, so the first letter typed into a
+  rename landed in front of the word being edited — measured, "test" became
+  "xtest". Only the caller knows where the caret belongs, so `GlassTextField`
+  gained a `TextFieldValue` overload and the alert passes the selection.
+- **Return confirms.** Without it the key dismisses the keyboard and uncovers the
+  button that was always going to be pressed next.
+- **The keyboard is asked for rather than waited for**, keyed on `visible`: a
+  `FocusRequester` fired once at composition leaves every later opening without a
+  cursor, because the composable stays in the tree between them.
+
+### The sheet's "+" creates and adds in one press
+
+Pressing it closes the sheet and opens the alert — two panes of glass over each
+other, one asking which lists and one asking for a name, is two questions at once
+and the lower one is not answerable. Saving **creates the playlist and puts the
+video in it**: leaving the add to a later press of the sheet's own Save would
+make a named-but-empty playlist the outcome of cancelling, and that press is not
+even on screen. The new row is then ticked *and* part of the diff's baseline, so
+pressing Save afterwards sends nothing about it.
+
+**It is prepended, not appended.** The sheet's list is capped and scrolls, so
+appending put a playlist somebody had just named below the fold — the whole point
+of showing the sheet again is that they can see it happened. It is also the
+server's own order, which is `updated_at DESC`.
+
+### Four faults of state that outlives a route
+
+`viewModel()` stores in the activity's store, which outlives the screen. That is
+what makes the miniplayer possible and it is also what these four were:
+
+- **A deleted playlist stayed on the page**, opened nothing, and was gone only
+  after a restart. `PlaylistsViewModel` is hoisted into `App.kt` now and told
+  which row went — told rather than refetched, because this side already knows
+  the id and a round trip would draw the stale list while it ran.
+- **Both playlist screens ask again on arrival, quietly.** A playlist made from
+  the sheet on Home is otherwise missing from the page until the app restarts.
+  Quiet because blanking a list that is already correct, to redraw the same rows,
+  reads as a page that failed and recovered.
+- **The playlists page's scroll is the caller's**, for the tabs' reason: a
+  collection opens *over* it, so a `rememberLazyListState` inside it dies there
+  and coming back put the list at the top.
+- **`Route.Saved` is depth 2 now.** It is reached from the playlists page rather
+  than from Settings, and `forward` is `target >= initial` — so at equal depth
+  leaving it animated as another step inward. The third time this exact trap has
+  been sprung, after `Route.Channel` and `Route.Playlist`.
+
+### The modal glass is darker than the bars'
+
+One tint was wrong for two jobs. A bar is an edge content passes *under*, and
+being able to read the feed through it is what makes it glass. A sheet is a
+surface somebody stops at and answers, and at the bars' 0.75 the thumbnails
+behind it competed with its own rows. `TINT_MODAL` is 0.90 — then 0.95, because
+the reference given was the player's settings sheet, which is this same material
+over a page that happens to be almost black. The rim and the lens still read at
+the edges, which is what keeps it a pane rather than a panel.
+
+The sheet also takes **62% of the screen** rather than the player's 45%: that one
+is two switches over a video that must stay the subject, and this one is a list
+somebody scans. At 45% a household of twelve collections showed three.
+
+**The rows carry a round, centre-cropped picture** — the miniplayer's window and
+its reasoning, since a 16:9 frame fitted into a circle is a stripe with two blank
+caps. The saved shelf has no first video, so it draws its own bookmark; a
+playlist with nothing in it yet draws the collection mark rather than an empty
+grey circle.

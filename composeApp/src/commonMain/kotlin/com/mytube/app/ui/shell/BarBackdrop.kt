@@ -120,6 +120,15 @@ fun GlassBackdrop(
     backdrop: Backdrop?,
     fromTop: Boolean = true,
     shape: CornerBasedShape = RoundedCornerShape(0.dp),
+    /**
+     * How much of the app's own colour goes over the sample.
+     *
+     * [TINT_GLASS] for the bars and the chips, which are edges content passes
+     * under. A sheet and an alert take [TINT_MODAL], which is darker: they are
+     * a *surface* somebody reads and answers, and at the bars' tone the feed
+     * showing through them competes with their own rows for the eye.
+     */
+    tint: Float = TINT_GLASS,
 ) {
     if (backdrop != null) {
         Box(
@@ -194,7 +203,7 @@ fun GlassBackdrop(
                 // The tint, over the effects rather than inside them. The blur
                 // says the content continues underneath; this is what keeps a
                 // 10sp tab label legible over whatever is passing.
-                onDrawSurface = { drawRect(Tokens.bg.copy(alpha = TINT_GLASS)) },
+                onDrawSurface = { drawRect(Tokens.bg.copy(alpha = tint)) },
             ),
         )
         return
@@ -257,6 +266,22 @@ val LocalBackdrop = compositionLocalOf<LayerBackdrop?> { null }
  * is the only thing that was ever wrong.
  */
 const val TINT_GLASS = 0.75f
+
+/**
+ * And the tone a sheet or an alert takes.
+ *
+ * Darker than the bars', deliberately, and it is the one place this app has two
+ * numbers rather than one. The bars are read *against* the page moving under
+ * them — that is what makes them look like glass edges. A sheet is a surface
+ * somebody stops to read: its own rows have to win, and at 0.75 the thumbnails
+ * behind them were still bright enough to compete. Reported from the phone,
+ * twice: 0.90 was still not it. The reference given was the player's own
+ * settings sheet, which is this same material over a page that happens to be
+ * almost black — so what was being asked for was that *result*, and the number
+ * that produces it over a feed of thumbnails is this one. The rim and the lens
+ * still read at the edges, which is what keeps it a pane rather than a panel.
+ */
+const val TINT_MODAL = 0.95f
 
 /**
  * How far the material blurs, everywhere it is used.

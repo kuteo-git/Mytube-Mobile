@@ -33,6 +33,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.backdrop.backdrops.LayerBackdrop
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import com.mytube.app.ui.home.imageModel
+import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.settings.TickIcon
@@ -68,6 +74,7 @@ import com.mytube.app.ui.theme.Tokens
 fun BoxScope.SavePlaylistSheet(
     viewModel: SavePlaylistViewModel,
     visible: Boolean,
+    mediaBaseUrl: String,
     backdrop: LayerBackdrop?,
     onDismiss: () -> Unit,
     onSaved: (saved: Boolean) -> Unit,
@@ -77,6 +84,7 @@ fun BoxScope.SavePlaylistSheet(
     SavePlaylistSheetContent(
         state = state,
         visible = visible,
+        mediaBaseUrl = mediaBaseUrl,
         backdrop = backdrop,
         onDismiss = onDismiss,
         onToggleSaved = viewModel::toggleSaved,
@@ -95,6 +103,7 @@ fun BoxScope.SavePlaylistSheet(
 fun BoxScope.SavePlaylistSheetContent(
     state: SaveSheetState,
     visible: Boolean,
+    mediaBaseUrl: String = "",
     backdrop: LayerBackdrop?,
     onDismiss: () -> Unit,
     onToggleSaved: () -> Unit,
@@ -109,9 +118,22 @@ fun BoxScope.SavePlaylistSheetContent(
 ) {
     val strings = LocalStrings.current
 
+    val creating = (state as? SaveSheetState.Ready)?.creating == true
+
     // Dimmed, unlike the player's settings sheet: that one sits over the video
     // it adjusts, and this one covers a feed it has no relationship with.
-    GlassSheet(visible = visible, backdrop = backdrop, scrim = SHEET_SCRIM, onDismiss = onDismiss) {
+    //
+    // **The sheet stands down while the alert is up.** Two panes of glass over
+    // each other, one asking which lists and one asking for a name, is two
+    // questions on screen at once — and the lower one is not answerable while
+    // the upper one is.
+    GlassSheet(
+        visible = visible && !creating,
+        backdrop = backdrop,
+        scrim = SHEET_SCRIM,
+        onDismiss = onDismiss,
+        maxHeightFraction = SHEET_FRACTION,
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -122,13 +144,34 @@ fun BoxScope.SavePlaylistSheetContent(
                         .calculateBottomPadding() + Space.lg,
                 ),
         ) {
-            Text(
-                text = strings.saveToPlaylist,
-                color = Tokens.text,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = Space.md),
-            )
+            // The title, and the one control that is not a row: making a new
+            // playlist. Top right, as on every sheet that offers to add
+            // something to the list it is showing.
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = Space.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = strings.saveToPlaylist,
+                    color = Tokens.text,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (state is SaveSheetState.Ready) {
+                    Icon(
+                        imageVector = PlusIcon,
+                        contentDescription = strings.newPlaylist,
+                        tint = Tokens.text,
+                        modifier = Modifier
+                            .size(Size.iconButton)
+                            .clip(GlassRadius.control)
+                            .glassControl(GlassRadius.control)
+                            .clickable(onClick = onStartCreating)
+                            .padding(Space.sm),
+                    )
+                }
+            }
 
             when (state) {
                 is SaveSheetState.Loading -> Box(
@@ -157,6 +200,7 @@ fun BoxScope.SavePlaylistSheetContent(
                                 label = strings.savedTitle,
                                 ticked = state.savedTicked,
                                 onClick = onToggleSaved,
+                                icon = BookmarkIcon,
                             )
                         }
 
@@ -166,41 +210,11 @@ fun BoxScope.SavePlaylistSheetContent(
                                 detail = strings.playlistCount(playlist.itemCount),
                                 ticked = playlist.id in state.ticked,
                                 onClick = { onToggle(playlist.id) },
+                                thumbnailPath = playlist.thumbnailPaths.firstOrNull().orEmpty(),
+                                mediaBaseUrl = mediaBaseUrl,
                             )
                         }
 
-                        item(key = "new") {
-                            if (state.creating) {
-                                // The field replaces the row rather than
-                                // appearing under it: two ways to make a
-                                // playlist on screen at once is one of them
-                                // doing nothing.
-                                Column {
-                                    GlassTextField(
-                                        value = state.newName,
-                                        onValueChange = onNameChanged,
-                                        placeholder = strings.playlistName,
-                                    )
-                                    Spacer(Modifier.height(Space.sm))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                                        GlassButton(
-                                            label = strings.createPlaylist,
-                                            onClick = onCreate,
-                                            primary = true,
-                                            enabled = state.newName.isNotBlank(),
-                                            modifier = Modifier.padding(end = Space.xs),
-                                        )
-                                        GlassButton(strings.cancel, onCancelCreating)
-                                    }
-                                }
-                            } else {
-                                ActionRow(
-                                    label = strings.newPlaylist,
-                                    icon = PlusIcon,
-                                    onClick = onStartCreating,
-                                )
-                            }
-                        }
                     }
 
                     Spacer(Modifier.height(Space.lg))
@@ -220,6 +234,8 @@ fun BoxScope.SavePlaylistSheetContent(
             }
         }
     }
+
+    CreateAlert(state, backdrop, onNameChanged, onCancelCreating, onCreate)
 }
 
 /**
@@ -237,6 +253,10 @@ private fun TickRow(
     ticked: Boolean,
     onClick: () -> Unit,
     detail: String = "",
+    /** The playlist's first thumbnail, or empty for a row drawn with an icon. */
+    thumbnailPath: String = "",
+    mediaBaseUrl: String = "",
+    icon: ImageVector? = null,
 ) {
     val content = if (ticked) Tokens.invertText else Tokens.text
     Row(
@@ -245,9 +265,46 @@ private fun TickRow(
             .height(ROW_HEIGHT)
             .glassControl(GlassRadius.control, selected = ticked)
             .clickable(onClick = onClick)
-            .padding(horizontal = Space.lg),
+            .padding(start = Space.sm, end = Space.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Round and cropped from the centre, like the miniplayer's window and
+        // for its reason: a 16:9 frame fitted inside a circle is a stripe with
+        // two blank caps, which reads as a broken image.
+        Box(
+            Modifier
+                .size(THUMBNAIL)
+                .clip(CircleShape)
+                .background(if (ticked) Tokens.invertText.copy(alpha = 0.12f) else Tokens.surface),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                thumbnailPath.isNotEmpty() -> AsyncImage(
+                    model = imageModel(mediaBaseUrl, thumbnailPath),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+                // The shelf has no first video to show, and an empty circle is
+                // a picture that failed to load. Its own mark instead.
+                icon != null -> Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = content,
+                    modifier = Modifier.size(18.dp),
+                )
+                // A playlist with nothing in it yet: the collection's own mark,
+                // for the same reason.
+                else -> Icon(
+                    imageVector = PlaylistIcon,
+                    contentDescription = null,
+                    tint = content.copy(alpha = 0.6f),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+        Spacer(Modifier.size(Space.md))
+
         Column(Modifier.weight(1f)) {
             Text(
                 text = label,
@@ -275,28 +332,40 @@ private fun TickRow(
     }
 }
 
+/**
+ * Naming a new list, over the sheet that asked which list.
+ *
+ * Written **after** the sheet, because both are children of the caller's Box and
+ * a child is on top only if it is written last. The rule `ProfileSheet` cost the
+ * app once, and this is the second thing in the app that depends on it.
+ */
 @Composable
-private fun ActionRow(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
+private fun BoxScope.CreateAlert(
+    state: SaveSheetState,
+    backdrop: LayerBackdrop?,
+    onNameChanged: (String) -> Unit,
+    onCancel: () -> Unit,
+    onCreate: () -> Unit,
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(ROW_HEIGHT)
-            .glassControl(GlassRadius.control)
-            .clickable(onClick = onClick)
-            .padding(horizontal = Space.lg),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = Tokens.text, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.size(Space.md))
-        Text(label, color = Tokens.text, fontSize = 15.sp)
-    }
+    val strings = LocalStrings.current
+    val ready = state as? SaveSheetState.Ready
+
+    PlaylistNameAlert(
+        visible = ready?.creating == true,
+        title = strings.newPlaylist,
+        name = ready?.newName.orEmpty(),
+        backdrop = backdrop,
+        confirmLabel = strings.savePlaylist,
+        onNameChanged = onNameChanged,
+        onDismiss = onCancel,
+        onConfirm = onCreate,
+    )
 }
 
 private val ROW_HEIGHT = 56.dp
+
+/** The round window on a row. 40dp, the same as the avatar on a watch page. */
+private val THUMBNAIL = 40.dp
 
 /**
  * How tall the list may be before it scrolls.
@@ -307,6 +376,15 @@ private val ROW_HEIGHT = 56.dp
  * first number here and the button came up below the fold on a household with
  * six playlists, which is the one control the sheet exists to reach.
  */
-private val LIST_MAX_HEIGHT = 196.dp
+private val LIST_MAX_HEIGHT = 340.dp
+
+/**
+ * How much of the screen this sheet may take.
+ *
+ * More than the player's 45%, because this one is a *list*. At the player's
+ * share it showed three rows of a household's dozen collections, which makes
+ * scanning for one of them a scroll rather than a look.
+ */
+private const val SHEET_FRACTION = 0.62f
 
 private val SHEET_SCRIM = Color.Black.copy(alpha = 0.5f)

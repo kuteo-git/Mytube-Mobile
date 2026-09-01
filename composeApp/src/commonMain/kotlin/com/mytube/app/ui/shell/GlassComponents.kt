@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LocalTextStyle
@@ -185,6 +189,61 @@ fun GlassSlider(
  * The placeholder is drawn underneath rather than as a floating label: there is
  * one field per screen here and what it wants is written above it.
  */
+/**
+ * The same field, driven by a [TextFieldValue] so the caller owns the caret.
+ *
+ * A `String`-valued `BasicTextField` puts the caret at position **zero** when it
+ * is focused with text already in it — measured on the rename alert, where the
+ * first letter typed landed in front of the name being edited. Only the caller
+ * knows where the caret belongs, so the value it selects with is the value it
+ * passes.
+ */
+@Composable
+fun GlassTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    singleLine: Boolean = true,
+    textAlign: TextAlign = TextAlign.Start,
+    focusRequester: FocusRequester? = null,
+) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(FIELD_HEIGHT)
+            .glassControl(GlassRadius.control)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (value.text.isEmpty()) {
+            Text(
+                text = placeholder,
+                color = Tokens.text2,
+                fontSize = 15.sp,
+                textAlign = textAlign,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = singleLine,
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            textStyle = LocalTextStyle.current.merge(
+                TextStyle(color = Tokens.text, fontSize = 15.sp, textAlign = textAlign),
+            ),
+            cursorBrush = SolidColor(Tokens.brand),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+        )
+    }
+}
+
 @Composable
 fun GlassTextField(
     value: String,
@@ -192,6 +251,15 @@ fun GlassTextField(
     placeholder: String,
     modifier: Modifier = Modifier,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    /** What the return key does. Default is nothing, which is what it did. */
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    /**
+     * Where to send focus from, for a caller that wants the cursor here on
+     * arrival. On the field rather than on [modifier], which lands on the pane
+     * around it — a `focusRequester` there requests focus for a `Box`, which
+     * takes it and never raises a keyboard.
+     */
+    focusRequester: FocusRequester? = null,
     singleLine: Boolean = true,
     textAlign: TextAlign = TextAlign.Start,
 ) {
@@ -217,11 +285,14 @@ fun GlassTextField(
             onValueChange = onValueChange,
             singleLine = singleLine,
             keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
             textStyle = LocalTextStyle.current.merge(
                 TextStyle(color = Tokens.text, fontSize = 15.sp, textAlign = textAlign),
             ),
             cursorBrush = SolidColor(Tokens.brand),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
         )
     }
 }

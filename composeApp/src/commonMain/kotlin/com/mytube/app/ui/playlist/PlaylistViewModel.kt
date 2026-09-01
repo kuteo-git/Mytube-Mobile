@@ -23,8 +23,13 @@ sealed interface PlaylistState {
         val confirmingDelete: Boolean = false,
     ) : PlaylistState
 
-    /** The playlist was deleted from this page; the caller leaves it. */
-    data object Deleted : PlaylistState
+    /**
+     * The playlist was deleted from this page; the caller leaves it.
+     *
+     * Carries the id, so the page behind can drop the row rather than refetch
+     * the list it is about to draw.
+     */
+    data class Deleted(val playlistId: String) : PlaylistState
 }
 
 /** One collection, and what is in it. */
@@ -40,7 +45,8 @@ class PlaylistViewModel(
         load()
     }
 
-    fun refresh() = load()
+    /** Ask again, keeping what is drawn. See `PlaylistsViewModel.refresh`. */
+    fun refresh() = load(showLoading = _state.value !is PlaylistState.Ready)
 
     fun startRenaming() = update { it.copy(renaming = true, newName = it.playlist.title) }
 
@@ -75,7 +81,7 @@ class PlaylistViewModel(
         val ready = _state.value as? PlaylistState.Ready ?: return
         viewModelScope.launch {
             runCatching { videos.deletePlaylist(ready.playlist.id) }.fold(
-                onSuccess = { _state.value = PlaylistState.Deleted },
+                onSuccess = { _state.value = PlaylistState.Deleted(ready.playlist.id) },
                 onFailure = { update { it.copy(confirmingDelete = false) } },
             )
         }
@@ -102,8 +108,8 @@ class PlaylistViewModel(
         }
     }
 
-    private fun load() {
-        _state.value = PlaylistState.Loading
+    private fun load(showLoading: Boolean = true) {
+        if (showLoading) _state.value = PlaylistState.Loading
         viewModelScope.launch {
             _state.value = runCatching { videos.playlist(playlistId) }.fold(
                 onSuccess = { PlaylistState.Ready(it.playlist, it.videos) },

@@ -37,7 +37,15 @@ class PlaylistsViewModel(private val videos: VideoRepository) : ViewModel() {
         load()
     }
 
-    fun refresh() = load()
+    /**
+     * Ask again, keeping what is drawn.
+     *
+     * Called on every arrival, because this ViewModel outlives the route and a
+     * playlist made from the sheet on Home is otherwise missing here until the
+     * app is restarted. Quiet, because blanking a list that is already correct
+     * to redraw the same rows reads as a page that failed and recovered.
+     */
+    fun refresh() = load(showLoading = _state.value !is PlaylistsState.Ready)
 
     fun startCreating() = update { it.copy(creating = true) }
 
@@ -60,8 +68,21 @@ class PlaylistsViewModel(private val videos: VideoRepository) : ViewModel() {
         }
     }
 
-    private fun load() {
-        _state.value = PlaylistsState.Loading
+    /**
+     * Drop a playlist that has just been deleted from inside it.
+     *
+     * Told rather than refetched: this ViewModel lives in the activity's store
+     * and outlives the route, so without being told the deleted row stayed on
+     * the page and opened a collection the server no longer had. Refetching
+     * would work too and would draw the stale list for the length of a round
+     * trip — and this side already knows exactly which row went.
+     */
+    fun forget(playlistId: String) = update { ready ->
+        ready.copy(playlists = ready.playlists.filterNot { it.id == playlistId })
+    }
+
+    private fun load(showLoading: Boolean = true) {
+        if (showLoading) _state.value = PlaylistsState.Loading
         viewModelScope.launch {
             _state.value = runCatching { videos.playlists() }.fold(
                 onSuccess = { PlaylistsState.Ready(it) },

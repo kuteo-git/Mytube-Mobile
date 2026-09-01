@@ -20,6 +20,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,7 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.VideoCard
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.DetailBack
+import com.mytube.app.ui.shell.LocalBackdrop
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.shell.GlassRadius
@@ -64,14 +66,21 @@ fun PlaylistScreen(
     onOpenSettings: () -> Unit,
     onOpenVideo: (String, List<String>) -> Unit,
     onOpenChannel: (String) -> Unit,
-    onDeleted: () -> Unit,
+    onDeleted: (playlistId: String) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // Leaving is the caller's, not this screen's: the page has no contents left
     // to draw, and which list to fall back to is a question about the route.
-    if (state is PlaylistState.Deleted) {
-        androidx.compose.runtime.LaunchedEffect(Unit) { onDeleted() }
+    // The id goes with it, so the page behind can drop the row without asking
+    // the server what it already knows.
+    // Same reason as the page behind it: the contents can have changed from a
+    // sheet on another screen since this was last drawn.
+    LaunchedEffect(Unit) { viewModel.refresh() }
+
+    val deleted = state as? PlaylistState.Deleted
+    if (deleted != null) {
+        LaunchedEffect(deleted.playlistId) { onDeleted(deleted.playlistId) }
     }
 
     PlaylistContent(
@@ -113,6 +122,13 @@ fun PlaylistContent(
 ) {
     val strings = LocalStrings.current
 
+    // Two boxes, and the nesting is load-bearing. `glassSource` registers the
+    // inner one as the layer every floating pane samples — so an alert drawn
+    // *inside* it samples a recording of itself, which is not a bad look but a
+    // crash: `SkBlurImageFilter::onGetOutputLayerBounds` recurses until the
+    // stack goes. The charter records it from the pull-to-refresh pane, and
+    // this is the second time it has been paid for.
+    Box(Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().glassSource()) {
         TabScaffold(
             loading = state is PlaylistState.Loading,
@@ -168,6 +184,34 @@ fun PlaylistContent(
         }
 
         DetailBack(onBack, strings.back)
+        }
+
+        // Outside the recorded node — see the comment on the boxes above.
+        val ready = state as? PlaylistState.Ready
+
+        // Prefilled with the name it has: renaming is editing a word, not
+        // typing one from nothing, and an empty field asks somebody to
+        // remember what they are changing.
+        PlaylistNameAlert(
+            visible = ready?.renaming == true,
+            title = strings.renamePlaylist,
+            name = ready?.newName.orEmpty(),
+            backdrop = LocalBackdrop.current,
+            confirmLabel = strings.savePlaylist,
+            onNameChanged = onNameChanged,
+            onDismiss = onCancelRenaming,
+            onConfirm = onRename,
+        )
+
+        ConfirmAlert(
+            visible = ready?.confirmingDelete == true,
+            title = strings.deletePlaylist,
+            detail = strings.deletePlaylistConfirm,
+            confirmLabel = strings.deletePlaylist,
+            backdrop = LocalBackdrop.current,
+            onDismiss = onCancelDelete,
+            onConfirm = onDelete,
+        )
     }
 }
 
@@ -187,63 +231,26 @@ private fun PlaylistHeader(
     val strings = LocalStrings.current
 
     Column(Modifier.fillMaxWidth().padding(horizontal = Space.lg)) {
-        if (state.renaming) {
-            GlassTextField(
-                value = state.newName,
-                onValueChange = onNameChanged,
-                placeholder = strings.playlistName,
-            )
-            Spacer(Modifier.height(Space.sm))
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                GlassButton(
-                    label = strings.savePlaylist,
-                    onClick = onRename,
-                    primary = true,
-                    enabled = state.newName.isNotBlank(),
-                    modifier = Modifier.padding(end = Space.xs),
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = state.playlist.title,
+                    color = Tokens.text,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
                 )
-                GlassButton(strings.cancel, onCancelRenaming)
+                Text(
+                    text = strings.playlistCount(state.playlist.itemCount),
+                    color = Tokens.text2,
+                    fontSize = 13.sp,
+                )
             }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = state.playlist.title,
-                        color = Tokens.text,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = strings.playlistCount(state.playlist.itemCount),
-                        color = Tokens.text2,
-                        fontSize = 13.sp,
-                    )
-                }
-                PlaylistMenu(onStartRenaming, onAskDelete)
-            }
+            PlaylistMenu(onStartRenaming, onAskDelete)
         }
 
         Spacer(Modifier.height(Space.md))
 
-        if (state.confirmingDelete) {
-            // One confirmation, and it is a row rather than a dialog: nothing
-            // else in this app is a Material dialog, and a sheet for two words
-            // and two buttons is a second layer over a page already showing
-            // what is about to go.
-            Text(strings.deletePlaylistConfirm, color = Tokens.text2, fontSize = 13.sp)
-            Spacer(Modifier.height(Space.sm))
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-                GlassButton(
-                    label = strings.deletePlaylist,
-                    onClick = onDelete,
-                    primary = true,
-                    modifier = Modifier.padding(end = Space.xs),
-                )
-                GlassButton(strings.cancel, onCancelDelete)
-            }
-        } else if (canPlay) {
-            GlassButton(strings.playAll, onPlayAll, primary = true)
-        }
+        if (canPlay) GlassButton(strings.playAll, onPlayAll, primary = true)
 
         Spacer(Modifier.height(Space.md))
     }

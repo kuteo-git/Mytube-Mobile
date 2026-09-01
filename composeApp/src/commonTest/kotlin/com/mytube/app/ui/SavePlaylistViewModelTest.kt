@@ -125,9 +125,16 @@ class SavePlaylistViewModelTest {
         assertTrue(repo.pinned.isEmpty(), "the pinned bit was written for no change")
     }
 
-    /** Somebody who names a list for this video means to put it there. */
+    /**
+     * Naming a list for this video is both acts on one press.
+     *
+     * The alert's Save creates *and* adds. Leaving the add to a later press of
+     * the sheet's own Save would make a named-but-empty playlist the outcome of
+     * cancelling — and the sheet is closed while the alert is up, so that press
+     * is not even on screen.
+     */
     @Test
-    fun aNewPlaylistArrivesTicked() = runTest(dispatcher) {
+    fun creatingAlsoAddsTheVideoAndLeavesTheRowTicked() = runTest(dispatcher) {
         val repo = FakePlaylists(lists = emptyList())
         val model = SavePlaylistViewModel(SaveTarget("v1"), repo)
         advanceUntilIdle()
@@ -139,11 +146,57 @@ class SavePlaylistViewModelTest {
 
         val ready = assertIs<SaveSheetState.Ready>(model.state.value)
         assertEquals(listOf("Nhạc"), repo.created)
+        assertEquals(listOf("pl_made" to "v1"), repo.added)
         assertTrue(ready.ticked.contains("pl_made"))
+        // And it is listed **first**, or the sheet comes back with the row
+        // somebody just made below the fold of a capped, scrolling list.
+        assertEquals("pl_made", ready.playlists.first().id)
+    }
+
+    /** The add already happened, so Save must not send it a second time. */
+    @Test
+    fun savingAfterCreatingSendsNothingMore() = runTest(dispatcher) {
+        val repo = FakePlaylists(lists = emptyList())
+        val model = SavePlaylistViewModel(SaveTarget("v1"), repo)
+        advanceUntilIdle()
+
+        model.startCreating()
+        model.nameChanged("Nhạc")
+        model.create()
+        advanceUntilIdle()
 
         model.save {}
         advanceUntilIdle()
+
         assertEquals(listOf("pl_made" to "v1"), repo.added)
+        assertTrue(repo.removed.isEmpty())
+    }
+
+    /**
+     * An upstream result is written into the catalogue once.
+     *
+     * Creating a playlist ensures the row, and Save must reuse that id rather
+     * than asking the gateway to resolve the same address again.
+     */
+    @Test
+    fun anUpstreamResultIsWrittenOnceAcrossCreateAndSave() = runTest(dispatcher) {
+        val repo = FakePlaylists(lists = listOf(playlist("pl_music")), ensured = "v_new")
+        val model = SavePlaylistViewModel(
+            SaveTarget(videoId = "", sourceUrl = "https://youtu.be/abc"),
+            repo,
+        )
+        advanceUntilIdle()
+
+        model.startCreating()
+        model.nameChanged("Nhạc")
+        model.create()
+        advanceUntilIdle()
+        model.toggle("pl_music")
+        model.save {}
+        advanceUntilIdle()
+
+        assertEquals(1, repo.ensureCalls.size)
+        assertEquals(listOf("pl_made" to "v_new", "pl_music" to "v_new"), repo.added)
     }
 
     /**
