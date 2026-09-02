@@ -71,6 +71,26 @@ class GatewayDataSource(private val client: HttpClient) {
         if (pageToken.isNotBlank()) parameter("pageToken", pageToken)
     }.orThrow().body()
 
+    /**
+     * New uploads from followed channels this viewer has not watched.
+     *
+     * The same `FeedDto` as [feed], because the gateway deliberately answers
+     * with the same shape — a page of videos and a token — so nothing on this
+     * side needed a second parser.
+     *
+     * No `hours`: the window is the server's, read from its own config on every
+     * request. Sending one from here would put a number nobody can see in a
+     * client that has to be released to change it.
+     */
+    suspend fun missed(
+        baseUrl: String,
+        userId: String,
+        pageToken: String,
+    ): FeedDto = client.get("${baseUrl.trimEnd('/')}/api/feed/missed") {
+        identify(userId)
+        if (pageToken.isNotBlank()) parameter("pageToken", pageToken)
+    }.orThrow().body()
+
     suspend fun video(baseUrl: String, userId: String, id: String): VideoDto =
         client.get("${baseUrl.trimEnd('/')}/api/videos/$id") {
             identify(userId)

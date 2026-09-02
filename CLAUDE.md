@@ -2575,3 +2575,40 @@ channel and the search results all put a `ScreenTitle` at the head of their list
 under a floating `DetailBack`. Two screens out of five in the settings menu
 therefore looked like a different app. The scaffold now does what the other four
 do, and `DetailTopRow` is gone.
+
+## The chip for what was missed (2026-09-02)
+
+Home mixes everything into one ranked page, so a new upload from a followed
+channel competes with the rest of the library. **Bỏ lỡ / Missed** is a standing
+answer to one question: what did the channels this household follows post in the
+last day that nobody has watched?
+
+The work was in the server repository first, because there was nothing to call —
+`GET /api/feed/missed`, and its charter entry holds the ranking decisions. What
+belongs here:
+
+- **Its own repository method, not a topic.** `feed(topic =)` asks the gateway
+  for the household's mix; this is a different endpoint answering a different
+  question, and the mapper is the same because the gateway deliberately answers
+  in the same shape.
+- **`Chip.Missed` is not a `Category`**, exactly like `Chip.Live` and for both of
+  its reasons: the server answers it from another endpoint, and **the chip is
+  absent when the answer is empty**. "Nothing was missed" is a true and useful
+  answer, and it is said by the chip not being there rather than by a blank grid.
+- **One request, two jobs.** `missed()` is asked on every load — that is what
+  decides whether the chip exists — and when the chip is the selected one, that
+  same answer *is* the page. Nothing is fetched twice, and the two can never
+  disagree about what is in the list.
+- **A failure there leaves Home standing.** It is asked to decide whether one
+  chip is drawn, and a feed that will not render because of that is a screen lost
+  to a decoration.
+- **The window is the server's**, read from its config per request. The app sends
+  no `hours`: a number the app carries is a number that needs a release to change.
+- `loadMore` is the one place the kind of chip decides where a page comes from.
+  Everything else reads a token it was handed.
+
+**The refresh gesture is answered on the server.** The app sends no page token on
+a load, and the gateway mints a new rotation for the channel round-robin each
+time — so pulling the list down leads with a different channel while every
+channel still gets a row before any gets a second. Nothing on this side changed
+to get it.

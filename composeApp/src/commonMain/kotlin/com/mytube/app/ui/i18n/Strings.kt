@@ -56,6 +56,9 @@ interface Strings {
     val moreOptions: String
     val continueWatching: String
     val chipAll: String
+
+    /** New uploads from followed channels, not yet watched. */
+    val chipMissed: String
     val chipLive: String
     /** Shown when a topic or Live has nothing in it. */
     val nothingHere: String
@@ -303,6 +306,7 @@ object EnglishStrings : Strings {
     override val moreOptions = "More"
     override val continueWatching = "Continue watching"
     override val chipAll = "All"
+    override val chipMissed = "Missed"
     override val chipLive = "Live"
     override val nothingHere = "Nothing here"
 
@@ -478,6 +482,7 @@ object VietnameseStrings : Strings {
     override val moreOptions = "Thêm"
     override val continueWatching = "Xem tiếp"
     override val chipAll = "Tất cả"
+    override val chipMissed = "Bỏ lỡ"
     // Kept in English: it is what every player and every television calls a
     // broadcast, and "trực tiếp" is longer than the chip it sits in.
     override val chipLive = "Live"

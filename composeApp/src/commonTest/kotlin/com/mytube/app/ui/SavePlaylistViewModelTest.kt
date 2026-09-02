@@ -316,6 +316,8 @@ class SavePlaylistViewModelTest {
         override suspend fun resolveChannel(query: String) = ""
         override suspend fun topics() = emptyList<com.mytube.app.domain.model.Topic>()
         override suspend fun live() = emptyList<Video>()
+        override suspend fun missed(pageToken: String) =
+            com.mytube.app.domain.repository.FeedPage(emptyList(), "")
         override suspend fun history(limit: Int) = emptyList<Video>()
         override suspend fun saved() = emptyList<Video>()
         override suspend fun feedMix() = throw NotImplementedError()

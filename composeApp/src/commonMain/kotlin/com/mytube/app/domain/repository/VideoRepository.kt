@@ -53,6 +53,20 @@ interface VideoRepository {
      */
     suspend fun feed(topic: String = "", pageToken: String = ""): FeedPage
 
+    /**
+     * What the followed channels published recently and this viewer has not
+     * watched.
+     *
+     * A page like [feed]'s, and a separate call rather than a topic on that one:
+     * the feed answers "what should this household see", which is a mix with a
+     * tenth of a page reserved for new uploads. This answers "did I miss
+     * anything", which is a list that runs out — and running out is the point.
+     *
+     * The window it looks back over belongs to the server. See
+     * `GatewayDataSource.missed`.
+     */
+    suspend fun missed(pageToken: String = ""): FeedPage
+
     suspend fun video(id: String): Video
 
     /** Videos in *this library* matching a query. */

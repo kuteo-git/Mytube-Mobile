@@ -75,6 +75,7 @@ fun ChipRow(
                 Text(
                     text = when (chip) {
                         Chip.All -> strings.chipAll
+                        Chip.Missed -> strings.chipMissed
                         Chip.Live -> strings.chipLive
                         is Chip.Category -> chip.topic.name
                     },

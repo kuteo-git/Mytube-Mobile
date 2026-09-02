@@ -73,6 +73,14 @@ class VideoRepositoryImpl(
         )
     }
 
+    override suspend fun missed(pageToken: String): FeedPage {
+        val dto = gateway.missed(requireBaseUrl(), server.profileId(), pageToken)
+        return FeedPage(
+            videos = dto.videos.map { it.toDomain() },
+            nextPageToken = dto.nextPageToken.orEmpty().trim(),
+        )
+    }
+
     override suspend fun video(id: String): Video =
         gateway.video(requireBaseUrl(), server.profileId(), id).toDomain()
 

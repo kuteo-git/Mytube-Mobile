@@ -6,6 +6,7 @@ import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.repository.VideoRepository
+import com.mytube.app.ui.home.Chip
 import com.mytube.app.ui.home.HomeState
 import com.mytube.app.ui.home.HomeViewModel
 import kotlinx.coroutines.Dispatchers
@@ -136,12 +137,115 @@ class HomeViewModelTest {
         nextPageToken = next,
     )
 
+    // --- the Missed chip ----------------------------------------------------
+
+    @Test
+    fun missedChipIsAbsentWhenNothingWasMissed() = runTest(dispatcher) {
+        val model = HomeViewModel(FakeVideos(pages = listOf(page("a", next = ""))))
+        advance()
+
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(false, state.chips.contains(Chip.Missed))
+    }
+
+    /**
+     * And it sits straight after All.
+     *
+     * The position is asserted rather than left to a reader of the code: it is
+     * the second thing a thumb reaches and the first after "everything", which
+     * is the whole argument for putting a standing question there.
+     */
+    @Test
+    fun missedChipAppearsSecondWhenSomethingWasMissed() = runTest(dispatcher) {
+        val model = HomeViewModel(
+            FakeVideos(
+                pages = listOf(page("a", next = "")),
+                missedPages = listOf(page("new1", "new2", next = "")),
+            ),
+        )
+        advance()
+
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf(Chip.All, Chip.Missed), state.chips.take(2))
+    }
+
+    /**
+     * One request, two jobs.
+     *
+     * The answer that decided whether to draw the chip is the answer the chip
+     * shows. Asking again on selection would be a round trip for a list already
+     * in hand, and — worse — a second chance for the two to disagree.
+     */
+    @Test
+    fun selectingMissedShowsWhatTheChipWasBuiltFrom() = runTest(dispatcher) {
+        val videos = FakeVideos(
+            pages = listOf(page("a", next = "")),
+            missedPages = listOf(page("new1", "new2", next = "cursor")),
+        )
+        val model = HomeViewModel(videos)
+        advance()
+
+        model.select(Chip.Missed)
+        advance()
+
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf("new1", "new2"), state.videos.map { it.id })
+        assertEquals("cursor", state.nextPageToken)
+    }
+
+    /** More of this list comes from this list, not from the feed. */
+    @Test
+    fun loadingMoreUnderMissedAsksMissed() = runTest(dispatcher) {
+        val videos = FakeVideos(
+            pages = listOf(page("a", next = "")),
+            missedPages = listOf(
+                page("new1", next = "cursor"),
+                page("new2", next = ""),
+            ),
+        )
+        val model = HomeViewModel(videos)
+        advance()
+        model.select(Chip.Missed)
+        advance()
+
+        val feedCallsBefore = videos.calls
+        model.loadMore()
+        advance()
+
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf("new1", "new2"), state.videos.map { it.id })
+        assertEquals(feedCallsBefore, videos.calls)
+    }
+
+    /**
+     * A missed list that fails does not take Home down with it.
+     *
+     * It is asked on every load purely to decide whether one chip exists, and a
+     * feed that will not render because of that is a screen lost to a decoration.
+     */
+    @Test
+    fun aFailingMissedCallStillLeavesTheFeed() = runTest(dispatcher) {
+        val model = HomeViewModel(
+            FakeVideos(pages = listOf(page("a", next = "")), missedFails = true),
+        )
+        advance()
+
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf("a"), state.videos.map { it.id })
+        assertEquals(false, state.chips.contains(Chip.Missed))
+    }
+
     private class FakeVideos(
         private val pages: List<FeedPage> = emptyList(),
         private val failWith: Throwable? = null,
         private val failFromCall: Int = Int.MAX_VALUE,
+        /** What `/api/feed/missed` answers, page by page. */
+        private val missedPages: List<FeedPage> = listOf(FeedPage(emptyList(), "")),
+        private val missedFails: Boolean = false,
     ) : VideoRepository {
         var calls = 0
+            private set
+        var missedCalls = 0
             private set
 
         override suspend fun feed(topic: String, pageToken: String): FeedPage {
@@ -162,6 +266,20 @@ class HomeViewModelTest {
         // answer emptily: no topics, nothing on air, nothing half-watched.
         override suspend fun topics() = emptyList<com.mytube.app.domain.model.Topic>()
         override suspend fun live() = emptyList<Video>()
+
+        /**
+         * Keyed on the token, not on a call counter.
+         *
+         * The counter version was wrong in a way worth recording: every full
+         * load asks this — that is what draws the chip — so selecting the chip
+         * consumed page two before anybody had scrolled anywhere. A page comes
+         * back for the token that asks for it, which is what the server does.
+         */
+        override suspend fun missed(pageToken: String): FeedPage {
+            missedCalls++
+            if (missedFails) throw IllegalStateException("upstream said no")
+            return if (pageToken.isEmpty()) missedPages.first() else missedPages.last()
+        }
         override suspend fun history(limit: Int) = emptyList<Video>()
         override suspend fun saved() = emptyList<Video>()
         override suspend fun feedMix() = throw NotImplementedError()

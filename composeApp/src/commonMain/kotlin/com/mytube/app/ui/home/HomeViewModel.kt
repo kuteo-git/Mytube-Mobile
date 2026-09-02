@@ -25,12 +25,24 @@ import kotlinx.coroutines.launch
  */
 sealed interface Chip {
     data object All : Chip
+
+    /**
+     * New uploads from followed channels, not yet watched.
+     *
+     * Not a topic, like [Live] and for the same two reasons: the server answers
+     * it from a different endpoint, and it is **absent when the answer is
+     * empty** — a chip leading to a blank grid is a dead button wearing a name.
+     * "Nothing was missed" is a true and useful answer, and it is said by the
+     * chip not being there.
+     */
+    data object Missed : Chip
     data object Live : Chip
     data class Category(val topic: Topic) : Chip
 
     val key: String
         get() = when (this) {
             All -> "__all"
+            Missed -> "__missed"
             Live -> "__live"
             is Category -> topic.name
         }
@@ -221,7 +233,13 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         _state.update { current.copy(loadingMore = true) }
         viewModelScope.launch {
             _state.value = runCatching {
-                videos.feed(topic = topicOf(current.selected), pageToken = current.nextPageToken)
+                // The one place the kind of chip decides where a page comes
+                // from. Everything else reads a token it was handed.
+                if (current.selected == Chip.Missed) {
+                    videos.missed(pageToken = current.nextPageToken)
+                } else {
+                    videos.feed(topic = topicOf(current.selected), pageToken = current.nextPageToken)
+                }
             }.fold(
                 onSuccess = {
                     current.copy(
@@ -255,9 +273,20 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         coroutineScope {
             // In parallel: four independent questions to one server.
             val feed = async {
-                if (chip == Chip.Live) null else videos.feed(topic = topicOf(chip))
+                when (chip) {
+                    Chip.Live, Chip.Missed -> null
+                    else -> videos.feed(topic = topicOf(chip))
+                }
             }
             val live = async { videos.live() }
+            // Asked on every load, not only when this chip is selected — the
+            // same arrangement Live has, and for its reason: whether the chip
+            // exists at all is decided by whether the answer is empty, so the
+            // question has to be asked before anybody can press it.
+            //
+            // One request, two jobs. It draws the chip, and when the chip is the
+            // one selected it *is* the page — so nothing is fetched twice.
+            val missed = async { runCatching { videos.missed() }.getOrNull() }
             // The chip row and the rail are only rebuilt on a full load. Keeping
             // the previous ones during a topic switch is what stops the chips
             // flickering out and back as the feed under them changes.
@@ -269,11 +298,23 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
 
             val onAir = live.await()
             val page = feed.await()
+            val missedPage = missed.await()
 
             HomeState.Ready(
-                videos = if (chip == Chip.Live) onAir else page?.videos.orEmpty(),
-                nextPageToken = page?.nextPageToken.orEmpty(),
-                chips = withLive(topics.await(), onAir.isNotEmpty()),
+                videos = when (chip) {
+                    Chip.Live -> onAir
+                    Chip.Missed -> missedPage?.videos.orEmpty()
+                    else -> page?.videos.orEmpty()
+                },
+                nextPageToken = when (chip) {
+                    Chip.Live -> ""
+                    Chip.Missed -> missedPage?.nextPageToken.orEmpty()
+                    else -> page?.nextPageToken.orEmpty()
+                },
+                chips = withMissed(
+                    withLive(topics.await(), onAir.isNotEmpty()),
+                    missedPage?.videos?.isNotEmpty() == true,
+                ),
                 selected = chip,
                 continueWatching = history.await(),
             )
@@ -296,6 +337,24 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         val withoutLive = chips.filterNot { it == Chip.Live }
         if (!anythingOnAir) return withoutLive
         return listOf(withoutLive.first(), Chip.Live) + withoutLive.drop(1)
+    }
+
+    /**
+     * The Missed chip appears only when something was missed.
+     *
+     * Rebuilt each load like [withLive] rather than remembered, because "is
+     * there anything new I have not seen" is exactly the thing that changes
+     * between one look and the next — and it changes by *watching*, which is
+     * what the viewer does between two looks at this screen.
+     *
+     * Placed straight after All and before Live: it is a way of reading the
+     * whole library rather than a subject, and it answers the question people
+     * open the app to ask.
+     */
+    private fun withMissed(chips: List<Chip>, anythingMissed: Boolean): List<Chip> {
+        val without = chips.filterNot { it == Chip.Missed }
+        if (!anythingMissed || without.isEmpty()) return without
+        return listOf(without.first(), Chip.Missed) + without.drop(1)
     }
 
     private fun topicOf(chip: Chip): String = when (chip) {
