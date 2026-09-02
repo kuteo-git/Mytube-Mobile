@@ -32,6 +32,9 @@ class NarratorTest {
         override fun setVideoVolume(level: Float) { volume = level }
         /** The level each line started at, so the sliders can be asserted. */
         val spokenAt = mutableListOf<Float>()
+        /** Every address handed over ahead of time, in order. */
+        val prepared = mutableListOf<String>()
+        override fun prepare(url: String) { prepared.add(url) }
         override fun speak(url: String, volume: Float) {
             spoken.add(url)
             spokenAt.add(volume)
@@ -198,6 +201,41 @@ class NarratorTest {
 
         assertEquals(emptyList(), host.spoken)
         assertEquals(1f, host.volume)
+        narrator.release()
+    }
+
+    @Test
+    fun `buffers the next line while this one is speaking`() = runTest {
+        val host = FakeHost()
+        val narrator = Narrator(host, TestScope(testScheduler))
+
+        narrator.setClips(listOf(clip(1.0, 3.0, "a.wav"), clip(3.0, 5.0, "b.wav")))
+
+        host.videoPositionSeconds = 1.5
+        advanceTimeBy(400)
+
+        // The server leaves a line's audio no room inside its slot, so the next
+        // one has to be fetched before it is due or its predecessor loses the
+        // moment the fetch takes.
+        assertEquals(listOf("b.wav"), host.prepared)
+        assertEquals(listOf("a.wav"), host.spoken)
+        // The ticker is `while (true)`, and `runTest` drains the scheduler when
+        // the body ends — so a test that leaves it running advances virtual
+        // time for ever. Every test here ends this way for that reason.
+        narrator.release()
+    }
+
+    @Test
+    fun `hands the same address over once, however many ticks pass`() = runTest {
+        val host = FakeHost()
+        val narrator = Narrator(host, TestScope(testScheduler))
+
+        narrator.setClips(listOf(clip(1.0, 3.0, "a.wav"), clip(3.0, 5.0, "b.wav")))
+
+        host.videoPositionSeconds = 1.5
+        advanceTimeBy(1_000)
+
+        assertEquals(listOf("b.wav"), host.prepared)
         narrator.release()
     }
 }

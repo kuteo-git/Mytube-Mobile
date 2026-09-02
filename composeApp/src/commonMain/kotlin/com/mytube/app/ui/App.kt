@@ -81,9 +81,11 @@ import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.deviceLanguage
 import com.mytube.app.domain.model.Profile
 import com.mytube.app.domain.repository.FeedMix
+import com.mytube.app.ui.playlist.PlaylistNameAlert
 import com.mytube.app.ui.playlist.PlaylistScreen
 import com.mytube.app.ui.playlist.PlaylistViewModel
 import com.mytube.app.ui.playlist.PlaylistsScreen
+import com.mytube.app.ui.playlist.PlaylistsState
 import com.mytube.app.ui.playlist.PlaylistsViewModel
 import com.mytube.app.ui.playlist.SavePlaylistSheet
 import com.mytube.app.ui.playlist.SavePlaylistViewModel
@@ -1317,6 +1319,25 @@ fun App(
             // either. Before the sheet, so a menu row that opens one is covered
             // by what it opened rather than left standing over it.
             GlassMenu()
+
+            // Naming a new collection, drawn here rather than by the tab that
+            // opens it. A tab is composed inside `AppShell`'s recording, so an
+            // alert of sampled glass there samples the layer it is drawn into
+            // and the app dies in Skia's image-filter bounds walk. The screen's
+            // own `glassSource` is a no-op under a shell, which is why the two
+            // boxes it used to wrap this in did not help.
+            val playlistsState by playlists.state.collectAsStateWithLifecycle()
+            val playlistStrings = LocalStrings.current
+            PlaylistNameAlert(
+                visible = (playlistsState as? PlaylistsState.Ready)?.creating == true,
+                title = playlistStrings.newPlaylist,
+                name = (playlistsState as? PlaylistsState.Ready)?.newName.orEmpty(),
+                backdrop = backdrop,
+                confirmLabel = playlistStrings.createPlaylist,
+                onNameChanged = playlists::nameChanged,
+                onDismiss = playlists::cancelCreating,
+                onConfirm = playlists::create,
+            )
 
             val savingFor = savingTarget
             if (savingFor != null) {

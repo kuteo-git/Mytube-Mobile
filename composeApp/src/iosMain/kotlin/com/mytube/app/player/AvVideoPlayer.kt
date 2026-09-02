@@ -182,6 +182,7 @@ class AvVideoPlayer : VideoPlayer {
     override fun stop() {
         narrator?.release()
         narrator = null
+        nowPlaying.resign()
         nowPlaying.clear()
         av.pause()
         // Replacing the item with nothing is what clears the Now Playing entry
@@ -198,6 +199,11 @@ class AvVideoPlayer : VideoPlayer {
         // side of this already measured, in reverse.
         narrator?.release()
         narrator = null
+        // The lock-screen *entry* is deliberately left standing (see above);
+        // its *buttons* are not. `MPRemoteCommandCenter` is process-wide, so a
+        // released player that still answers Play is a second video heard over
+        // the one the viewer opened — measured on the phone.
+        nowPlaying.resign()
         observer?.let { av.removeTimeObserver(it) }
         observer = null
         av.pause()
@@ -253,7 +259,7 @@ class AvVideoPlayer : VideoPlayer {
             // needs — but the *rate* has to be right the instant it changes, or
             // the lock screen's clock counts on through a pause.
             val now = _state.value
-            nowPlaying.progress(now.positionSeconds, now.isPlaying)
+            nowPlaying.progress(now.positionSeconds, now.isPlaying, now.durationSeconds)
         }
     }
 }

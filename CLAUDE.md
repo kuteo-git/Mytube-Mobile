@@ -2707,3 +2707,101 @@ iOS gets a 1024 asset catalogue entry, inset to 75% because a favicon read at
 16px runs to its edges and an app icon is masked. Android gets an **adaptive icon
 as a vector** rather than ten PNGs, with a monochrome layer for Android 13's
 themed icons.
+
+## Five from the narration, the lock screen and one changed tab (2026-09-02)
+
+### A slot with no slack, and a client that starts late
+
+Reported as every narration line being cut short. Neither half was wrong on its
+own, and together they lose the end of every sentence.
+
+The server fits each clip's audio to the gap before the next line —
+`tempoFor` stretches it to fill the slot exactly — so **there is no slack in the
+slot at all**. The client then started a clip up to a tick late and had it
+replaced by the next one exactly on time, so the tail lost precisely what the
+start had cost: the 250ms tick, plus fetching a WAV over the LAN.
+
+- **Fixed on the client, because that is where the delay is.** Making the server
+  fit into 92% of the slot would have worked by speaking faster to pay for
+  something slow somewhere else, and would have meant regenerating every clip
+  already cached.
+- **`NarrationHost.prepare(url)`, and two players used in turn.** One player
+  cannot buffer the next line while playing this one — loading a new item is
+  what stops the current one, on both `ExoPlayer` and `AVPlayer`. So the clip
+  after this is prepared on the idle player and starting it is a swap.
+- **One ahead, not a queue.** A platform holding several is a platform deciding
+  when they play, which is the one thing `Narrator` exists to keep in one place.
+- **The tick is 100ms**, and `nextClipAfter` reads from the playhead rather than
+  from the clip now speaking, so a seek lands on the right answer with no
+  special case — the reasoning that makes the whole loop poll rather than
+  schedule.
+
+`NarrationClip.durationSeconds` is no longer what stops a clip. Its comment said
+ducking must end when the line's time is up rather than when its file stops;
+that is right about ducking and was wrong as the rule for the audio.
+
+### The narration was read one sentence ahead, and it was the server's
+
+Recorded here because it was diagnosed from this side and reported as an app
+fault. `services/translate_server.py` asked the model for N numbered lines and
+checked only that N came back; a model that merged two cues into line 1 repeated
+a line to keep the count, and from there every cue carried the next cue's words.
+The server's own changelog holds the measurement. **Nothing in this app was
+wrong**, and the two clients differed only in that the web app had already been
+fed the same cache.
+
+The lesson worth keeping is the shape of the first fix considered: numbering the
+lines by hash instead of by position. It would have changed nothing — the model
+returned every number correctly and put the wrong text under it. **A check on
+the envelope cannot catch a fault in the contents.**
+
+### A screen that changes what it is used as loses the two-box trick
+
+Pressing "+" on the playlists tab killed the app. The alert was already wrapped
+in the two boxes this charter prescribes — a sampled backdrop drawn *outside*
+the node that records the layer — and that arrangement is only load-bearing
+while the screen records its own layer. As a **tab** it is composed inside
+`AppShell`'s recording, where `glassSource()` is deliberately a no-op, so both
+boxes were inside the layer the alert would sample and Skia's image-filter
+bounds walk recursed until the stack went.
+
+`PlaylistNameAlert` is drawn from `App.kt` now, beside `SavePlaylistSheet`, for
+exactly the reason that sheet is. **The rule is not "wrap it in two boxes", it
+is "draw it outside every recording"** — and the two are the same sentence only
+for a route.
+
+### `MPRemoteCommandCenter` is process-wide and its targets accumulate
+
+Play video A, background it, play video B, then press Play on the lock screen:
+**both were heard.** `NowPlaying` had a `registered` flag, which stops one
+instance registering twice and says nothing about a second instance registering
+beside it — and nothing ever removed a handler. Two players, eight targets, one
+button, two answers.
+
+`resign()` removes this instance's own handlers and is called from `release()`
+as well as `stop()`. That is the one place the release/stop split does *not*
+apply: releasing hands back this app's hold on the picture while the sound
+carries on, but a player that has let go must not still answer the lock screen.
+
+### The lock screen had no scrubber, and a comment claimed otherwise
+
+`describe()` runs the moment the item is handed to the player, when the duration
+is still zero — and a zero duration is written out as `MPNowPlayingInfoPropertyIsLiveStream`,
+which is how iOS is told there is nothing to scrub. The comment beside it said
+*"`progress` corrects it on the first tick"*. It did not: `progress` sent the
+elapsed time and the rate and never the length. So every video was a live stream
+with no length for its whole duration, and the lock screen offered no seek.
+
+**A comment that describes what another function does is a claim about code
+somebody else can change.** The length now travels on every tick beside the
+position, where the two cannot disagree.
+
+- **The artwork is fetched, reversing the decision recorded above.** *"A lock
+  screen with a title and no picture is complete"* does not survive contact with
+  the real thing — every other app has one, and its absence reads as an entry
+  that failed to load. The objections it was refused on are answered rather than
+  ignored: the fetch is asynchronous, a failure leaves the text untouched, and
+  "unreachable off the house wifi" is equally true of the video.
+- **A picture that lands late is only applied if it is still the right picture.**
+  A viewer can press next while it is in flight, and without the check the lock
+  screen shows the previous video under the new title.

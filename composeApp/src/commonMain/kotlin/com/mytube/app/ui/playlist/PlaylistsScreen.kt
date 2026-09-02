@@ -42,7 +42,6 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.DetailBack
-import com.mytube.app.ui.shell.LocalBackdrop
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.shell.GlassRadius
@@ -106,9 +105,6 @@ fun PlaylistsScreen(
         onOpenPlaylist = onOpenPlaylist,
         onRetry = viewModel::refresh,
         onStartCreating = viewModel::startCreating,
-        onCancelCreating = viewModel::cancelCreating,
-        onNameChanged = viewModel::nameChanged,
-        onCreate = viewModel::create,
     )
 }
 
@@ -123,19 +119,18 @@ fun PlaylistsContent(
     onOpenPlaylist: (String) -> Unit,
     onRetry: () -> Unit,
     onStartCreating: () -> Unit,
-    onCancelCreating: () -> Unit,
-    onNameChanged: (String) -> Unit,
-    onCreate: () -> Unit,
 ) {
     val strings = LocalStrings.current
 
-    // Two boxes, and the nesting is load-bearing. `glassSource` registers the
-    // inner one as the layer every floating pane samples — so an alert drawn
-    // *inside* it samples a recording of itself, which is not a bad look but a
-    // crash: `SkBlurImageFilter::onGetOutputLayerBounds` recurses until the
-    // stack goes. The charter records it from the pull-to-refresh pane, and
-    // this is the second time it has been paid for.
-    Box(Modifier.fillMaxSize()) {
+    // The create alert is **not** drawn here, and the two boxes that used to
+    // wrap it are gone with it. Wrapping worked while this was a route, which
+    // records its own layer; as a tab it is drawn inside `AppShell`'s
+    // recording, and `glassSource` below is then a no-op — so both boxes were
+    // inside the layer the alert would sample, and pressing "+" was
+    // `EXC_BAD_ACCESS` in Skia's image-filter bounds walk. It is `App.kt`'s
+    // now, beside the save sheet, which is outside every recording. The
+    // charter records this crash twice already; this is the shape it takes
+    // when a screen changes what it is used as.
     Box(Modifier.fillMaxSize().glassSource()) {
         TabScaffold(
             loading = state is PlaylistsState.Loading,
@@ -222,20 +217,6 @@ fun PlaylistsContent(
         }
 
         if (onBack != null) DetailBack(onBack, strings.back)
-        }
-
-        // Outside the recorded node, and last, so it is over the page rather
-        // than sampling it.
-        PlaylistNameAlert(
-            visible = (state as? PlaylistsState.Ready)?.creating == true,
-            title = strings.newPlaylist,
-            name = (state as? PlaylistsState.Ready)?.newName.orEmpty(),
-            backdrop = LocalBackdrop.current,
-            confirmLabel = strings.createPlaylist,
-            onNameChanged = onNameChanged,
-            onDismiss = onCancelCreating,
-            onConfirm = onCreate,
-        )
     }
 }
 

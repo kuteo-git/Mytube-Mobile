@@ -4,6 +4,7 @@ import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.clipAt
+import com.mytube.app.domain.model.nextClipAfter
 import com.mytube.app.domain.model.levelsFor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,20 @@ interface NarrationHost {
     fun videoVolume(): Float
 
     fun setVideoVolume(level: Float)
+
+    /**
+     * Fetch and buffer a clip that is not due yet, so [speak] can start it
+     * without waiting.
+     *
+     * The server fits each line's audio to the gap before the next line, so a
+     * clip's slot has no room to spare — and a clip that takes a moment to load
+     * loses exactly that moment off its tail when the next one replaces it.
+     * Measured as every line ending a fraction early.
+     *
+     * Called repeatedly with the same address; a platform that already holds it
+     * must do nothing.
+     */
+    fun prepare(url: String)
 
     /** Begin one clip. Anything already speaking is replaced. */
     fun speak(url: String, volume: Float)
@@ -82,6 +97,9 @@ class Narrator(
 
     /** What is speaking now, so a clip is started once rather than on every tick. */
     private var speaking: NarrationClip? = null
+
+    /** The address handed to [NarrationHost.prepare], so it is handed over once. */
+    private var prepared: String = ""
 
     /** The video's own level, remembered so the ducking can be undone exactly. */
     private var master: Float = 1f
@@ -150,6 +168,7 @@ class Narrator(
         ticker = null
         host.silence()
         speaking = null
+        prepared = ""
         // Back to where it was, not up to 1.0: raising it would undo the
         // viewer's own volume setting on the way out of narration.
         host.setVideoVolume(master)
@@ -168,12 +187,30 @@ class Narrator(
             if (speaking != null) hush()
             return
         }
-        if (due == speaking) return
+        if (due == speaking) {
+            readyNext()
+            return
+        }
 
         val levels = levels()
         host.setVideoVolume(levels.video)
         speaking = due
         host.speak(due.clipUrl, levels.narration)
+        readyNext()
+    }
+
+    /**
+     * Buffer the line after the one on screen.
+     *
+     * One ahead, not several: the clips are seconds apart and a platform holding
+     * a queue of them is a platform deciding when they play, which is the one
+     * thing this class exists to keep in one place.
+     */
+    private fun readyNext() {
+        val next = nextClipAfter(clips, host.videoPositionSeconds) ?: return
+        if (next.clipUrl == prepared) return
+        prepared = next.clipUrl
+        host.prepare(next.clipUrl)
     }
 
     private fun hush() {
@@ -185,7 +222,16 @@ class Narrator(
     }
 
     private companion object {
-        /** The same rate the position readout uses. */
-        const val TICK_MILLIS = 250L
+        /**
+         * How often the playhead is compared against the clips.
+         *
+         * A line may start up to one tick late and is replaced by the next one
+         * exactly on time, so the tick is subtracted from every clip's tail —
+         * and the server leaves no slack to absorb it, having stretched the
+         * audio to fill the gap before the next line. At 250ms that was audible
+         * as clipped endings; this is the readout's rate divided by two and a
+         * half, and it is four comparisons against a list, not four requests.
+         */
+        const val TICK_MILLIS = 100L
     }
 }

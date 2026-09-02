@@ -24,7 +24,32 @@ import com.mytube.app.domain.player.NarrationHost
 @UnstableApi
 class AndroidNarrationHost(context: Context, private val video: Player) : NarrationHost {
 
-    private val speaker = ExoPlayer.Builder(context).build()
+    /**
+     * Two speakers, used in turn.
+     *
+     * One player cannot buffer the next line while playing this one — loading a
+     * new item is what stops the current one. So the clip after this is prepared
+     * on the idle player, and starting it is a swap rather than a fetch.
+     */
+    private val speakers = listOf(
+        ExoPlayer.Builder(context).build(),
+        ExoPlayer.Builder(context).build(),
+    )
+
+    /** Which of the two is the one that may be heard. */
+    private var current = 0
+
+    /** What each player holds, so an address already loaded is not loaded again. */
+    private val loaded = arrayOf("", "")
+
+    private val idle get() = 1 - current
+
+    private fun load(slot: Int, url: String) {
+        if (loaded[slot] == url) return
+        speakers[slot].setMediaItem(MediaItem.fromUri(url))
+        speakers[slot].prepare()
+        loaded[slot] = url
+    }
 
     override val videoIsPlaying: Boolean get() = video.isPlaying
 
@@ -36,22 +61,40 @@ class AndroidNarrationHost(context: Context, private val video: Player) : Narrat
         video.volume = level
     }
 
+    override fun prepare(url: String) {
+        // Onto the idle player, and at zero volume: `prepare` only buffers, but
+        // a swap that arrives mid-tick must not be audible before `speak` has
+        // set the viewer's level.
+        speakers[idle].volume = 0f
+        load(idle, url)
+    }
+
     override fun speak(url: String, volume: Float) {
-        speaker.setMediaItem(MediaItem.fromUri(url))
-        speaker.volume = volume
-        speaker.prepare()
-        speaker.play()
+        // The prepared player if it is the one holding this line, otherwise the
+        // current one — a seek reaches a clip nothing was buffering.
+        if (loaded[idle] == url) {
+            speakers[current].stop()
+            current = idle
+        }
+        load(current, url)
+        speakers[current].volume = volume
+        speakers[current].seekTo(0)
+        speakers[current].play()
     }
 
     override fun setSpeechVolume(level: Float) {
-        speaker.volume = level
+        speakers[current].volume = level
     }
 
     override fun silence() {
-        speaker.stop()
-        speaker.clearMediaItems()
+        speakers.forEach {
+            it.stop()
+            it.clearMediaItems()
+        }
+        loaded[0] = ""
+        loaded[1] = ""
     }
 
     /** Hands back the decoder. Only the owner of this host may call it. */
-    fun dispose() = speaker.release()
+    fun dispose() = speakers.forEach { it.release() }
 }
