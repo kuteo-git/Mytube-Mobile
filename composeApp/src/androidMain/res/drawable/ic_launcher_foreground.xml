@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The same mark the web app's favicon draws: a house with a play in it.
+
+    Its comment there is the reason it is not YouTube's own rounded rectangle:
+    that is a trademark rather than a layout, and the tokens read off YouTube's
+    desktop are a reference for spacing and colour, its logo is not one of them.
+
+    Drawn at 108dp with the shape inside the middle 66dp, which is what an
+    adaptive icon reserves — the outer ring is cropped to whatever mask the
+    launcher applies, and anything drawn there is lost on a round one.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="26.4" android:translateY="27.15" android:scaleX="1.66" android:scaleY="1.66">
+        <path
+            android:fillColor="#FF0000"
+            android:pathData="M16,3.5 L30,14 a1.4,1.4 0 0 1 0.6,1.1 V27 a2.6,2.6 0 0 1 -2.6,2.6 H4 a2.6,2.6 0 0 1 -2.6,-2.6 V15.1 A1.4,1.4 0 0 1 2,14 Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M13,15.5 L21,20 L13,24.5 Z" />
+    </group>
+</vector>

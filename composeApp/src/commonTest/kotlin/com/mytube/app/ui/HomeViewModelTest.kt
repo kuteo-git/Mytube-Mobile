@@ -235,6 +235,52 @@ class HomeViewModelTest {
         assertEquals(false, state.chips.contains(Chip.Missed))
     }
 
+    /**
+     * Stepping back to a chip shows what it had and asks nothing.
+     *
+     * It used to restore the cache and reload underneath, quietly — so a list
+     * somebody was already reading changed by itself a moment later. Reported
+     * exactly that way. Refreshing is a gesture now, not something that happens
+     * to a reader.
+     */
+    @Test
+    fun steppingBackToAChipDoesNotRefetchIt() = runTest(dispatcher) {
+        val videos = FakeVideos(pages = listOf(page("a", next = ""), page("b", next = "")))
+        val model = HomeViewModel(videos)
+        advance()
+
+        model.select(Chip.All)
+        advance()
+        val callsAfterFirst = videos.calls
+
+        // Away and back. The chip row here holds All and whatever topics came
+        // back; Live stands in for "another chip" and asks nothing of the feed.
+        model.select(Chip.Live)
+        advance()
+        model.select(Chip.All)
+        advance()
+
+        assertEquals(callsAfterFirst, videos.calls)
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf("a"), state.videos.map { it.id })
+    }
+
+    /** A pull is unconditional: it is the gesture that means "ask again". */
+    @Test
+    fun pullingToRefreshAlwaysAsks() = runTest(dispatcher) {
+        val videos = FakeVideos(pages = listOf(page("a", next = ""), page("b", next = "")))
+        val model = HomeViewModel(videos)
+        advance()
+        val before = videos.calls
+
+        model.refresh()
+        advance()
+
+        assertEquals(before + 1, videos.calls)
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf("b"), state.videos.map { it.id })
+    }
+
     private class FakeVideos(
         private val pages: List<FeedPage> = emptyList(),
         private val failWith: Throwable? = null,

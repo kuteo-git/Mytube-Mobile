@@ -177,6 +177,8 @@ data class ChannelDetailDto(
 @Serializable
 data class ChannelVideoDto(
     val id: String,
+    /** The address to hand back when the household has never imported this. */
+    val sourceUrl: String = "",
     val title: String = "",
     val durationSeconds: Int = 0,
     val viewCount: Long = 0,
@@ -215,6 +217,11 @@ fun ChannelVideoDto.toDomain(channel: Channel): Video = Video(
     publishedAt = publishedAt.orEmpty(),
     // Absolute, and `imageModel` is what notices. See its comment.
     thumbnailPath = thumbnailUrl,
+    // The two facts that make an upstream row openable. Everywhere else in the
+    // app these take their defaults, because everywhere else a Video is a row
+    // that already exists on this disk.
+    sourceUrl = sourceUrl,
+    inLibrary = inLibrary,
 )
 
 @Serializable

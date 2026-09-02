@@ -31,6 +31,7 @@ import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.GlassPill
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.shell.pressableGlassControl
 
 /**
  * Like · Dislike · Save, under the video.
@@ -171,8 +172,11 @@ fun SubscribeButton(subscribed: Boolean, onClick: () -> Unit, modifier: Modifier
         fontSize = 14.sp,
         fontWeight = FontWeight.Medium,
         modifier = modifier
-            .glassControl(RoundedCornerShape(percent = 50), selected = !subscribed)
-            .clickable(onClick = onClick)
+            .pressableGlassControl(
+                RoundedCornerShape(percent = 50),
+                selected = !subscribed,
+                onClick = onClick,
+            )
             .padding(horizontal = 16.dp, vertical = 10.dp),
     )
 }

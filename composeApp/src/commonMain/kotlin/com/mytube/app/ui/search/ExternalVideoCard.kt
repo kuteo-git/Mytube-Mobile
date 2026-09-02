@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,15 +39,14 @@ import com.mytube.app.ui.home.Radius
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
 import com.mytube.app.ui.home.MoreVertical
 import com.mytube.app.ui.home.Size
-import com.mytube.app.ui.shell.GlassRadius
-import com.mytube.app.ui.shell.menuSurface
+import com.mytube.app.ui.shell.MenuAction
+import com.mytube.app.ui.shell.rememberMenuAnchor
+import com.mytube.app.ui.home.OpeningOverlay
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.home.formatViews
@@ -150,20 +148,9 @@ fun ExternalVideoCard(
                 )
             }
 
-            // Over the picture, not beside the title: the picture is what was
-            // pressed, and it is the one part of the card big enough to say
-            // "this one, and it is working" without a second glance.
-            if (opening) {
-                Box(
-                    Modifier.fillMaxWidth().fillMaxHeight().background(Color.Black.copy(alpha = 0.55f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(
-                        color = Tokens.text,
-                        modifier = Modifier.size(28.dp),
-                    )
-                }
-            }
+            // Shared with the channel page's card, which has the same state for
+            // the same reason. See [OpeningOverlay].
+            if (opening) OpeningOverlay()
         }
 
         // The dot sits at the end of the title block, as on the library card —
@@ -221,36 +208,21 @@ fun ExternalVideoCard(
  *
  * A card whose actions mean nothing draws no dot rather than a dead one — the
  * rule this app already follows — and for an upstream result exactly one action
- * means something. Paint rather than sampled glass, for [menuSurface]'s reasons.
+ * means something. Real glass, drawn at the root: see [MenuHost].
  */
 @Composable
 private fun ExternalCardMenu(strings: Strings, onSaveToPlaylist: () -> Unit) {
-    var open by remember { mutableStateOf(false) }
+    val (anchor, show) = rememberMenuAnchor()
 
-    Box {
-        Icon(
-            imageVector = MoreVertical,
-            contentDescription = strings.moreOptions,
-            tint = Tokens.text2,
-            modifier = Modifier
-                .size(Size.iconButton)
-                .clip(CircleShape)
-                .clickable { open = true }
-                .padding(Space.sm),
-        )
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            containerColor = Color.Transparent,
-            shape = GlassRadius.menu,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            modifier = Modifier.menuSurface(GlassRadius.menu),
-        ) {
-            DropdownMenuItem(
-                text = { Text(strings.saveToPlaylist, color = Tokens.text) },
-                onClick = { open = false; onSaveToPlaylist() },
-            )
-        }
-    }
+    Icon(
+        imageVector = MoreVertical,
+        contentDescription = strings.moreOptions,
+        tint = Tokens.text2,
+        modifier = anchor
+            .size(Size.iconButton)
+            .clip(CircleShape)
+            .clickable { show(listOf(MenuAction(strings.saveToPlaylist, onSaveToPlaylist))) }
+            .padding(Space.sm),
+    )
 }
+

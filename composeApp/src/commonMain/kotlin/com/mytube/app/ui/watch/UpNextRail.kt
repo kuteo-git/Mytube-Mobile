@@ -40,6 +40,7 @@ import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.shell.pressableGlassControl
 
 /** How recently ingested still counts as new. Two days, from the web app. */
 private const val NEW_WINDOW_DAYS = 2
@@ -77,8 +78,7 @@ fun UpNextRail(
         Row(
             Modifier
                 .fillMaxWidth()
-                .glassControl(RoundedCornerShape(12.dp))
-                .clickable(onClick = onToggleCollapsed)
+                .pressableGlassControl(RoundedCornerShape(12.dp), onClick = onToggleCollapsed)
                 .padding(horizontal = Space.md, vertical = Space.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -141,8 +141,11 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
         fontWeight = FontWeight.Medium,
         maxLines = 1,
         modifier = Modifier
-            .glassControl(RoundedCornerShape(percent = 50), selected = selected)
-            .clickable(onClick = onClick)
+            .pressableGlassControl(
+                RoundedCornerShape(percent = 50),
+                selected = selected,
+                onClick = onClick,
+            )
             .padding(horizontal = 12.dp, vertical = 7.dp),
     )
 }

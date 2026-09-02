@@ -2612,3 +2612,98 @@ a load, and the gateway mints a new rotation for the channel round-robin each
 time — so pulling the list down leads with a different channel while every
 channel still gets a row before any gets a second. Nothing on this side changed
 to get it.
+
+## What a finger gets back, and a mark for the app (2026-09-02)
+
+### Glass moves when it is touched
+
+Every control here is a pane of glass and pressing one did **nothing at all**:
+`indication = null` everywhere, because Material's ripple is ink spreading
+through paper and this app is not made of paper. That removed the wrong answer
+and left no answer — a button with no acknowledgement is one people press twice.
+
+There is no library for this. No Compose Multiplatform package draws an
+iOS-26-style press, and the version of `backdrop` this project is pinned to
+cannot move — 2.0.0 wants `compileSdk 37`, which is past what AGP 8.11.1
+supports, and AGP cannot move because 9.x is incompatible with the KMP plugin.
+So it is written here, on the library already in use.
+
+- **`drawBackdrop` takes lambdas for everything** — shape, effects, highlight —
+  and they are read at *draw* time. A press therefore costs a redraw and no
+  recomposition, which on a chip row is the difference between 2% of movement
+  and re-composing a `LazyRow` item at 120fps.
+- **`GlassPress` is a holder, not a modifier**, because two things read it from
+  two places: the layout scales the node and the *material* deepens its lens.
+  One object is what keeps the halves in step.
+- **Two springs, not one.** Pressing is quick and damped — meeting a surface;
+  releasing overshoots — a sheet under tension let go. One symmetric curve reads
+  as an animation playing rather than as a material responding.
+- **Painted surfaces brighten instead**, since paint cannot refract.
+- **`pressableGlassControl` and friends fold the material, the squash and the
+  click into one modifier.** Written apart, the next control written gets the
+  material and no press — which is exactly how fifteen of them ended up silent.
+- **Measured**: holding the Share pill takes it from mean 0.436 to 0.486 while
+  the Save pill beside it does not change by a single pixel. On the tab bar, the
+  held item differs by RMSE 0.055 against 0.003 for its neighbours.
+
+Cards keep their own 0.98 spring and are deliberately untouched: a card is a
+picture, and that number says "the touch landed here", not "this is a button".
+The player's controls over the video are untouched too — on iOS 26 they are
+drawn by SwiftUI, so a Compose squash would show on Android only.
+
+### The overflow menu is real glass now
+
+It was `DropdownMenu` with a painted surface, and the two reasons written down
+for that were both true and both about *where a popup draws*: its own coordinate
+space reads the wrong slice, and its anchor sits inside the recorded layer where
+sampling is a segfault. Neither is a fact about menus. So the menu moved to where
+the sheets and the alert are — an ordinary child of the root `Box` — and
+`MenuHost` carries the one open menu and the rectangle of the button it hangs
+from. `menuSurface` and `DropdownMenu` are gone from the codebase.
+
+- **The dismiss watcher is a modifier on the root, not a full-screen sibling.**
+  Not consuming the event is not enough: Compose hit-tests siblings in reverse
+  draw order and **stops at the first one hit**, so a node covering the screen
+  takes the gesture from everything beneath it whether it consumes anything or
+  not. Reported as the menu blocking the scroll, and measured — menu closed,
+  feed motionless. An *ancestor* sees the Initial pass first and the list still
+  receives it: one is a lid, the other a doorbell.
+- **It grows from the button**, `TransformOrigin` computed from the anchor, so it
+  is correct when the pane flips above rather than below.
+- **Rows are 40dp with the pane carrying 10dp**, because a label centred in a row
+  leaves half a row above and half below — so *between* two labels is a whole
+  row's leftover and at an edge it is half of one. Measured before: 37dp against
+  19dp, reported as uneven padding. And rows fill the pane's width: one that
+  answers only where the letters are is one people press twice.
+
+### The sheet's frame, measured off the platform
+
+A screenshot of iOS's share sheet (591×1280, 1.5 px per point) puts its left edge
+at x=14 and its right at 577 of 591 — 9.3pt each side — and its bottom edge
+10.6pt above the screen. So `SHEET_MARGIN` is 10dp, **even on all three sides**;
+the home indicator is cleared *inside* the pane instead. The corner follows: the
+same screenshot's arc is ~35pt, which is 47.33 − 10 — the platform draws its
+sheet concentric with the display, exactly the rule this app used for 32dp when
+the margin was 16.
+
+### Two bugs the phone found
+
+- **A channel's uploads come from YouTube, so most have no catalogue row** — and
+  pressing one navigated to a watch screen that answered *"gateway answered 404
+  for /api/videos/bnNMULP-Ftc"*. `ChannelViewModel.openVideo` writes the row
+  first and opens the id the server answers with, which is `SearchViewModel`'s
+  path for the same reason. Measured on the reported video: `POST
+  /api/videos/external` → `{"videoId":"bnNMULP-Ftc"}`, then 200 and an HLS
+  stream.
+- **The two "fetching this one" overlays were different spinners.** One
+  composable now, `OpeningOverlay`: the search results and the channel page have
+  the same state for the same reason and must not look like two apps.
+
+### The app has a mark
+
+The web app's own favicon — a house with a play in it, and its comment says why
+it is not YouTube's rounded rectangle: that is a trademark rather than a layout.
+iOS gets a 1024 asset catalogue entry, inset to 75% because a favicon read at
+16px runs to its edges and an app icon is masked. Android gets an **adaptive icon
+as a vector** rather than ten PNGs, with a monochrome layer for Android 13's
+themed icons.

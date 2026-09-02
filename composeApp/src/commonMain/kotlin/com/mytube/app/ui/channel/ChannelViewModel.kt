@@ -69,6 +69,14 @@ class ChannelViewModel(
     private val _state = MutableStateFlow<ChannelState>(ChannelState.Loading)
     val state: StateFlow<ChannelState> = _state.asStateFlow()
 
+    /** The id of the row being written, or empty. */
+    private val _opening = MutableStateFlow("")
+    val opening: StateFlow<String> = _opening.asStateFlow()
+
+    /** The last attempt to open something upstream came back with nothing. */
+    private val _openFailed = MutableStateFlow(false)
+    val openFailed: StateFlow<Boolean> = _openFailed.asStateFlow()
+
     init {
         load(sortToken = "")
     }
@@ -93,6 +101,51 @@ class ChannelViewModel(
             sorting = true,
         )
         load(option.token, keep = current, index = index)
+    }
+
+    /**
+     * Opens a row, writing it into the catalogue first when it is not there yet.
+     *
+     * **This page's rows come from YouTube**, so most of them have no catalogue
+     * entry — and navigating straight to one produced exactly what was reported:
+     * *"gateway answered 404 for /api/videos/bnNMULP-Ftc"*, on a channel the
+     * household had never imported. The video was fine; there was simply no row
+     * to ask about.
+     *
+     * `SearchViewModel.openExternal` is the same three steps for the same
+     * reason, and the rules it records hold here:
+     *
+     * - **The row is written first and the screen navigates second.** Going the
+     *   other way puts the watch screen's "YouTube will not hand this video
+     *   over" in front of a video that is on its way.
+     * - **An empty id back is a refusal wearing a success's clothes.** The
+     *   gateway answers 200 with `{"videoId":""}` when it could not resolve the
+     *   address, and opening the watch screen on an empty id opens it on nothing.
+     * - **`inLibrary` skips the round trip** for a row that already has one.
+     *
+     * The queue is passed through untouched. It is a list of *upstream* ids and
+     * every one of them takes this same path when it is reached, so translating
+     * the whole page here would be forty writes for a video somebody has not
+     * pressed.
+     */
+    fun openVideo(video: Video, queue: List<String>, onOpened: (String, List<String>) -> Unit) {
+        if (_opening.value.isNotEmpty()) return
+        _openFailed.value = false
+
+        if (video.inLibrary || video.sourceUrl.isEmpty()) {
+            onOpened(video.id, queue)
+            return
+        }
+
+        _opening.value = video.id
+        viewModelScope.launch {
+            runCatching { videos.ensureExternal(video.sourceUrl) }
+                .onSuccess { id ->
+                    if (id.isNotEmpty()) onOpened(id, queue) else _openFailed.value = true
+                }
+                .onFailure { _openFailed.value = true }
+            _opening.value = ""
+        }
     }
 
     fun toggleSubscribed() {

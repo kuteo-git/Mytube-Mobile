@@ -1,0 +1,318 @@
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  SIGSEGV (0xb) at pc=0x0000000141cf2c8c, pid=23342, tid=53979
+#
+# JRE version: OpenJDK Runtime Environment Temurin-21.0.12.1+1 (21.0.12.1+1) (build 21.0.12.1+1-LTS)
+# Java VM: OpenJDK 64-Bit Server VM Temurin-21.0.12.1+1 (21.0.12.1+1-LTS, mixed mode, sharing, tiered, compressed oops, compressed class ptrs, g1 gc, bsd-aarch64)
+# Problematic frame:
+# C  [libllvmstubs.dylib+0x1856c8c]  llvm::BranchProbabilityInfo::calculate(llvm::Function const&, llvm::LoopInfo const&, llvm::TargetLibraryInfo const*, llvm::DominatorTree*, llvm::PostDominatorTree*)+0x3e4
+#
+# No core dump will be written. Core dumps have been disabled. To enable core dumping, try "ulimit -c unlimited" before starting Java again
+#
+# If you would like to submit a bug report, please visit:
+#   https://github.com/adoptium/adoptium-support/issues
+# The crash happened outside the Java Virtual Machine in native code.
+# See problematic frame for where to report the bug.
+#
+
+---------------  S U M M A R Y ------------
+
+Command Line: --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED -Xmx4096M -Dfile.encoding=UTF-8 -Duser.country=VN -Duser.language=en -Duser.variant -javaagent:/Volumes/Data2/dev/gradle/wrapper/dists/gradle-8.14-bin/38aieal9i53h9rfe7vjup95b9/gradle-8.14/lib/agents/gradle-instrumentation-agent-8.14.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 8.14
+
+Host: "Mac16,10" arm64, 10 cores, 24G, Darwin 25.6.0, macOS 26.6.2 (25G83)
+Time: Wed Sep  2 15:30:56 2026 +07 elapsed time: 3080.080405 seconds (0d 0h 51m 20s)
+
+---------------  T H R E A D  ---------------
+
+Current thread (0x0000000b5128f100):  JavaThread "Execution worker Thread 4" [_thread_in_native, id=53979, stack(0x000000017d038000,0x000000017d23b000) (2060K)]
+
+Stack: [0x000000017d038000,0x000000017d23b000],  sp=0x000000017d230890,  free space=2018k
+Native frames: (J=compiled Java code, j=interpreted, Vv=VM code, C=native code)
+C  [libllvmstubs.dylib+0x1856c8c]  llvm::BranchProbabilityInfo::calculate(llvm::Function const&, llvm::LoopInfo const&, llvm::TargetLibraryInfo const*, llvm::DominatorTree*, llvm::PostDominatorTree*)+0x3e4
+C  [libllvmstubs.dylib+0x9b091c]  llvm::detail::AnalysisPassModel<llvm::Function, llvm::BranchProbabilityAnalysis, llvm::AnalysisManager<llvm::Function>::Invalidator>::run(llvm::Function&, llvm::AnalysisManager<llvm::Function>&)+0x34
+C  [libllvmstubs.dylib+0x1f63710]  llvm::AnalysisManager<llvm::Function>::getResultImpl(llvm::AnalysisKey*, llvm::Function&)+0x1c4
+C  [libllvmstubs.dylib+0x184054c]  llvm::BlockFrequencyAnalysis::run(llvm::Function&, llvm::AnalysisManager<llvm::Function>&)+0x30
+C  [libllvmstubs.dylib+0x9b075c]  llvm::detail::AnalysisPassModel<llvm::Function, llvm::BlockFrequencyAnalysis, llvm::AnalysisManager<llvm::Function>::Invalidator>::run(llvm::Function&, llvm::AnalysisManager<llvm::Function>&)+0x20
+C  [libllvmstubs.dylib+0x1f63710]  llvm::AnalysisManager<llvm::Function>::getResultImpl(llvm::AnalysisKey*, llvm::Function&)+0x1c4
+C  [libllvmstubs.dylib+0x18fb068]  llvm::BlockFrequencyInfo& llvm::function_ref<llvm::BlockFrequencyInfo& (llvm::Function&)>::callback_fn<getDefaultInlineAdvice(llvm::CallBase&, llvm::AnalysisManager<llvm::Function>&, llvm::InlineParams const&)::$_2>(long, llvm::Function&)+0x1c
+C  [libllvmstubs.dylib+0x18ed388]  (anonymous namespace)::InlineCostCallAnalyzer::onAnalysisStart()+0x14c
+C  [libllvmstubs.dylib+0x18e9c88]  (anonymous namespace)::CallAnalyzer::analyze()+0x44
+C  [libllvmstubs.dylib+0x18e96b0]  llvm::getInlineCost(llvm::CallBase&, llvm::Function*, llvm::InlineParams const&, llvm::TargetTransformInfo&, llvm::function_ref<llvm::AssumptionCache& (llvm::Function&)>, llvm::function_ref<llvm::TargetLibraryInfo const& (llvm::Function&)>, llvm::function_ref<llvm::BlockFrequencyInfo& (llvm::Function&)>, llvm::ProfileSummaryInfo*, llvm::OptimizationRemarkEmitter*)+0xe8
+C  [libllvmstubs.dylib+0x18fafe4]  llvm::InlineCost llvm::function_ref<llvm::InlineCost (llvm::CallBase&)>::callback_fn<getDefaultInlineAdvice(llvm::CallBase&, llvm::AnalysisManager<llvm::Function>&, llvm::InlineParams const&)::$_3>(long, llvm::CallBase&)+0xbc
+C  [libllvmstubs.dylib+0x18f806c]  llvm::shouldInline(llvm::CallBase&, llvm::function_ref<llvm::InlineCost (llvm::CallBase&)>, llvm::OptimizationRemarkEmitter&, bool)+0x58
+C  [libllvmstubs.dylib+0x18f7540]  getDefaultInlineAdvice(llvm::CallBase&, llvm::AnalysisManager<llvm::Function>&, llvm::InlineParams const&)+0x1a4
+C  [libllvmstubs.dylib+0x18f72f8]  llvm::DefaultInlineAdvisor::getAdviceImpl(llvm::CallBase&)+0x30
+C  [libllvmstubs.dylib+0x1040e3c]  llvm::InlinerPass::run(llvm::LazyCallGraph::SCC&, llvm::AnalysisManager<llvm::LazyCallGraph::SCC, llvm::LazyCallGraph&>&, llvm::LazyCallGraph&, llvm::CGSCCUpdateResult&)+0xcc0
+C  [libllvmstubs.dylib+0x1864060]  llvm::PassManager<llvm::LazyCallGraph::SCC, llvm::AnalysisManager<llvm::LazyCallGraph::SCC, llvm::LazyCallGraph&>, llvm::LazyCallGraph&, llvm::CGSCCUpdateResult&>::run(llvm::LazyCallGraph::SCC&, llvm::AnalysisManager<llvm::LazyCallGraph::SCC, llvm::LazyCallGraph&>&, llvm::LazyCallGraph&, llvm::CGSCCUpdateResult&)+0x1c0
+C  [libllvmstubs.dylib+0x1865200]  llvm::ModuleToPostOrderCGSCCPassAdaptor::run(llvm::Module&, llvm::AnalysisManager<llvm::Module>&)+0x954
+C  [libllvmstubs.dylib+0x1f60630]  llvm::PassManager<llvm::Module, llvm::AnalysisManager<llvm::Module>>::run(llvm::Module&, llvm::AnalysisManager<llvm::Module>&)+0x194
+C  [libllvmstubs.dylib+0x10422f4]  llvm::ModuleInlinerWrapperPass::run(llvm::Module&, llvm::AnalysisManager<llvm::Module>&)+0x24c
+C  [libllvmstubs.dylib+0x1f60630]  llvm::PassManager<llvm::Module, llvm::AnalysisManager<llvm::Module>>::run(llvm::Module&, llvm::AnalysisManager<llvm::Module>&)+0x194
+C  [libllvmstubs.dylib+0xedd8]  LLVMKotlinRunPasses+0x220
+C  [libllvmstubs.dylib+0xe9e0]  Java_llvm_llvm_kniBridge935+0x40
+j  llvm.llvm.kniBridge935(JJJIJ)J+0
+j  llvm.llvm.LLVMKotlinRunPasses(Lkotlinx/cinterop/CPointer;Ljava/lang/String;Lkotlinx/cinterop/CPointer;ILkotlinx/cinterop/CValuesRef;)Lkotlinx/cinterop/CPointer;+85
+j  org.jetbrains.kotlin.backend.konan.LlvmOptimizationPipeline.execute(Lkotlinx/cinterop/CPointer;)V+478
+j  org.jetbrains.kotlin.backend.konan.driver.phases.BitcodeKt.optimizationPipelinePass$lambda$0(Lkotlin/jvm/functions/Function3;Lorg/jetbrains/kotlin/backend/konan/driver/phases/OptimizationState;Lkotlinx/cinterop/CPointer;)Lkotlin/Unit;+49
+j  org.jetbrains.kotlin.backend.konan.driver.phases.BitcodeKt$$Lambda+0x0000007002f22a48.invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+12
+J 310072 c1 org.jetbrains.kotlin.backend.common.phaser.PhaseBuildersKt$createSimpleNamedCompilerPhase$3.phaseBody(Lorg/jetbrains/kotlin/config/LoggingContext;Ljava/lang/Object;)Ljava/lang/Object; (10 bytes) @ 0x00000001139b756c [0x00000001139b7400+0x000000000000016c]
+J 126502 c2 org.jetbrains.kotlin.config.phaser.NamedCompilerPhase.invoke(Lorg/jetbrains/kotlin/config/phaser/PhaseConfig;Lorg/jetbrains/kotlin/config/phaser/PhaserState;Lorg/jetbrains/kotlin/config/LoggingContext;Ljava/lang/Object;)Ljava/lang/Object; (372 bytes) @ 0x00000001194e1320 [0x00000001194e07c0+0x0000000000000b60]
+J 446297 c2 org.jetbrains.kotlin.backend.konan.driver.phases.TopLevelPhasesKt.runAndMeasurePhase$default(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/config/phaser/NamedCompilerPhase;Ljava/lang/Object;ZILjava/lang/Object;)Ljava/lang/Object; (17 bytes) @ 0x0000000119f5a518 [0x0000000119f5a240+0x00000000000002d8]
+j  org.jetbrains.kotlin.backend.konan.driver.phases.BitcodeKt.runBitcodePostProcessing(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;)V+196
+j  org.jetbrains.kotlin.backend.konan.driver.phases.TopLevelPhasesKt.compileModule(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/ir/declarations/IrModuleFragment;Lorg/jetbrains/kotlin/ir/IrBuiltIns;Ljava/io/File;Lorg/jetbrains/kotlin/backend/konan/driver/utilities/CExportFiles;)V+121
+j  org.jetbrains.kotlin.backend.konan.driver.phases.TopLevelPhasesKt.runBackend$lambda$0$runAfterLowerings(Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/backend/konan/Context;Lorg/jetbrains/kotlin/backend/konan/driver/phases/BackendJobFragment;Lorg/jetbrains/kotlin/backend/konan/NativeGenerationState;)V+307
+j  org.jetbrains.kotlin.backend.konan.driver.phases.TopLevelPhasesKt.runBackend(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/backend/konan/Context;Lorg/jetbrains/kotlin/ir/declarations/IrModuleFragment;Lorg/jetbrains/kotlin/util/PerformanceManager;)V+305
+j  org.jetbrains.kotlin.backend.konan.driver.NativeCompilerDriver.produceObjCFramework(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lorg/jetbrains/kotlin/cli/jvm/compiler/KotlinCoreEnvironment;)V+412
+j  org.jetbrains.kotlin.backend.konan.driver.NativeCompilerDriver.run$lambda$0$0$0(Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lorg/jetbrains/kotlin/backend/konan/driver/NativeCompilerDriver;Lorg/jetbrains/kotlin/cli/jvm/compiler/KotlinCoreEnvironment;Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;)Lkotlin/Unit;+158
+j  org.jetbrains.kotlin.backend.konan.driver.NativeCompilerDriver$$Lambda+0x0000007002002c00.invoke(Ljava/lang/Object;)Ljava/lang/Object;+16
+j  org.jetbrains.kotlin.backend.konan.driver.MachineryKt$startTopLevel$topLevelPhase$1.phaseBody(Lorg/jetbrains/kotlin/backend/konan/driver/NativeBackendPhaseContext;Ljava/lang/Object;)V+37
+j  org.jetbrains.kotlin.backend.konan.driver.MachineryKt$startTopLevel$topLevelPhase$1.phaseBody(Lorg/jetbrains/kotlin/config/LoggingContext;Ljava/lang/Object;)Ljava/lang/Object;+6
+J 126502 c2 org.jetbrains.kotlin.config.phaser.NamedCompilerPhase.invoke(Lorg/jetbrains/kotlin/config/phaser/PhaseConfig;Lorg/jetbrains/kotlin/config/phaser/PhaserState;Lorg/jetbrains/kotlin/config/LoggingContext;Ljava/lang/Object;)Ljava/lang/Object; (372 bytes) @ 0x00000001194e1320 [0x00000001194e07c0+0x0000000000000b60]
+j  org.jetbrains.kotlin.backend.konan.driver.MachineryKt.startTopLevel(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine$Companion;Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lkotlin/jvm/functions/Function1;)V+74
+j  org.jetbrains.kotlin.backend.konan.driver.NativeCompilerDriver.run(Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lorg/jetbrains/kotlin/cli/jvm/compiler/KotlinCoreEnvironment;)V+63
+j  org.jetbrains.kotlin.backend.konan.KonanDriver.run()V+1127
+j  org.jetbrains.kotlin.cli.bc.K2Native.runKonanDriver(Lorg/jetbrains/kotlin/config/CompilerConfiguration;Lorg/jetbrains/kotlin/cli/jvm/compiler/KotlinCoreEnvironment;Lorg/jetbrains/kotlin/com/intellij/openapi/Disposable;)V+40
+j  org.jetbrains.kotlin.cli.bc.K2Native.doExecute(Lorg/jetbrains/kotlin/cli/common/arguments/K2NativeCompilerArguments;Lorg/jetbrains/kotlin/config/CompilerConfiguration;Lorg/jetbrains/kotlin/com/intellij/openapi/Disposable;Lorg/jetbrains/kotlin/utils/KotlinPaths;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+187
+j  org.jetbrains.kotlin.cli.bc.K2Native.doExecute(Lorg/jetbrains/kotlin/cli/common/arguments/CommonCompilerArguments;Lorg/jetbrains/kotlin/config/CompilerConfiguration;Lorg/jetbrains/kotlin/com/intellij/openapi/Disposable;Lorg/jetbrains/kotlin/utils/KotlinPaths;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+9
+j  org.jetbrains.kotlin.cli.common.CLICompiler.execImpl(Lorg/jetbrains/kotlin/cli/common/messages/MessageCollector;Lorg/jetbrains/kotlin/config/Services;Lorg/jetbrains/kotlin/cli/common/arguments/CommonCompilerArguments;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+283
+j  org.jetbrains.kotlin.cli.common.CLICompiler.exec(Lorg/jetbrains/kotlin/cli/common/messages/MessageCollector;Lorg/jetbrains/kotlin/config/Services;Lorg/jetbrains/kotlin/cli/common/arguments/CommonCompilerArguments;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+89
+j  org.jetbrains.kotlin.cli.common.CLICompiler.exec(Ljava/io/PrintStream;Lorg/jetbrains/kotlin/config/Services;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;[Ljava/lang/String;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+329
+j  org.jetbrains.kotlin.cli.common.CLICompiler.exec(Ljava/io/PrintStream;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;[Ljava/lang/String;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+26
+j  org.jetbrains.kotlin.cli.common.CLICompiler$Companion.doMainNoExit(Lorg/jetbrains/kotlin/cli/common/CLICompiler;[Ljava/lang/String;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+39
+j  org.jetbrains.kotlin.cli.bc.K2Native$Companion.mainNoExitWithRenderer$lambda$0([Ljava/lang/String;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;)Lkotlin/Unit;+15
+j  org.jetbrains.kotlin.cli.bc.K2Native$Companion$$Lambda+0x0000007001ce0fe0.invoke()Ljava/lang/Object;+8
+J 397557 c1 org.jetbrains.kotlin.util.UtilKt.profile(Ljava/lang/String;Lkotlin/jvm/functions/Function0;)V (37 bytes) @ 0x000000011734d574 [0x000000011734cc00+0x0000000000000974]
+j  org.jetbrains.kotlin.cli.bc.K2Native$Companion.mainNoExitWithRenderer([Ljava/lang/String;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;)V+21
+j  org.jetbrains.kotlin.cli.bc.K2NativeKt.mainNoExitWithXcodeRenderer([Ljava/lang/String;)V+19
+j  org.jetbrains.kotlin.cli.utilities.MainKt$daemonMainWithXcodeRenderer$1.invoke([Ljava/lang/String;)V+7
+j  org.jetbrains.kotlin.cli.utilities.MainKt$daemonMainWithXcodeRenderer$1.invoke(Ljava/lang/Object;)Ljava/lang/Object;+5
+j  org.jetbrains.kotlin.cli.utilities.MainKt.mainImpl([Ljava/lang/String;ZLkotlin/jvm/functions/Function1;)V+206
+j  org.jetbrains.kotlin.cli.utilities.MainKt.inProcessMain([Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V+23
+j  org.jetbrains.kotlin.cli.utilities.MainKt.daemonMainWithXcodeRenderer([Ljava/lang/String;)V+13
+j  java.lang.invoke.LambdaForm$DMH+0x00000070011bdc00.invokeStatic(Ljava/lang/Object;Ljava/lang/Object;)V+10 java.base@21.0.12.1
+j  java.lang.invoke.LambdaForm$MH+0x0000007001816400.invoke(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+33 java.base@21.0.12.1
+J 12373 c2 java.lang.reflect.Method.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; java.base@21.0.12.1 (108 bytes) @ 0x00000001199de370 [0x00000001199dddc0+0x00000000000005b0]
+j  org.jetbrains.kotlin.internal.compilerRunner.native.KotlinNativeToolRunner.runInProcess(Lorg/jetbrains/kotlin/internal/compilerRunner/native/KotlinNativeToolRunner$ToolArguments;)V+827
+j  org.jetbrains.kotlin.internal.compilerRunner.native.KotlinNativeToolRunner.runTool(Lorg/jetbrains/kotlin/internal/compilerRunner/native/KotlinNativeToolRunner$ToolArguments;)V+100
+j  org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink$compile$1.invoke()V+411
+j  org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink$compile$1.invoke()Ljava/lang/Object;+1
+j  org.jetbrains.kotlin.compilerRunner.ReportUtilsKt.addBuildMetricsForTaskAction(Lorg/jetbrains/kotlin/gradle/report/UsesBuildMetricsService;Lorg/jetbrains/kotlin/build/report/metrics/BuildMetricsReporter;Lorg/jetbrains/kotlin/gradle/dsl/KotlinVersion;Lkotlin/jvm/functions/Function0;)V+90
+j  org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink.compile()V+37
+J 234761 c2 java.lang.invoke.DirectMethodHandle$Holder.invokeSpecial(Ljava/lang/Object;Ljava/lang/Object;)V java.base@21.0.12.1 (14 bytes) @ 0x000000011d54e68c [0x000000011d54e640+0x000000000000004c]
+j  java.lang.invoke.LambdaForm$MH+0x000000700119b000.invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+31 java.base@21.0.12.1
+J 11274 c2 jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; java.base@21.0.12.1 (92 bytes) @ 0x000000011996a57c [0x000000011996a380+0x00000000000001fc]
+J 6468 c1 org.gradle.internal.reflect.JavaMethod.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; (74 bytes) @ 0x000000011254f76c [0x000000011254f1c0+0x00000000000005ac]
+j  org.gradle.api.internal.project.taskfactory.StandardTaskAction.doExecute(Lorg/gradle/api/Task;Ljava/lang/String;)V+16
+j  org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(Lorg/gradle/api/Task;)V+32
+j  org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(Ljava/lang/Object;)V+5
+j  org.gradle.api.internal.tasks.execution.TaskExecution$3.run(Lorg/gradle/internal/operations/BuildOperationContext;)V+23
+J 50518 c1 org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(Lorg/gradle/internal/operations/BuildOperation;Lorg/gradle/internal/operations/BuildOperationContext;)V (10 bytes) @ 0x0000000111de7904 [0x0000000111de7640+0x00000000000002c4]
+J 258483 c2 org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$ReadableBuildOperationContext;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecutionListener;)Ljava/lang/Object; (12 bytes) @ 0x000000011cdac294 [0x000000011cdac200+0x0000000000000094]
+J 258484 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor$Builder;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecution;)Ljava/lang/Object; (147 bytes) @ 0x000000011c9ae66c [0x000000011c9adf40+0x000000000000072c]
+J 181218 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.run(Lorg/gradle/internal/operations/RunnableBuildOperation;)V (13 bytes) @ 0x000000011a18a45c [0x000000011a18a300+0x000000000000015c]
+j  org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(Ljava/lang/String;Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/InputChangesAwareTaskAction;Lorg/gradle/internal/execution/history/changes/InputChangesInternal;Z)V+30
+j  org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/internal/execution/history/changes/InputChangesInternal;)V+131
+j  org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(Lorg/gradle/internal/execution/history/changes/InputChangesInternal;)Lorg/gradle/internal/execution/UnitOfWork$WorkResult;+46
+j  org.gradle.api.internal.tasks.execution.TaskExecution.execute(Lorg/gradle/internal/execution/UnitOfWork$ExecutionRequest;)Lorg/gradle/internal/execution/UnitOfWork$WorkOutput;+61
+j  org.gradle.internal.execution.steps.ExecuteStep.executeInternal(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/InputChangesContext;)Lorg/gradle/internal/execution/steps/Result;+16
+j  org.gradle.internal.execution.steps.ExecuteStep.access$000(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/InputChangesContext;)Lorg/gradle/internal/execution/steps/Result;+2
+j  org.gradle.internal.execution.steps.ExecuteStep$1.call(Lorg/gradle/internal/operations/BuildOperationContext;)Lorg/gradle/internal/execution/steps/Result;+8
+j  org.gradle.internal.execution.steps.ExecuteStep$1.call(Lorg/gradle/internal/operations/BuildOperationContext;)Ljava/lang/Object;+2
+J 47987 c2 org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(Lorg/gradle/internal/operations/BuildOperation;Lorg/gradle/internal/operations/BuildOperationContext;)V (10 bytes) @ 0x000000011a4b0f30 [0x000000011a4b0dc0+0x0000000000000170]
+J 258483 c2 org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$ReadableBuildOperationContext;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecutionListener;)Ljava/lang/Object; (12 bytes) @ 0x000000011cdac294 [0x000000011cdac200+0x0000000000000094]
+J 258484 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor$Builder;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecution;)Ljava/lang/Object; (147 bytes) @ 0x000000011c9ae66c [0x000000011c9adf40+0x000000000000072c]
+J 48002 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.call(Lorg/gradle/internal/operations/CallableBuildOperation;)Ljava/lang/Object; (24 bytes) @ 0x000000011a4c18a0 [0x000000011a4c1700+0x00000000000001a0]
+j  org.gradle.internal.execution.steps.ExecuteStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/ChangingOutputsContext;)Lorg/gradle/internal/execution/steps/Result;+28
+j  org.gradle.internal.execution.steps.ExecuteStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.CancelExecutionStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+35
+j  org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.TimeoutStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+92
+j  org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/ChangingOutputsContext;)Lorg/gradle/internal/execution/steps/Result;+24
+...<more frames>...
+Java frames: (J=compiled Java code, j=interpreted, Vv=VM code)
+j  llvm.llvm.kniBridge935(JJJIJ)J+0
+j  llvm.llvm.LLVMKotlinRunPasses(Lkotlinx/cinterop/CPointer;Ljava/lang/String;Lkotlinx/cinterop/CPointer;ILkotlinx/cinterop/CValuesRef;)Lkotlinx/cinterop/CPointer;+85
+j  org.jetbrains.kotlin.backend.konan.LlvmOptimizationPipeline.execute(Lkotlinx/cinterop/CPointer;)V+478
+j  org.jetbrains.kotlin.backend.konan.driver.phases.BitcodeKt.optimizationPipelinePass$lambda$0(Lkotlin/jvm/functions/Function3;Lorg/jetbrains/kotlin/backend/konan/driver/phases/OptimizationState;Lkotlinx/cinterop/CPointer;)Lkotlin/Unit;+49
+j  org.jetbrains.kotlin.backend.konan.driver.phases.BitcodeKt$$Lambda+0x0000007002f22a48.invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+12
+J 310072 c1 org.jetbrains.kotlin.backend.common.phaser.PhaseBuildersKt$createSimpleNamedCompilerPhase$3.phaseBody(Lorg/jetbrains/kotlin/config/LoggingContext;Ljava/lang/Object;)Ljava/lang/Object; (10 bytes) @ 0x00000001139b756c [0x00000001139b7400+0x000000000000016c]
+J 126502 c2 org.jetbrains.kotlin.config.phaser.NamedCompilerPhase.invoke(Lorg/jetbrains/kotlin/config/phaser/PhaseConfig;Lorg/jetbrains/kotlin/config/phaser/PhaserState;Lorg/jetbrains/kotlin/config/LoggingContext;Ljava/lang/Object;)Ljava/lang/Object; (372 bytes) @ 0x00000001194e1320 [0x00000001194e07c0+0x0000000000000b60]
+J 446297 c2 org.jetbrains.kotlin.backend.konan.driver.phases.TopLevelPhasesKt.runAndMeasurePhase$default(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/config/phaser/NamedCompilerPhase;Ljava/lang/Object;ZILjava/lang/Object;)Ljava/lang/Object; (17 bytes) @ 0x0000000119f5a518 [0x0000000119f5a240+0x00000000000002d8]
+j  org.jetbrains.kotlin.backend.konan.driver.phases.BitcodeKt.runBitcodePostProcessing(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;)V+196
+j  org.jetbrains.kotlin.backend.konan.driver.phases.TopLevelPhasesKt.compileModule(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/ir/declarations/IrModuleFragment;Lorg/jetbrains/kotlin/ir/IrBuiltIns;Ljava/io/File;Lorg/jetbrains/kotlin/backend/konan/driver/utilities/CExportFiles;)V+121
+j  org.jetbrains.kotlin.backend.konan.driver.phases.TopLevelPhasesKt.runBackend$lambda$0$runAfterLowerings(Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/backend/konan/Context;Lorg/jetbrains/kotlin/backend/konan/driver/phases/BackendJobFragment;Lorg/jetbrains/kotlin/backend/konan/NativeGenerationState;)V+307
+j  org.jetbrains.kotlin.backend.konan.driver.phases.TopLevelPhasesKt.runBackend(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/backend/konan/Context;Lorg/jetbrains/kotlin/ir/declarations/IrModuleFragment;Lorg/jetbrains/kotlin/util/PerformanceManager;)V+305
+j  org.jetbrains.kotlin.backend.konan.driver.NativeCompilerDriver.produceObjCFramework(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lorg/jetbrains/kotlin/cli/jvm/compiler/KotlinCoreEnvironment;)V+412
+j  org.jetbrains.kotlin.backend.konan.driver.NativeCompilerDriver.run$lambda$0$0$0(Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lorg/jetbrains/kotlin/backend/konan/driver/NativeCompilerDriver;Lorg/jetbrains/kotlin/cli/jvm/compiler/KotlinCoreEnvironment;Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine;)Lkotlin/Unit;+158
+j  org.jetbrains.kotlin.backend.konan.driver.NativeCompilerDriver$$Lambda+0x0000007002002c00.invoke(Ljava/lang/Object;)Ljava/lang/Object;+16
+j  org.jetbrains.kotlin.backend.konan.driver.MachineryKt$startTopLevel$topLevelPhase$1.phaseBody(Lorg/jetbrains/kotlin/backend/konan/driver/NativeBackendPhaseContext;Ljava/lang/Object;)V+37
+j  org.jetbrains.kotlin.backend.konan.driver.MachineryKt$startTopLevel$topLevelPhase$1.phaseBody(Lorg/jetbrains/kotlin/config/LoggingContext;Ljava/lang/Object;)Ljava/lang/Object;+6
+J 126502 c2 org.jetbrains.kotlin.config.phaser.NamedCompilerPhase.invoke(Lorg/jetbrains/kotlin/config/phaser/PhaseConfig;Lorg/jetbrains/kotlin/config/phaser/PhaserState;Lorg/jetbrains/kotlin/config/LoggingContext;Ljava/lang/Object;)Ljava/lang/Object; (372 bytes) @ 0x00000001194e1320 [0x00000001194e07c0+0x0000000000000b60]
+j  org.jetbrains.kotlin.backend.konan.driver.MachineryKt.startTopLevel(Lorg/jetbrains/kotlin/backend/common/phaser/PhaseEngine$Companion;Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lkotlin/jvm/functions/Function1;)V+74
+j  org.jetbrains.kotlin.backend.konan.driver.NativeCompilerDriver.run(Lorg/jetbrains/kotlin/backend/konan/KonanConfig;Lorg/jetbrains/kotlin/cli/jvm/compiler/KotlinCoreEnvironment;)V+63
+j  org.jetbrains.kotlin.backend.konan.KonanDriver.run()V+1127
+j  org.jetbrains.kotlin.cli.bc.K2Native.runKonanDriver(Lorg/jetbrains/kotlin/config/CompilerConfiguration;Lorg/jetbrains/kotlin/cli/jvm/compiler/KotlinCoreEnvironment;Lorg/jetbrains/kotlin/com/intellij/openapi/Disposable;)V+40
+j  org.jetbrains.kotlin.cli.bc.K2Native.doExecute(Lorg/jetbrains/kotlin/cli/common/arguments/K2NativeCompilerArguments;Lorg/jetbrains/kotlin/config/CompilerConfiguration;Lorg/jetbrains/kotlin/com/intellij/openapi/Disposable;Lorg/jetbrains/kotlin/utils/KotlinPaths;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+187
+j  org.jetbrains.kotlin.cli.bc.K2Native.doExecute(Lorg/jetbrains/kotlin/cli/common/arguments/CommonCompilerArguments;Lorg/jetbrains/kotlin/config/CompilerConfiguration;Lorg/jetbrains/kotlin/com/intellij/openapi/Disposable;Lorg/jetbrains/kotlin/utils/KotlinPaths;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+9
+j  org.jetbrains.kotlin.cli.common.CLICompiler.execImpl(Lorg/jetbrains/kotlin/cli/common/messages/MessageCollector;Lorg/jetbrains/kotlin/config/Services;Lorg/jetbrains/kotlin/cli/common/arguments/CommonCompilerArguments;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+283
+j  org.jetbrains.kotlin.cli.common.CLICompiler.exec(Lorg/jetbrains/kotlin/cli/common/messages/MessageCollector;Lorg/jetbrains/kotlin/config/Services;Lorg/jetbrains/kotlin/cli/common/arguments/CommonCompilerArguments;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+89
+j  org.jetbrains.kotlin.cli.common.CLICompiler.exec(Ljava/io/PrintStream;Lorg/jetbrains/kotlin/config/Services;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;[Ljava/lang/String;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+329
+j  org.jetbrains.kotlin.cli.common.CLICompiler.exec(Ljava/io/PrintStream;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;[Ljava/lang/String;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+26
+j  org.jetbrains.kotlin.cli.common.CLICompiler$Companion.doMainNoExit(Lorg/jetbrains/kotlin/cli/common/CLICompiler;[Ljava/lang/String;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;)Lorg/jetbrains/kotlin/cli/common/ExitCode;+39
+j  org.jetbrains.kotlin.cli.bc.K2Native$Companion.mainNoExitWithRenderer$lambda$0([Ljava/lang/String;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;)Lkotlin/Unit;+15
+j  org.jetbrains.kotlin.cli.bc.K2Native$Companion$$Lambda+0x0000007001ce0fe0.invoke()Ljava/lang/Object;+8
+J 397557 c1 org.jetbrains.kotlin.util.UtilKt.profile(Ljava/lang/String;Lkotlin/jvm/functions/Function0;)V (37 bytes) @ 0x000000011734d574 [0x000000011734cc00+0x0000000000000974]
+j  org.jetbrains.kotlin.cli.bc.K2Native$Companion.mainNoExitWithRenderer([Ljava/lang/String;Lorg/jetbrains/kotlin/cli/common/messages/MessageRenderer;)V+21
+j  org.jetbrains.kotlin.cli.bc.K2NativeKt.mainNoExitWithXcodeRenderer([Ljava/lang/String;)V+19
+j  org.jetbrains.kotlin.cli.utilities.MainKt$daemonMainWithXcodeRenderer$1.invoke([Ljava/lang/String;)V+7
+j  org.jetbrains.kotlin.cli.utilities.MainKt$daemonMainWithXcodeRenderer$1.invoke(Ljava/lang/Object;)Ljava/lang/Object;+5
+j  org.jetbrains.kotlin.cli.utilities.MainKt.mainImpl([Ljava/lang/String;ZLkotlin/jvm/functions/Function1;)V+206
+j  org.jetbrains.kotlin.cli.utilities.MainKt.inProcessMain([Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V+23
+j  org.jetbrains.kotlin.cli.utilities.MainKt.daemonMainWithXcodeRenderer([Ljava/lang/String;)V+13
+j  java.lang.invoke.LambdaForm$DMH+0x00000070011bdc00.invokeStatic(Ljava/lang/Object;Ljava/lang/Object;)V+10 java.base@21.0.12.1
+j  java.lang.invoke.LambdaForm$MH+0x0000007001816400.invoke(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+33 java.base@21.0.12.1
+J 12373 c2 java.lang.reflect.Method.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; java.base@21.0.12.1 (108 bytes) @ 0x00000001199de370 [0x00000001199dddc0+0x00000000000005b0]
+j  org.jetbrains.kotlin.internal.compilerRunner.native.KotlinNativeToolRunner.runInProcess(Lorg/jetbrains/kotlin/internal/compilerRunner/native/KotlinNativeToolRunner$ToolArguments;)V+827
+j  org.jetbrains.kotlin.internal.compilerRunner.native.KotlinNativeToolRunner.runTool(Lorg/jetbrains/kotlin/internal/compilerRunner/native/KotlinNativeToolRunner$ToolArguments;)V+100
+j  org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink$compile$1.invoke()V+411
+j  org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink$compile$1.invoke()Ljava/lang/Object;+1
+j  org.jetbrains.kotlin.compilerRunner.ReportUtilsKt.addBuildMetricsForTaskAction(Lorg/jetbrains/kotlin/gradle/report/UsesBuildMetricsService;Lorg/jetbrains/kotlin/build/report/metrics/BuildMetricsReporter;Lorg/jetbrains/kotlin/gradle/dsl/KotlinVersion;Lkotlin/jvm/functions/Function0;)V+90
+j  org.jetbrains.kotlin.gradle.tasks.KotlinNativeLink.compile()V+37
+J 234761 c2 java.lang.invoke.DirectMethodHandle$Holder.invokeSpecial(Ljava/lang/Object;Ljava/lang/Object;)V java.base@21.0.12.1 (14 bytes) @ 0x000000011d54e68c [0x000000011d54e640+0x000000000000004c]
+j  java.lang.invoke.LambdaForm$MH+0x000000700119b000.invoke(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;+31 java.base@21.0.12.1
+J 11274 c2 jdk.internal.reflect.DirectMethodHandleAccessor.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; java.base@21.0.12.1 (92 bytes) @ 0x000000011996a57c [0x000000011996a380+0x00000000000001fc]
+J 6468 c1 org.gradle.internal.reflect.JavaMethod.invoke(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object; (74 bytes) @ 0x000000011254f76c [0x000000011254f1c0+0x00000000000005ac]
+j  org.gradle.api.internal.project.taskfactory.StandardTaskAction.doExecute(Lorg/gradle/api/Task;Ljava/lang/String;)V+16
+j  org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(Lorg/gradle/api/Task;)V+32
+j  org.gradle.api.internal.project.taskfactory.StandardTaskAction.execute(Ljava/lang/Object;)V+5
+j  org.gradle.api.internal.tasks.execution.TaskExecution$3.run(Lorg/gradle/internal/operations/BuildOperationContext;)V+23
+J 50518 c1 org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(Lorg/gradle/internal/operations/BuildOperation;Lorg/gradle/internal/operations/BuildOperationContext;)V (10 bytes) @ 0x0000000111de7904 [0x0000000111de7640+0x00000000000002c4]
+J 258483 c2 org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$ReadableBuildOperationContext;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecutionListener;)Ljava/lang/Object; (12 bytes) @ 0x000000011cdac294 [0x000000011cdac200+0x0000000000000094]
+J 258484 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor$Builder;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecution;)Ljava/lang/Object; (147 bytes) @ 0x000000011c9ae66c [0x000000011c9adf40+0x000000000000072c]
+J 181218 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.run(Lorg/gradle/internal/operations/RunnableBuildOperation;)V (13 bytes) @ 0x000000011a18a45c [0x000000011a18a300+0x000000000000015c]
+j  org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(Ljava/lang/String;Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/InputChangesAwareTaskAction;Lorg/gradle/internal/execution/history/changes/InputChangesInternal;Z)V+30
+j  org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/internal/execution/history/changes/InputChangesInternal;)V+131
+j  org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(Lorg/gradle/internal/execution/history/changes/InputChangesInternal;)Lorg/gradle/internal/execution/UnitOfWork$WorkResult;+46
+j  org.gradle.api.internal.tasks.execution.TaskExecution.execute(Lorg/gradle/internal/execution/UnitOfWork$ExecutionRequest;)Lorg/gradle/internal/execution/UnitOfWork$WorkOutput;+61
+j  org.gradle.internal.execution.steps.ExecuteStep.executeInternal(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/InputChangesContext;)Lorg/gradle/internal/execution/steps/Result;+16
+j  org.gradle.internal.execution.steps.ExecuteStep.access$000(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/InputChangesContext;)Lorg/gradle/internal/execution/steps/Result;+2
+j  org.gradle.internal.execution.steps.ExecuteStep$1.call(Lorg/gradle/internal/operations/BuildOperationContext;)Lorg/gradle/internal/execution/steps/Result;+8
+j  org.gradle.internal.execution.steps.ExecuteStep$1.call(Lorg/gradle/internal/operations/BuildOperationContext;)Ljava/lang/Object;+2
+J 47987 c2 org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(Lorg/gradle/internal/operations/BuildOperation;Lorg/gradle/internal/operations/BuildOperationContext;)V (10 bytes) @ 0x000000011a4b0f30 [0x000000011a4b0dc0+0x0000000000000170]
+J 258483 c2 org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$ReadableBuildOperationContext;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecutionListener;)Ljava/lang/Object; (12 bytes) @ 0x000000011cdac294 [0x000000011cdac200+0x0000000000000094]
+J 258484 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor$Builder;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecution;)Ljava/lang/Object; (147 bytes) @ 0x000000011c9ae66c [0x000000011c9adf40+0x000000000000072c]
+J 48002 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.call(Lorg/gradle/internal/operations/CallableBuildOperation;)Ljava/lang/Object; (24 bytes) @ 0x000000011a4c18a0 [0x000000011a4c1700+0x00000000000001a0]
+j  org.gradle.internal.execution.steps.ExecuteStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/ChangingOutputsContext;)Lorg/gradle/internal/execution/steps/Result;+28
+j  org.gradle.internal.execution.steps.ExecuteStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.CancelExecutionStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+35
+j  org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.TimeoutStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+92
+j  org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/ChangingOutputsContext;)Lorg/gradle/internal/execution/steps/Result;+24
+j  org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.RemovePreviousOutputsStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/ChangingOutputsContext;)Lorg/gradle/internal/execution/steps/Result;+57
+j  org.gradle.internal.execution.steps.RemovePreviousOutputsStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/InputChangesContext;)Lorg/gradle/internal/execution/steps/Result;+53
+j  org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/WorkspaceContext;)Lorg/gradle/internal/execution/steps/AfterExecutionResult;+6
+j  org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.ResolveInputChangesStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/IncrementalCachingContext;)Lorg/gradle/internal/execution/steps/Result;+22
+j  org.gradle.internal.execution.steps.ResolveInputChangesStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/WorkspaceContext;)Lorg/gradle/internal/execution/steps/AfterExecutionResult;+6
+j  org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$1(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/WorkspaceContext;Lorg/gradle/internal/execution/caching/CachingState$Disabled;)Lorg/gradle/internal/execution/steps/AfterExecutionResult;+3
+j  org.gradle.internal.execution.steps.BuildCacheStep$$Lambda+0x00000070018546d0.apply(Ljava/lang/Object;)Ljava/lang/Object;+16
+j  org.gradle.internal.Either$Right.fold(Ljava/util/function/Function;Ljava/util/function/Function;)Ljava/lang/Object;+5
+j  org.gradle.internal.execution.caching.CachingState.fold(Ljava/util/function/Function;Ljava/util/function/Function;)Ljava/lang/Object;+6
+j  org.gradle.internal.execution.steps.BuildCacheStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/WorkspaceContext;)Lorg/gradle/internal/execution/steps/AfterExecutionResult;+25
+j  org.gradle.internal.execution.steps.BuildCacheStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/PreviousExecutionContext;)Lorg/gradle/internal/execution/steps/AfterExecutionResult;+6
+j  org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+j  org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(Lorg/gradle/internal/execution/UnitOfWork;Lcom/google/common/collect/ImmutableList;Lorg/gradle/internal/execution/steps/IncrementalChangesContext;)Lorg/gradle/internal/execution/steps/UpToDateResult;+11
+j  org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(Lorg/gradle/internal/execution/UnitOfWork;Lcom/google/common/collect/ImmutableList;Lorg/gradle/internal/execution/steps/IncrementalChangesContext;)Lorg/gradle/internal/execution/steps/UpToDateResult;+4
+j  org.gradle.internal.execution.steps.SkipUpToDateStep$$Lambda+0x0000007001852f78.get()Ljava/lang/Object;+16
+J 247819 c1 org.gradle.internal.execution.steps.SkipUpToDateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/IncrementalChangesContext;)Lorg/gradle/internal/execution/steps/UpToDateResult; (72 bytes) @ 0x000000011522bd84 [0x000000011522b800+0x0000000000000584]
+j  org.gradle.internal.execution.steps.SkipUpToDateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+J 196486 c1 org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x0000000111aa5b7c [0x0000000111aa5700+0x000000000000047c]
+j  org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/IncrementalChangesContext;Lorg/gradle/internal/execution/caching/CachingState;)Lorg/gradle/internal/execution/steps/UpToDateResult;+14
+J 247822 c1 org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/ValidationFinishedContext;Lorg/gradle/internal/execution/caching/CachingState;)Lorg/gradle/internal/execution/steps/UpToDateResult; (11 bytes) @ 0x0000000113ac510c [0x0000000113ac5040+0x00000000000000cc]
+J 183661 c1 org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/ValidationFinishedContext;)Lorg/gradle/internal/execution/steps/CachingResult; (67 bytes) @ 0x000000011226427c [0x0000000112263d80+0x00000000000004fc]
+J 247821 c1 org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x0000000113ac550c [0x0000000113ac5440+0x00000000000000cc]
+J 247820 c1 org.gradle.internal.execution.steps.ResolveChangesStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/ValidationFinishedContext;)Lorg/gradle/internal/execution/steps/Result; (49 bytes) @ 0x0000000115332d2c [0x0000000115332840+0x00000000000004ec]
+j  org.gradle.internal.execution.steps.ResolveChangesStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result;+6
+J 196484 c1 org.gradle.internal.execution.steps.ValidateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/BeforeExecutionContext;)Lorg/gradle/internal/execution/steps/Result; (261 bytes) @ 0x00000001131bdedc [0x00000001131b9ec0+0x000000000000401c]
+J 196483 c1 org.gradle.internal.execution.steps.ValidateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x0000000112386c0c [0x0000000112386a40+0x00000000000001cc]
+J 183646 c1 org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/PreviousExecutionContext;)Lorg/gradle/internal/execution/steps/CachingResult; (41 bytes) @ 0x00000001147c32c4 [0x00000001147c3000+0x00000000000002c4]
+J 197104 c1 org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x00000001130ae18c [0x00000001130ae0c0+0x00000000000000cc]
+J 183539 c1 org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/WorkspaceContext;)Lorg/gradle/internal/execution/steps/CachingResult; (87 bytes) @ 0x0000000112a082d4 [0x0000000112a07d80+0x0000000000000554]
+J 121045 c1 org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x00000001168afe8c [0x00000001168afdc0+0x00000000000000cc]
+J 121053 c1 org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (37 bytes) @ 0x000000011769b0ec [0x000000011769b000+0x00000000000000ec]
+J 53229 c1 org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/WorkspaceContext;)Lorg/gradle/internal/execution/steps/AfterExecutionResult; (70 bytes) @ 0x00000001138f4e44 [0x00000001138f4b80+0x00000000000002c4]
+J 149346 c1 org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x000000011257cb8c [0x000000011257cac0+0x00000000000000cc]
+J 149814 c1 org.gradle.internal.execution.steps.HandleStaleOutputsStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/WorkspaceContext;)Lorg/gradle/internal/execution/steps/AfterExecutionResult; (45 bytes) @ 0x00000001162d6350 [0x00000001162d6240+0x0000000000000110]
+J 53268 c1 org.gradle.internal.execution.steps.HandleStaleOutputsStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x0000000116f1d90c [0x0000000116f1d840+0x00000000000000cc]
+J 183530 c1 org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$execute$0(Lorg/gradle/internal/execution/steps/IdentityContext;Lorg/gradle/internal/execution/UnitOfWork;Ljava/io/File;Lorg/gradle/internal/execution/history/ExecutionHistoryStore;)Lorg/gradle/internal/execution/steps/WorkspaceResult; (51 bytes) @ 0x0000000114721020 [0x0000000114720e80+0x00000000000001a0]
+J 149338 c1 org.gradle.internal.execution.steps.AssignMutableWorkspaceStep$$Lambda+0x000000700183a948.executeInWorkspace(Ljava/io/File;Lorg/gradle/internal/execution/history/ExecutionHistoryStore;)Ljava/lang/Object; (18 bytes) @ 0x000000011257ea0c [0x000000011257e940+0x00000000000000cc]
+J 149337 c1 org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(Ljava/lang/String;Lorg/gradle/internal/execution/workspace/MutableWorkspaceProvider$WorkspaceAction;)Ljava/lang/Object; (39 bytes) @ 0x000000011257ee90 [0x000000011257ed40+0x0000000000000150]
+J 183561 c1 org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/IdentityContext;)Lorg/gradle/internal/execution/steps/WorkspaceResult; (35 bytes) @ 0x00000001171b91e4 [0x00000001171b8f80+0x0000000000000264]
+J 222669 c1 org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x0000000116e7ea0c [0x0000000116e7e940+0x00000000000000cc]
+J 8145 c1 org.gradle.internal.execution.steps.ChoosePipelineStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/IdentityContext;)Lorg/gradle/internal/execution/steps/Result; (71 bytes) @ 0x000000011280dde8 [0x000000011280d780+0x0000000000000668]
+J 7932 c1 org.gradle.internal.execution.steps.ChoosePipelineStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x000000011279a58c [0x000000011279a3c0+0x00000000000001cc]
+J 121051 c1 org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep$$Lambda+0x0000007001839180.get()Ljava/lang/Object; (16 bytes) @ 0x0000000116724e9c [0x0000000116724dc0+0x00000000000000dc]
+J 7937 c1 org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x000000011279de70 [0x000000011279cdc0+0x00000000000010b0]
+J 119206 c1 org.gradle.internal.execution.steps.IdentityCacheStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x0000000114e61fa0 [0x0000000114e61ec0+0x00000000000000e0]
+J 177586 c1 org.gradle.internal.execution.steps.IdentifyStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/ExecutionRequestContext;)Lorg/gradle/internal/execution/steps/Result; (17 bytes) @ 0x0000000112c72f20 [0x0000000112c72e40+0x00000000000000e0]
+J 178029 c1 org.gradle.internal.execution.steps.IdentifyStep.execute(Lorg/gradle/internal/execution/UnitOfWork;Lorg/gradle/internal/execution/steps/Context;)Lorg/gradle/internal/execution/steps/Result; (10 bytes) @ 0x000000011426608c [0x0000000114265fc0+0x00000000000000cc]
+J 183529 c1 org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/TaskStateInternal;Lorg/gradle/api/internal/tasks/TaskExecutionContext;Lorg/gradle/api/internal/tasks/execution/TaskExecution;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (95 bytes) @ 0x0000000112dc55e4 [0x0000000112dc52c0+0x0000000000000324]
+J 183531 c1 org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/TaskStateInternal;Lorg/gradle/api/internal/tasks/TaskExecutionContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (81 bytes) @ 0x0000000114bca634 [0x0000000114bca480+0x00000000000001b4]
+J 121050 c1 org.gradle.api.internal.tasks.execution.ProblemsTaskPathTrackingTaskExecuter.execute(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/TaskStateInternal;Lorg/gradle/api/internal/tasks/TaskExecutionContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (56 bytes) @ 0x0000000116725644 [0x0000000116725300+0x0000000000000344]
+J 15567 c1 org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/TaskStateInternal;Lorg/gradle/api/internal/tasks/TaskExecutionContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (168 bytes) @ 0x0000000111af172c [0x0000000111af1040+0x00000000000006ec]
+J 121360 c1 org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/TaskStateInternal;Lorg/gradle/api/internal/tasks/TaskExecutionContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (107 bytes) @ 0x0000000114cf3028 [0x0000000114cf2d80+0x00000000000002a8]
+J 150896 c1 org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/TaskStateInternal;Lorg/gradle/api/internal/tasks/TaskExecutionContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (126 bytes) @ 0x0000000113d5022c [0x0000000113d4fe80+0x00000000000003ac]
+J 234456 c1 org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/TaskStateInternal;Lorg/gradle/api/internal/tasks/TaskExecutionContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (205 bytes) @ 0x0000000111de9114 [0x0000000111de8900+0x0000000000000814]
+J 234455 c1 org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/TaskStateInternal;Lorg/gradle/api/internal/tasks/TaskExecutionContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (33 bytes) @ 0x0000000115f9f150 [0x0000000115f9f080+0x00000000000000d0]
+J 119220 c1 org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(Lorg/gradle/internal/operations/BuildOperationContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (279 bytes) @ 0x0000000112fc93e8 [0x0000000112fc9000+0x00000000000003e8]
+J 234454 c1 org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(Lorg/gradle/internal/operations/BuildOperationContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (49 bytes) @ 0x00000001162fd138 [0x00000001162fd080+0x00000000000000b8]
+J 183585 c1 org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(Lorg/gradle/internal/operations/BuildOperationContext;)Ljava/lang/Object; (6 bytes) @ 0x0000000117243664 [0x00000001172435c0+0x00000000000000a4]
+J 47987 c2 org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(Lorg/gradle/internal/operations/BuildOperation;Lorg/gradle/internal/operations/BuildOperationContext;)V (10 bytes) @ 0x000000011a4b0f30 [0x000000011a4b0dc0+0x0000000000000170]
+J 258483 c2 org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$ReadableBuildOperationContext;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecutionListener;)Ljava/lang/Object; (12 bytes) @ 0x000000011cdac294 [0x000000011cdac200+0x0000000000000094]
+J 258484 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.execute(Lorg/gradle/internal/operations/BuildOperationDescriptor$Builder;Lorg/gradle/internal/operations/BuildOperationState;Lorg/gradle/internal/operations/DefaultBuildOperationRunner$BuildOperationExecution;)Ljava/lang/Object; (147 bytes) @ 0x000000011c9ae66c [0x000000011c9adf40+0x000000000000072c]
+J 48002 c2 org.gradle.internal.operations.DefaultBuildOperationRunner.call(Lorg/gradle/internal/operations/CallableBuildOperation;)Ljava/lang/Object; (24 bytes) @ 0x000000011a4c18a0 [0x000000011a4c1700+0x00000000000001a0]
+J 234448 c1 org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(Lorg/gradle/api/internal/TaskInternal;Lorg/gradle/api/internal/tasks/TaskStateInternal;Lorg/gradle/api/internal/tasks/TaskExecutionContext;)Lorg/gradle/api/internal/tasks/TaskExecuterResult; (24 bytes) @ 0x0000000115e58b00 [0x0000000115e58940+0x00000000000001c0]
+J 234444 c1 org.gradle.execution.plan.LocalTaskNodeExecutor.execute(Lorg/gradle/execution/plan/Node;Lorg/gradle/api/internal/tasks/NodeExecutionContext;)Z (97 bytes) @ 0x0000000114270370 [0x000000011426ffc0+0x00000000000003b0]
+J 199337 c1 org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(Lorg/gradle/execution/plan/Node;)V (85 bytes) @ 0x0000000112843740 [0x0000000112842f80+0x00000000000007c0]
+J 199340 c1 org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(Ljava/lang/Object;)V (9 bytes) @ 0x0000000117321ef8 [0x0000000117321d40+0x00000000000001b8]
+J 199339 c1 org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction$$Lambda+0x00000070017f6510.run()V (12 bytes) @ 0x00000001173223fc [0x0000000117322240+0x00000000000001bc]
+J 199312 c1 org.gradle.internal.operations.CurrentBuildOperationRef.with(Lorg/gradle/internal/operations/BuildOperationRef;Ljava/lang/Runnable;)V (35 bytes) @ 0x0000000113ddda80 [0x0000000113ddd480+0x0000000000000600]
+J 199335 c1 org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(Ljava/lang/Object;)V (9 bytes) @ 0x0000000116d4b980 [0x0000000116d4b380+0x0000000000000600]
+J 199336 c1 org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(Ljava/lang/Object;Lorg/gradle/execution/plan/WorkSource;Lorg/gradle/api/Action;)V (88 bytes) @ 0x00000001170284a4 [0x00000001170282c0+0x00000000000001e4]
+j  org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run()V+75
+J 325614 c2 org.gradle.internal.concurrent.AbstractManagedExecutor$1.run()V (57 bytes) @ 0x0000000119ed0b88 [0x0000000119ed08c0+0x00000000000002c8]
+J 139635 c1 java.util.concurrent.ThreadPoolExecutor.runWorker(Ljava/util/concurrent/ThreadPoolExecutor$Worker;)V java.base@21.0.12.1 (187 bytes) @ 0x0000000114385758 [0x0000000114384d00+0x0000000000000a58]
+J 27970 c1 java.util.concurrent.ThreadPoolExecutor$Worker.run()V java.base@21.0.12.1 (9 bytes) @ 0x0000000114846078 [0x0000000114845fc0+0x00000000000000b8]
+J 52775 c1 java.lang.Thread.run()V java.base@21.0.12.1 (23 bytes) @ 0x00000001144ea0f4 [0x00000001144e9e80+0x0000000000000274]
+v  ~StubRoutines::call_stub 0x0000000118efc154
+
+siginfo: si_signo: 11 (SIGSEGV), si_code: 2 (SEGV_ACCERR), si_addr: 0x0000000000315882
+
+Registers:
+ x0=0x0000000000000000  x1=0x0000000b33b2b200  x2=0xffffffffffffe000  x3=0x00000000ffffffff
+ x4=0x0000000000000001  x5=0x0000000000000002  x6=0xffffffffbfc007ff  x7=0xfffff0003ffff800
+ x8=0x0000000142f74df8  x9=0x0000000000000020 x10=0x0000000000315862 x11=0x0000000000000001
+x12=0x000000000000003f x13=0xfffffffffffff000 x14=0x0000000ba3e82400 x15=0x0000000000000001
+x16=0x0000000000000000 x17=0xfffffffffffff000 x18=0x0000000000000000 x19=0x000000017d230fe8
+x20=0x0000000b064a3848 x21=0x0000000b24a95148 x22=0x000000017d230ac0 x23=0x000000017d230910
+x24=0x0000000b33b2b200 x25=0x0000000000000028 x26=0x0000000000000021 x27=0x0000000142f74000
+x28=0x0000000142f74df8  fp=0x000000017d230fd0  lr=0x0000000141cf2c14  sp=0x000000017d230890
+pc=0x0000000141cf2c8c cpsr=0x0000000080000000
+
+Register to memory mapping:
+
+x0 =0x0 is null
+x1 =0x0000000b33b2b200 points into unknown readable memory: 0x1000000000000017 | 17 00 00 00 00 00 00 10
+x2 =0xffffffffffffe000 is an unknown value
+x3 =0x00000000ffffffff is an unknown value
+x4 =0x0000000000000001 is an unknown value
+x5 =0x0000000000000002 is an unknown value
+x6 =0xffffffffbfc007ff is an unknown value
+x7 =0xfffff0003ffff800 is an unknown value
+x8 =

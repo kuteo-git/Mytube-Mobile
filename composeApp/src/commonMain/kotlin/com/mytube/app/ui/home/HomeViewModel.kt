@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 import kotlinx.coroutines.launch
 
 /**
@@ -135,9 +138,21 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
                     nextPageToken = seen.nextPageToken,
                     switching = false,
                 )
-                // `showLoading = false` and no refreshing flag: this is meant to
-                // be invisible. When it lands the list is replaced in place.
-                load(chip, showLoading = false)
+                // **And then, usually, nothing.**
+                //
+                // It used to reload every time, quietly: the cached list
+                // appeared and a moment later a different one replaced it under
+                // whoever was already reading it. Invisible was the intent and
+                // it is not what a list changing by itself looks like — reported
+                // as exactly that, stepping between two chips.
+                //
+                // So the reload is a question about *age*. Inside the window the
+                // list on screen is the answer, and refreshing is a gesture
+                // somebody makes rather than a thing that happens to them; past
+                // it the page is old enough that showing yesterday's answer
+                // would be the worse fault. Pull-to-refresh is unconditional and
+                // always was.
+                if (seen.at.elapsedNow() >= STALE_AFTER) load(chip, showLoading = false)
                 return
             }
 
@@ -167,6 +182,8 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         val videos: List<Video>,
         val continueWatching: List<Video>,
         val nextPageToken: String,
+        /** When this was fetched, for [STALE_AFTER]. */
+        val at: TimeMark,
     )
 
     private val cache = mutableMapOf<String, CachedChip>()
@@ -177,6 +194,7 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
             videos = ready.videos,
             continueWatching = ready.continueWatching,
             nextPageToken = ready.nextPageToken,
+            at = TimeSource.Monotonic.markNow(),
         )
     }
 
@@ -367,3 +385,17 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         else -> HomeState.Failed(error.message ?: "could not reach the library")
     }
 }
+
+/**
+ * How long a chip's page is treated as still true.
+ *
+ * Five minutes, and the number is a judgement about *this* feed: the library
+ * gains videos in batches when a scan runs, not continuously, so a page is
+ * rarely wrong within a few minutes — and stepping between two chips to compare
+ * them takes seconds, which is the case the reload was ruining.
+ *
+ * It bounds the staleness rather than removing it: past this a chip that has
+ * been sitting in the cache since the app opened this morning is reloaded, which
+ * is the fault the unconditional reload was written to prevent.
+ */
+private val STALE_AFTER = 5.minutes

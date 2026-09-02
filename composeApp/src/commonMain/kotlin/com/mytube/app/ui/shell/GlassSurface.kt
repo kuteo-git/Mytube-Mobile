@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -78,22 +79,32 @@ import com.mytube.app.ui.theme.Tokens
  * every control down into the platform layer. [GlassPane] pushes a rectangle and
  * keeps the layout in Kotlin, which is the difference.
  */
-fun Modifier.glassSurface(shape: Shape): Modifier = this
+fun Modifier.glassSurface(shape: Shape, press: GlassPress? = null): Modifier = this
     .clip(shape)
-    .background(GLASS_BASE)
-    .background(
+    .drawBehind {
+        // Brighter while it is held, for [glassControl]'s reason: paint cannot
+        // refract, so what a press changes is the light on the surface.
+        val pressed = press?.fraction ?: 0f
+        drawRect(GLASS_BASE)
         // A diagonal rather than a vertical: a vertical gradient on a 48dp disc
         // reads as a shadow under it, which is the opposite of light landing on
         // a surface. `Offset.Infinite` lets the brush size itself to whatever it
         // is drawn into, so one modifier serves a 52dp disc and a 120dp pill.
-        brush = Brush.linearGradient(
-            colors = listOf(GLASS_SHEEN, Color.Transparent),
-            start = Offset.Zero,
-            end = Offset.Infinite,
-        ),
-        shape = shape,
-    )
+        drawRect(
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    GLASS_SHEEN.copy(alpha = GLASS_SHEEN.alpha + SURFACE_LIFT * pressed),
+                    Color.Transparent,
+                ),
+                start = Offset.Zero,
+                end = Offset.Infinite,
+            ),
+        )
+    }
     .border(1.dp, GLASS_EDGE, shape)
+
+/** How much brighter the sheen gets while a disc over the video is held. */
+private const val SURFACE_LIFT = 0.10f
 
 private val GLASS_BASE = Color.Black.copy(alpha = 0.40f)
 private val GLASS_SHEEN = Color.White.copy(alpha = 0.16f)
@@ -128,23 +139,42 @@ private val GLASS_EDGE = Color.White.copy(alpha = 0.22f)
  * state. A state has to be a different *kind* of surface, not a slightly
  * different shade of the same one.
  */
-fun Modifier.glassControl(shape: Shape, selected: Boolean = false): Modifier =
+fun Modifier.glassControl(
+    shape: Shape,
+    selected: Boolean = false,
+    /**
+     * How hard it is being pressed, or null for a surface nobody presses.
+     *
+     * Paint cannot refract, so what deepens here is the light on it: the fill
+     * and the sheen brighten while a finger is down. It is the same [GlassPress]
+     * the squash reads, so a control wearing both moves as one thing.
+     */
+    press: GlassPress? = null,
+): Modifier =
     if (selected) {
         this.clip(shape).background(Tokens.invertBg)
     } else {
         this
             .clip(shape)
-            .background(CONTROL_FILL)
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(CONTROL_SHEEN, Color.Transparent),
-                    start = Offset.Zero,
-                    end = Offset.Infinite,
-                ),
-                shape = shape,
-            )
+            .drawBehind {
+                val pressed = press?.fraction ?: 0f
+                drawRect(CONTROL_FILL.copy(alpha = CONTROL_FILL.alpha + PRESS_LIFT * pressed))
+                drawRect(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            CONTROL_SHEEN.copy(alpha = CONTROL_SHEEN.alpha + PRESS_LIFT * pressed),
+                            Color.Transparent,
+                        ),
+                        start = Offset.Zero,
+                        end = Offset.Infinite,
+                    ),
+                )
+            }
             .border(1.dp, CONTROL_EDGE, shape)
     }
+
+/** How much brighter a painted surface gets while it is held. */
+private const val PRESS_LIFT = 0.06f
 
 private val CONTROL_FILL = Color.White.copy(alpha = 0.09f)
 private val CONTROL_SHEEN = Color.White.copy(alpha = 0.05f)

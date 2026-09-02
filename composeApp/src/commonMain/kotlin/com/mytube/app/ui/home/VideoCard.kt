@@ -18,8 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -43,8 +43,8 @@ import coil3.compose.AsyncImage
 import com.mohamedrejeb.calf.ui.gesture.adaptiveClickable
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.i18n.Strings
-import com.mytube.app.ui.shell.GlassRadius
-import com.mytube.app.ui.shell.menuSurface
+import com.mytube.app.ui.shell.MenuAction
+import com.mytube.app.ui.shell.rememberMenuAnchor
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -97,6 +97,18 @@ fun VideoCard(
      * something did happen and it was not what they aimed at.
      */
     onOpenChannel: (() -> Unit)? = null,
+    /**
+     * Its row is being written into the catalogue, so it cannot be opened yet.
+     *
+     * True only on the channel page, whose rows come from YouTube — see
+     * `ChannelViewModel.openVideo`. The card says so over its own picture and
+     * stops taking presses, because writing the row is a round trip to YouTube
+     * and a card that looks idle is one somebody presses again.
+     *
+     * `ExternalVideoCard` draws the same thing for the search screen's upstream
+     * half, which is the same state on the other list that has it.
+     */
+    opening: Boolean = false,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     // Pressed state, read here rather than left to the default ripple.
@@ -137,6 +149,7 @@ fun VideoCard(
             .adaptiveClickable(
                 interactionSource = press,
                 indication = null,
+                enabled = !opening,
                 onClick = onClick,
             ),
     ) {
@@ -171,6 +184,8 @@ fun VideoCard(
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                 )
             }
+
+            if (opening) OpeningOverlay()
 
             // How far through, drawn in brand red across the bottom of the
             // thumbnail. Only for a video somebody has actually started: a
@@ -315,66 +330,73 @@ fun VideoCardMenu(
     onMarkWatched: (() -> Unit)? = null,
 ) {
     if (onSave == null && onNotInterested == null && onMarkWatched == null) return
-    var menuOpen by remember { mutableStateOf(false) }
 
-    Box {
-        Icon(
-            imageVector = MoreVertical,
-            contentDescription = strings.moreOptions,
-            tint = Tokens.text2,
-            modifier = Modifier
-                .size(Size.iconButton)
-                .clip(CircleShape)
-                .clickable { menuOpen = true }
-                .padding(Space.sm),
-        )
-        // Paint, and dark. Two roads to real glass are closed here: a popup has
-        // its own coordinate space, so a sampled backdrop reads the wrong slice
-        // of the app, and this anchor sits inside the layer the shell records,
-        // where sampling crashes Skia outright. See [menuSurface].
-        DropdownMenu(
-            expanded = menuOpen,
-            onDismissRequest = { menuOpen = false },
-            containerColor = Color.Transparent,
-            shape = GlassRadius.menu,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            modifier = Modifier.menuSurface(GlassRadius.menu),
-        ) {
-            if (onSave != null) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            // "Lưu vào playlist", because the press no longer
-                            // writes one bit — it opens the question that bit
-                            // was standing in for. So the label does not follow
-                            // `video.saved` any more: a video already on the
-                            // shelf can still be wanted in a collection, and
-                            // "Saved" would say the question had been answered.
-                            //
-                            // Unless the caller names it: on the saved shelf and
-                            // on a playlist page the row is the way *off* the
-                            // list, which is a different sentence.
-                            saveLabel.ifEmpty { strings.saveToPlaylist },
-                            color = Tokens.text,
-                        )
-                    },
-                    onClick = { menuOpen = false; onSave() },
-                )
-            }
-            if (onMarkWatched != null) {
-                DropdownMenuItem(
-                    text = { Text(strings.markWatched, color = Tokens.text) },
-                    onClick = { menuOpen = false; onMarkWatched() },
-                )
-            }
-            if (onNotInterested != null) {
-                DropdownMenuItem(
-                    text = { Text(strings.notInterested, color = Tokens.text) },
-                    onClick = { menuOpen = false; onNotInterested() },
-                )
-            }
+    // The button is here; the panel is drawn at the root of the app.
+    //
+    // It was a `DropdownMenu`, which is a popup — its own layer with its own
+    // coordinate space — and a sampled backdrop there reads the wrong slice of
+    // the screen, while this anchor sits inside the layer the shell records,
+    // where sampling is a segfault. Both are facts about *where a popup draws*,
+    // so the menu moved instead of settling for paint. See [MenuHost].
+    val (anchor, show) = rememberMenuAnchor()
+
+    val items = buildList {
+        if (onSave != null) {
+            add(
+                MenuAction(
+                    // "Lưu vào playlist", because the press no longer writes one
+                    // bit — it opens the question that bit was standing in for.
+                    // So the label does not follow `video.saved` any more: a
+                    // video already on the shelf can still be wanted in a
+                    // collection, and "Saved" would say the question had been
+                    // answered.
+                    //
+                    // Unless the caller names it: on the saved shelf and on a
+                    // playlist page the row is the way *off* the list, which is
+                    // a different sentence.
+                    label = saveLabel.ifEmpty { strings.saveToPlaylist },
+                    onClick = onSave,
+                ),
+            )
         }
+        if (onMarkWatched != null) add(MenuAction(strings.markWatched, onMarkWatched))
+        if (onNotInterested != null) add(MenuAction(strings.notInterested, onNotInterested))
+    }
+
+    Icon(
+        imageVector = MoreVertical,
+        contentDescription = strings.moreOptions,
+        tint = Tokens.text2,
+        modifier = anchor
+            .size(Size.iconButton)
+            .clip(CircleShape)
+            .clickable { show(items) }
+            .padding(Space.sm),
+    )
+}
+
+/**
+ * "Fetching this one's metadata", drawn over a card's picture.
+ *
+ * One composable because **two lists have this state and they must not look
+ * different**: the search screen's upstream results and the channel page's
+ * uploads, both of which press a video the catalogue has no row for yet. They
+ * were two copies with two spinners — Material's here, the platform's there —
+ * and it was reported as exactly that.
+ *
+ * Over the picture rather than beside the title: the picture is what was
+ * pressed, and it is the one part of a card big enough to say "this one, and it
+ * is working" without a second glance.
+ */
+@Composable
+fun BoxScope.OpeningOverlay() {
+    Box(
+        Modifier
+            .matchParentSize()
+            .background(Color.Black.copy(alpha = 0.55f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(color = Tokens.text, modifier = Modifier.size(28.dp))
     }
 }
 

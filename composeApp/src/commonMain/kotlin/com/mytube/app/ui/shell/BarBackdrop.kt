@@ -393,10 +393,20 @@ val LocalGlassRecording = androidx.compose.runtime.compositionLocalOf { false }
 fun Modifier.liquidGlass(
     shape: CornerBasedShape,
     selected: Boolean = false,
+    /**
+     * How hard it is being pressed, or null for a pane nobody presses.
+     *
+     * The lens deepens with it — a sheet pushed on is thicker where the finger
+     * is, and bends more of what is behind it. The squash itself is
+     * [pressSquish]'s, on the same object, so the two halves of one movement
+     * cannot drift apart.
+     */
+    press: GlassPress? = null,
 ): Modifier {
     if (selected) return this.clip(shape).background(Tokens.invertBg)
 
-    val backdrop = LocalBackdrop.current ?: return this.glassControl(shape, selected = false)
+    val backdrop = LocalBackdrop.current
+        ?: return this.glassControl(shape, selected = false, press = press)
     return this.drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
@@ -407,11 +417,15 @@ fun Modifier.liquidGlass(
             // and a 16dp refraction on a 32dp control bends the whole of it
             // rather than its edge.
             blur(GLASS_BLUR.toPx())
+            // Read at draw time, which is the whole reason the press is an
+            // object rather than a parameter: this lambda re-runs on every
+            // frame of the animation and the control never recomposes.
+            val pressed = press?.fraction ?: 0f
             lens(
                 // At the chip's own corner radius, which is the library's
                 // ceiling for this parameter. See the note on the bars' lens.
-                refractionHeight = 8.dp.toPx(),
-                refractionAmount = 16.dp.toPx(),
+                refractionHeight = 8.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
+                refractionAmount = 16.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
                 depthEffect = true,
                 chromaticAberration = true,
             )

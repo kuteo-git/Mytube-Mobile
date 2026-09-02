@@ -2,6 +2,7 @@ package com.mytube.app.ui.shell
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
@@ -110,25 +111,21 @@ object GlassRadius {
     /**
      * A sheet's corners — all four of them.
      *
-     * All four because the sheet floats inset from the edges rather than
-     * sitting flush against them, like every other pane of glass in this app.
-     * A shape rounded only at the top is what a sheet welded to the bottom of
-     * the screen needs; this one has a margin under it, and square corners
-     * against that margin read as the sheet having been cut off.
+     * All four because the sheet floats inset from the edges rather than sitting
+     * flush against them, like every other pane of glass in this app.
      *
-     * **Concentric with the screen's own corner.** An iPhone 16e's display
-     * radius is 47.33pt and the sheet is inset by [GLASS_MARGIN]; a rounded
-     * rectangle inside another follows its curve only when the inner radius is
-     * the outer one *minus* the gap, so 47.33 − 16 ≈ 32. Using 47.33 directly
-     * would draw a corner fatter than the phone's, which reads as a mismatch
-     * rather than as a match — the gap between the two curves would pinch at
-     * the corners and open out along the edges.
+     * **36dp, and it follows the margin.** The same iOS screenshot the sheet's
+     * inset was measured from gives its corner too: the left edge reaches its
+     * straight run 52px below the pane's top, which at 1.5 px per point is a
+     * radius of about 35pt. That is not a coincidence — an iPhone 16e's display
+     * corner is 47.33pt and the sheet sits 10pt inside it, so 47.33 − 10 ≈ 37 is
+     * the concentric answer and the platform is drawing it.
      *
-     * Larger than [panel] for the same reason it is not 47: a sheet is nearly
-     * the width of the screen, and the radius that reads as generous on a 200dp
-     * menu reads as almost square on a 390dp sheet.
+     * Larger than [panel] for that reason rather than by taste: an alert is
+     * centred and far narrower, so it is nowhere near the screen's corner and
+     * has nothing to be concentric with.
      */
-    val sheet: CornerBasedShape = RoundedCornerShape(PANEL_RADIUS)
+    val sheet: CornerBasedShape = RoundedCornerShape(36.dp)
 }
 
 /**
@@ -429,14 +426,20 @@ fun GlassButton(
     // not the call to action stays glass, which is what makes one of them the
     // call to action.
     val filled = primary && enabled
+    // The squash is on both weights. A red button is not made of glass and still
+    // has to answer a finger — what changes with the material is what *else*
+    // happens, not whether the control moves.
+    val source = remember { MutableInteractionSource() }
+    val press = rememberGlassPress(source)
     Box(
         modifier
             .height(BUTTON_HEIGHT)
+            .pressSquish(press)
             .then(
                 if (filled) {
                     Modifier.clip(GlassRadius.control).background(Tokens.brand)
                 } else {
-                    Modifier.glassControl(GlassRadius.control)
+                    Modifier.glassControl(GlassRadius.control, press = press)
                 },
             )
             // Inside the pane, so a button sized by its label is a capsule
@@ -451,7 +454,14 @@ fun GlassButton(
             .alpha(if (enabled) 1f else 0.4f)
             .then(
                 if (enabled && !loading) {
-                    Modifier.pointerInput(onClick) { detectTapGestures { onClick() } }
+                    // `clickable` rather than the tap detector it had, because
+                    // the press animation reads the interaction source and a raw
+                    // `detectTapGestures` publishes nothing to one.
+                    Modifier.clickable(
+                        interactionSource = source,
+                        indication = null,
+                        onClick = onClick,
+                    )
                 } else {
                     Modifier
                 },
@@ -500,8 +510,7 @@ fun GlassPill(
     val ink = if (selected) Tokens.invertText else Tokens.text
     Row(
         modifier
-            .glassControl(GlassRadius.control, selected = selected)
-            .clickable(onClick = onClick)
+            .pressableGlassControl(GlassRadius.control, selected = selected, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -520,25 +529,3 @@ fun GlassPill(
 
 private val BUTTON_HEIGHT = 48.dp
 
-/**
- * What a popup is made of, since it cannot be made of glass.
- *
- * A menu lives in its own layer with its own coordinate space, so a sampled
- * backdrop there reads the wrong slice of the app — and its anchor is inside the
- * layer the shell records, where a sampled backdrop is not a wrong picture but a
- * crash (see `PullGlass`). Both roads are closed, so this one is honest about
- * being paint.
- *
- * **Dark, and nearly solid.** [glassControl] was tried first and it is built for
- * a control *on* a page: white at 0.09, which over a bright thumbnail turns the
- * panel into a grey smear with sharp video showing through it. A menu is a sheet
- * of the app's own surface that happens to be see-through — the theme's colour at
- * 0.92, with the same hairline the panes carry, so it belongs to the set without
- * pretending to sample anything.
- */
-fun Modifier.menuSurface(shape: CornerBasedShape): Modifier = this
-    .clip(shape)
-    .background(Tokens.surface.copy(alpha = MENU_ALPHA))
-    .border(1.dp, Color.White.copy(alpha = 0.10f), shape)
-
-private const val MENU_ALPHA = 0.92f

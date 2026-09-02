@@ -332,12 +332,19 @@ private fun BottomBar(
             // Square, so `GLASS_SHAPE` at 50 percent draws a circle. No label:
             // the tabs carry one because they name a place among three, and a
             // magnifier alone has never needed telling apart from anything.
+            val searchSource = remember { MutableInteractionSource() }
+            val searchPress = rememberGlassPress(searchSource)
             Box(
                 Modifier
                     .size(Size.topBar)
+                    .pressSquish(searchPress)
                     .clip(GLASS_SHAPE)
                     .consumeTaps()
-                    .clickable(onClick = onSearch),
+                    .clickable(
+                        interactionSource = searchSource,
+                        indication = null,
+                        onClick = onSearch,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 BarBackdrop(Modifier.matchParentSize(), fromTop = false, shape = GLASS_SHAPE)
@@ -359,9 +366,19 @@ private fun TabItem(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    // The squash, on a tab as on every other control.
+    //
+    // No material of its own: a tab is a glyph and a word *on* the bar's pane,
+    // not a second pane sitting on it — lighting a surface behind it would be
+    // the selected-state fault in a new place, and selection here is already
+    // said by the ink. What is left is the movement, which is the part that
+    // answers the finger.
+    val source = remember { MutableInteractionSource() }
+    val press = rememberGlassPress(source)
     Column(
         modifier = Modifier
-            .clickable(onClick = onClick)
+            .pressSquish(press)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
             .padding(horizontal = Space.md, vertical = Space.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

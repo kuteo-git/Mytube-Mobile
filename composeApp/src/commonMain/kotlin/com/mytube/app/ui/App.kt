@@ -52,6 +52,8 @@ import com.mytube.app.ui.home.HomeViewModel
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.shell.AppShell
 import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.shell.GlassMenu
+import com.mytube.app.ui.shell.dismissMenuOnOutsidePress
 import com.mytube.app.ui.shell.LocalBackdrop
 import com.mytube.app.ui.shell.LocalNativeGlass
 import com.mytube.app.ui.shell.NativeGlassBridge
@@ -597,7 +599,9 @@ fun App(
                 LocalMiniPlayerShowing provides (watching?.minimised == true),
                 LocalBackdrop provides backdrop,
             ) {
-            Box(Modifier.fillMaxSize()) {
+            // The one place a touch can be seen before anything acts on it, which
+            // is what closing a menu without swallowing the gesture needs.
+            Box(Modifier.fillMaxSize().dismissMenuOnOutsidePress()) {
                 // Screens arrive and leave the way they do on the platforms this
                 // runs on: a page pushed on slides in from the right over the one
                 // it covers, and the one underneath drifts a little to the left
@@ -1308,6 +1312,12 @@ fun App(
             // first card's ticks. It stays composed while it shuts — the
             // target is held until the exit has played, or the rows would
             // vanish mid-slide.
+            // The overflow menus, drawn here for the reason the sheets are: a
+            // popup cannot sample a backdrop and a child of the recording cannot
+            // either. Before the sheet, so a menu row that opens one is covered
+            // by what it opened rather than left standing over it.
+            GlassMenu()
+
             val savingFor = savingTarget
             if (savingFor != null) {
                 SavePlaylistSheet(

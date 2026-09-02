@@ -45,6 +45,7 @@ import com.mytube.app.ui.shell.GlassSheet
 import com.mytube.app.ui.shell.GlassTextField
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.shell.pressableGlassControl
 
 /**
  * Which collections this video belongs in.
@@ -161,8 +162,10 @@ fun BoxScope.SavePlaylistSheetContent(
                         modifier = Modifier
                             .size(Size.iconButton)
                             .clip(GlassRadius.control)
-                            .glassControl(GlassRadius.control)
-                            .clickable(onClick = onStartCreating)
+                            .pressableGlassControl(
+                                GlassRadius.control,
+                                onClick = onStartCreating,
+                            )
                             .padding(Space.sm),
                     )
                 }
@@ -258,8 +261,7 @@ private fun TickRow(
         Modifier
             .fillMaxWidth()
             .height(ROW_HEIGHT)
-            .glassControl(GlassRadius.control, selected = ticked)
-            .clickable(onClick = onClick)
+            .pressableGlassControl(GlassRadius.control, selected = ticked, onClick = onClick)
             .padding(start = Space.sm, end = Space.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {

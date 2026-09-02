@@ -39,6 +39,7 @@ import com.mytube.app.ui.shell.GlassSheet
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.shell.pressableGlassControl
 
 /**
  * What the gear on the control bar opens.
@@ -234,8 +235,11 @@ private fun TrackChip(label: String, selected: Boolean, onClick: () -> Unit) {
         fontSize = 13.sp,
         fontWeight = FontWeight.Medium,
         modifier = Modifier
-            .glassControl(RoundedCornerShape(percent = 50), selected = selected)
-            .clickable(onClick = onClick)
+            .pressableGlassControl(
+                RoundedCornerShape(percent = 50),
+                selected = selected,
+                onClick = onClick,
+            )
             .padding(horizontal = 14.dp, vertical = 7.dp),
     )
 }

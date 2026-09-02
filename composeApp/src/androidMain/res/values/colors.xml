@@ -4,4 +4,10 @@
          Tokens.bg, which comes from the design system's bg token. Two places, and
          unavoidable: a window background is set by the platform, not by us. -->
     <color name="mytube_bg">#0F0F0F</color>
+
+    <!-- The launcher icon's ground, behind the mark. The same colour again: on
+         a launcher an adaptive icon's background is the whole tile, and the app
+         opening onto a different shade of black would be a seam in the one
+         moment somebody is watching for it. -->
+    <color name="ic_launcher_background">#0F0F0F</color>
 </resources>

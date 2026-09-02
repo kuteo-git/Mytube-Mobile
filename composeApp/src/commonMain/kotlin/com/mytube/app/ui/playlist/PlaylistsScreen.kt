@@ -55,6 +55,7 @@ import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.shell.glassSource
 import com.mytube.app.ui.home.BadgeBackground
 import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.shell.pressableGlassControl
 
 /**
  * The collections this member keeps.
@@ -175,8 +176,10 @@ fun PlaylistsContent(
                                     .padding(end = Space.lg)
                                     .size(Size.iconButton)
                                     .clip(GlassRadius.control)
-                                    .glassControl(GlassRadius.control)
-                                    .clickable(onClick = onStartCreating)
+                                    .pressableGlassControl(
+                                        GlassRadius.control,
+                                        onClick = onStartCreating,
+                                    )
                                     .padding(Space.sm),
                             )
                         }

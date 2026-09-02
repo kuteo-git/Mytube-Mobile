@@ -208,13 +208,22 @@ fun BoxScope.GlassSheet(
                 // touching the screen. Same margin, so the panes read as one
                 // set rather than as one that happens to be adjacent.
                 //
-                // At the bottom it is the navigation inset when that is the
-                // larger — a home indicator is 34dp, and a margin under the
-                // indicator's own strip is a margin nobody can see.
+                // **[SHEET_MARGIN], even on all three sides**, measured off
+                // iOS's own share sheet rather than guessed.
+                //
+                // It used to be [GLASS_MARGIN] at the sides and the navigation
+                // inset below, on the reasoning that a margin under the home
+                // indicator's strip is a margin nobody can see. Beside the
+                // platform's sheet that produced 34dp below against 16 at the
+                // sides, and an uneven frame is what the eye actually reads.
+                //
+                // The indicator is cleared *inside* the pane instead — see the
+                // content's own padding below — so nothing sits under it while
+                // the glass still reaches down to the same margin as its edges.
                 .padding(
-                    start = GLASS_MARGIN,
-                    end = GLASS_MARGIN,
-                    bottom = maxOf(navigationInset, GLASS_MARGIN),
+                    start = SHEET_MARGIN,
+                    end = SHEET_MARGIN,
+                    bottom = SHEET_MARGIN,
                 )
                 .widthIn(max = MAX_WIDTH)
                 .heightIn(max = maxHeight)
@@ -285,7 +294,15 @@ fun BoxScope.GlassSheet(
                 // Below the handle, deliberately: the handle owns the vertical
                 // drag that dismisses, and a scrolling container over it would
                 // take that gesture first.
-                Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(
+                    Modifier
+                        .verticalScroll(rememberScrollState())
+                        // The home indicator, cleared here rather than by each
+                        // sheet: it is a property of the phone, not of what a
+                        // sheet happens to hold, and a caller that forgot it
+                        // would put its last row under the strip a swipe uses.
+                        .padding(bottom = navigationInset),
+                ) {
                     content()
                 }
             }
@@ -320,3 +337,20 @@ private const val MAX_HEIGHT_FRACTION = 0.45f
 
 /** And of a landscape one, where the same content needs a bigger share. */
 private const val LANDSCAPE_FRACTION = 0.8f
+
+/**
+ * How far a sheet sits in from the screen's edges.
+ *
+ * **Measured, not chosen.** A screenshot of iOS's share sheet on this
+ * household's phone (591×1280, so 1.5 px per point) puts the pane's left edge at
+ * x=14 and its right at x=577 of 591 — 9.3pt on both sides — and its bottom edge
+ * 16px, or 10.6pt, above the screen. So ten, and the same number below as
+ * beside: what the platform does is an even frame, and the home indicator is
+ * something the *content* clears rather than something the pane stands off from.
+ *
+ * Its own constant rather than [GLASS_MARGIN]. That one is 16dp and belongs to
+ * the three bars, which are stacked up the same two edges of the screen and must
+ * agree with each other; a sheet appears alone, over everything, and is measured
+ * against the platform's own.
+ */
+private val SHEET_MARGIN = 10.dp

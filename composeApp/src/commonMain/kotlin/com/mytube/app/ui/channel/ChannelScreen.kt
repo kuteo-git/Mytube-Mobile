@@ -59,6 +59,7 @@ import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
 import com.mytube.app.ui.watch.SubscribeButton
+import com.mytube.app.ui.shell.pressableGlassControl
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 @Composable
@@ -82,13 +83,19 @@ fun ChannelScreen(
     onSaveToPlaylist: (Video) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val opening by viewModel.opening.collectAsStateWithLifecycle()
+    val openFailed by viewModel.openFailed.collectAsStateWithLifecycle()
 
     ChannelContent(
         state = state,
         mediaBaseUrl = mediaBaseUrl,
         onBack = onBack,
         onOpenSettings = onOpenSettings,
-        onOpenVideo = onOpenVideo,
+        opening = opening,
+        openFailed = openFailed,
+        // The row is written into the catalogue first when it has no entry — see
+        // [ChannelViewModel.openVideo]. The screen only says where to go next.
+        onOpenVideo = { video, queue -> viewModel.openVideo(video, queue, onOpenVideo) },
         onRetry = viewModel::retry,
         onSelectSort = viewModel::selectSort,
         onToggleSubscribed = viewModel::toggleSubscribed,
@@ -103,7 +110,11 @@ fun ChannelContent(
     mediaBaseUrl: String,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenVideo: (String, List<String>) -> Unit,
+    /** The id of the row being written, so its card can say so and refuse a second tap. */
+    opening: String = "",
+    /** The last attempt came back with no id. */
+    openFailed: Boolean = false,
+    onOpenVideo: (Video, List<String>) -> Unit,
     onRetry: () -> Unit,
     onSelectSort: (SortOption) -> Unit,
     onToggleSubscribed: () -> Unit,
@@ -182,13 +193,33 @@ fun ChannelContent(
                 }
             }
 
+            // A press that could not be answered says so, above the list it was
+            // made in. Silence here is a dead button: the card stops spinning
+            // and nothing else happens, which reads as the app having lost the
+            // tap rather than as YouTube having refused it.
+            if (openFailed) {
+                item(key = "open-failed") {
+                    Text(
+                        text = strings.youtubeUnreachable,
+                        color = Tokens.text2,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = Space.lg, vertical = Space.sm),
+                    )
+                }
+            }
+
             items(if (ready.sorting) emptyList() else ready.videos, key = { it.id }) { video ->
                 VideoCard(
                     video = video,
                     mediaBaseUrl = mediaBaseUrl,
                     strings = strings,
-                    onClick = { onOpenVideo(video.id, queue) },
+                    onClick = { onOpenVideo(video, queue) },
                     onSave = { onSaveVideo(video) },
+                    // Fetching its metadata. The card says so over its own
+                    // picture and stops taking presses, because writing the row
+                    // is a round trip to YouTube and a card that looks idle is
+                    // one somebody presses again.
+                    opening = opening == video.id,
                 )
             }
 
@@ -316,8 +347,10 @@ private fun SortRow(options: List<SortOption>, selected: Int, onSelect: (SortOpt
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
-                    .glassControl(RoundedCornerShape(percent = 50), selected = lit)
-                    .clickable { onSelect(option) }
+                    .pressableGlassControl(
+                        RoundedCornerShape(percent = 50),
+                        selected = lit,
+                    ) { onSelect(option) }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
             )
         }

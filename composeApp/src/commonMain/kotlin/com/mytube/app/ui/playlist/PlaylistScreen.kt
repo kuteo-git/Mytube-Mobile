@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,11 +42,12 @@ import com.mytube.app.ui.shell.LocalBackdrop
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.GlassPill
 import com.mytube.app.ui.shell.GlassRadius
+import com.mytube.app.ui.shell.MenuAction
+import com.mytube.app.ui.shell.rememberMenuAnchor
 import com.mytube.app.ui.shell.GlassTextField
 import com.mytube.app.ui.shell.TabScaffold
 import com.mytube.app.ui.shell.detailContentPadding
 import com.mytube.app.ui.shell.glassSource
-import com.mytube.app.ui.shell.menuSurface
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -291,39 +290,27 @@ private fun PlaylistHeader(
 @Composable
 private fun PlaylistMenu(onRename: () -> Unit, onDelete: () -> Unit) {
     val strings = LocalStrings.current
-    var open by remember { mutableStateOf(false) }
+    // Drawn at the root and made of real glass — see [MenuHost]. It was a
+    // popup, which cannot sample: its own coordinate space reads the wrong
+    // slice, and this anchor sits inside the recorded layer where sampling is a
+    // segfault.
+    val (anchor, show) = rememberMenuAnchor()
 
-    Box {
-        Icon(
-            imageVector = MoreVertical,
-            contentDescription = strings.moreOptions,
-            tint = Tokens.text2,
-            modifier = Modifier
-                .size(Size.iconButton)
-                .clip(CircleShape)
-                .clickable { open = true }
-                .padding(Space.sm),
-        )
-        // Paint, not a sampled backdrop: a popup has its own coordinate space,
-        // and this anchor sits inside the layer the shell records — where
-        // sampling is a Skia stack overflow rather than a bad look.
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            containerColor = Color.Transparent,
-            shape = GlassRadius.menu,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            modifier = Modifier.menuSurface(GlassRadius.menu),
-        ) {
-            DropdownMenuItem(
-                text = { Text(strings.renamePlaylist, color = Tokens.text) },
-                onClick = { open = false; onRename() },
-            )
-            DropdownMenuItem(
-                text = { Text(strings.deletePlaylist, color = Tokens.text) },
-                onClick = { open = false; onDelete() },
-            )
-        }
-    }
+    Icon(
+        imageVector = MoreVertical,
+        contentDescription = strings.moreOptions,
+        tint = Tokens.text2,
+        modifier = anchor
+            .size(Size.iconButton)
+            .clip(CircleShape)
+            .clickable {
+                show(
+                    listOf(
+                        MenuAction(strings.renamePlaylist, onRename),
+                        MenuAction(strings.deletePlaylist, onDelete),
+                    ),
+                )
+            }
+            .padding(Space.sm),
+    )
 }
