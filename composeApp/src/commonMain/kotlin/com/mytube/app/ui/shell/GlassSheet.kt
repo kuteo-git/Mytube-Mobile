@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -161,6 +164,8 @@ fun BoxScope.GlassSheet(
     // player is the one place this app ever *is* landscape. The thing being
     // protected is what is behind the sheet, and behind it there is a video
     // whose subject is in the middle of the frame either way.
+    val navigationInset =
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val container = LocalWindowInfo.current.containerSize
     val fraction =
         if (container.width > container.height) LANDSCAPE_FRACTION else maxHeightFraction
@@ -195,6 +200,22 @@ fun BoxScope.GlassSheet(
                 // video these settings are about. `fillMaxWidth` and a wrapped
                 // height are correct in portrait and wrong the moment the phone
                 // turns, which is exactly how it was reported.
+                // The margin that makes it float.
+                //
+                // The three bars are capsules inset by [GLASS_MARGIN] with the
+                // page running underneath them, and a sheet welded to the
+                // bottom edge was the one pane of glass in the app still
+                // touching the screen. Same margin, so the panes read as one
+                // set rather than as one that happens to be adjacent.
+                //
+                // At the bottom it is the navigation inset when that is the
+                // larger — a home indicator is 34dp, and a margin under the
+                // indicator's own strip is a margin nobody can see.
+                .padding(
+                    start = GLASS_MARGIN,
+                    end = GLASS_MARGIN,
+                    bottom = maxOf(navigationInset, GLASS_MARGIN),
+                )
                 .widthIn(max = MAX_WIDTH)
                 .heightIn(max = maxHeight)
                 .align(Alignment.BottomCenter)

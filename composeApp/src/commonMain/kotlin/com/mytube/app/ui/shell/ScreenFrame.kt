@@ -96,7 +96,7 @@ fun tabContentPadding(): PaddingValues = tabContentPadding(LocalMiniPlayerShowin
  * The same, for a page opened from a menu rather than a tab.
  *
  * Saved, History and a channel have no tab bar and no chip row; what they have
- * at the top is [DetailTopRow]'s arrow, drawn over the content, and at the
+ * at the top is [DetailBack]'s arrow, drawn over the content, and at the
  * bottom nothing but the miniplayer when there is one. They used to borrow
  * `tabContentPadding`, which was right about the top by coincidence — the arrow
  * row is exactly `Size.topBar` — and wrong about the bottom by a tab bar's
@@ -135,7 +135,7 @@ fun BoxScope.DetailBack(onBack: () -> Unit, label: String) {
     }
 }
 
-/** The status inset plus the row [DetailTopRow]'s arrow sits in. */
+/** The status inset plus the row [DetailBack]'s arrow sits in. */
 @Composable
 private fun detailTopChrome(): Dp =
     WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + Size.topBar
@@ -610,67 +610,24 @@ fun DetailScaffold(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(
-                        top = WindowInsets.statusBars.asPaddingValues()
-                            .calculateTopPadding() + Size.topBar,
-                        bottom = Space.xxl,
-                    ),
-                content = content,
-            )
+                    .padding(detailContentPadding()),
+            ) {
+                // The heading is the first thing *in* the page, with the arrow
+                // floating over it — not a row sharing a line with the arrow,
+                // which is what this drew and what made two screens out of the
+                // five in this menu look like a different app.
+                //
+                // Every other page reached from a menu does it this way: Saved,
+                // History, a channel and the search results all put a
+                // [ScreenTitle] at the head of their list under a [DetailBack].
+                // The heading then scrolls away with what it heads, and the way
+                // out stays where a thumb left it.
+                ScreenTitle(title)
+                content()
+            }
 
-            DetailTopRow(title, onBack, backLabel, Modifier.align(Alignment.TopStart))
+            DetailBack(onBack, backLabel)
         }
-    }
-}
-
-/**
- * The arrow and the title, for a page whose content is a plain column.
- *
- * The title sits beside the arrow rather than above it: at this size a screen
- * with one subject does not need a heading the width of the page, and the row is
- * what says where the way out is.
- *
- * A page whose content is a *list* uses [DetailBack] with a `ScreenTitle` as the
- * list's first item instead — the heading then scrolls away with the thing it
- * heads, which is what Saved, History, a channel and the search results all do.
- */
-@Composable
-private fun DetailTopRow(
-    title: String,
-    onBack: () -> Unit,
-    backLabel: String,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier
-            .padding(
-                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
-            )
-            .fillMaxWidth()
-            .height(Size.topBar)
-            .padding(horizontal = Space.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .clickable(onClick = onBack),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = DetailBackIcon,
-                contentDescription = backLabel,
-                tint = Tokens.text,
-                modifier = Modifier.size(24.dp),
-            )
-        }
-        Text(
-            text = title,
-            color = Tokens.text,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-        )
     }
 }
 

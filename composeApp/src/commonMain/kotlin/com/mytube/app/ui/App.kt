@@ -121,8 +121,8 @@ private sealed interface Route {
     data object Home : Route
     data object Search : Route
     data object Saved : Route
-    /** The member's collections, reached from Settings. */
-    data object Playlists : Route
+    /** The channels this household follows, reached from Settings. */
+    data object Subscriptions : Route
     data class Playlist(val playlistId: String) : Route
     data object History : Route
     data object Profile : Route
@@ -217,7 +217,7 @@ private fun depth(route: Route): Int = when (route) {
     // arriving somewhere looks like.
     is Route.Setup -> 1
     is Route.Search -> 1
-    is Route.Playlists -> 1
+    is Route.Subscriptions -> 1
     /**
      * Two, with [Route.Playlist], and for the same reason.
      *
@@ -379,11 +379,10 @@ fun App(
             // screen dies with it, which is why every trip to another tab and
             // back put the feed at the top again.
             val tabScroll = Tab.entries.associateWith { rememberLazyListState() }
-            // The playlists page's scroll, for the tabs' reason: a collection
-            // opens over it, so the page is not composed while one is open and a
-            // state remembered inside it would die there. Reported as coming
-            // back from a playlist and finding the list at the top.
-            val playlistsScroll = rememberLazyListState()
+            // The subscriptions page's scroll, for the tabs' reason: it is a
+            // route, so it is not composed while anything else is, and a state
+            // remembered inside it would die there.
+            val subscriptionsScroll = rememberLazyListState()
             // How far the shell's bars have slid away, animated here rather than
             // inside the shell.
             //
@@ -552,7 +551,13 @@ fun App(
 
                     // A playlist is reached from exactly one page, so unlike a
                     // channel it needs nothing remembered.
-                    route is Route.Playlist -> route = Route.Playlists
+                    // A collection is opened from the Playlists *tab*, so
+                    // leaving it goes back to that tab rather than to a route
+                    // that no longer exists.
+                    route is Route.Playlist || route is Route.Saved -> {
+                        route = Route.Home
+                        tab = Tab.Playlists
+                    }
 
                     // A screen opened from a tab.
                     route !is Route.Home -> route = Route.Home
@@ -708,19 +713,24 @@ fun App(
                                     },
                                 )
 
-                                Tab.Subscriptions -> SubscriptionsScreen(
-                                    listState = tabScroll.getValue(Tab.Subscriptions),
-                                    viewModel = viewModel(key = "subs-$baseUrl-$profileId") {
-                                        SubscriptionsViewModel(container.videoRepository)
-                                    },
+                                // Collections are a tab now, where subscriptions
+                                // used to be. Both are lists somebody scans for
+                                // one name; the difference is how often, and a
+                                // household reaches for its own playlists far
+                                // more than for the list of who it follows —
+                                // which is why that one moved into Settings.
+                                //
+                                // `onBack = null`: a tab is not reached from
+                                // anywhere, so an arrow on it would lead
+                                // nowhere. Same rule as the setup screen's.
+                                Tab.Playlists -> PlaylistsScreen(
+                                    viewModel = playlists,
                                     mediaBaseUrl = baseUrl,
-                                    onOpenSettings = { tab = Tab.Settings },
-                                    // The channel screen does not exist yet, so
-                                    // pressing a row does nothing rather than
-                                    // pretending. Drawn anyway: the list is the
-                                    // answer to "who do I follow", which is most of
-                                    // what this tab is for.
-                                    onOpenChannel = openChannel,
+                                    listState = tabScroll.getValue(Tab.Playlists),
+                                    onBack = null,
+                                    onOpenSettings = { route = Route.Setup },
+                                    onOpenSaved = { route = Route.Saved },
+                                    onOpenPlaylist = { route = Route.Playlist(it) },
                                 )
 
                                 Tab.Settings -> SettingsScreen(
@@ -730,7 +740,7 @@ fun App(
                                     onOpenServer = { route = Route.Setup },
                                     onOpenProfile = { route = Route.Profile },
                                     onOpenHistory = { route = Route.History },
-                                    onOpenPlaylists = { route = Route.Playlists },
+                                    onOpenSubscriptions = { route = Route.Subscriptions },
                                     profileName = currentProfile?.name.orEmpty(),
                                     onChangeMix = { next ->
                                         // Drawn immediately, sent after: a
@@ -871,14 +881,15 @@ fun App(
                         )
                     }
 
-                    is Route.Playlists -> PlaylistsScreen(
-                        viewModel = playlists,
+                    is Route.Subscriptions -> SubscriptionsScreen(
+                        listState = subscriptionsScroll,
+                        viewModel = viewModel(key = "subs-$baseUrl-$profileId") {
+                            SubscriptionsViewModel(container.videoRepository)
+                        },
                         mediaBaseUrl = baseUrl,
-                        listState = playlistsScroll,
                         onBack = { route = Route.Home },
                         onOpenSettings = { route = Route.Setup },
-                        onOpenSaved = { route = Route.Saved },
-                        onOpenPlaylist = { route = Route.Playlist(it) },
+                        onOpenChannel = openChannel,
                     )
 
                     is Route.Playlist -> PlaylistScreen(
@@ -886,7 +897,7 @@ fun App(
                             PlaylistViewModel(current.playlistId, container.videoRepository)
                         },
                         mediaBaseUrl = baseUrl,
-                        onBack = { route = Route.Playlists },
+                        onBack = { route = Route.Home; tab = Tab.Playlists },
                         onOpenSettings = { route = Route.Setup },
                         // The whole page becomes the queue, so next and autoplay
                         // stay inside the playlist. `WatchSession.queue` already
@@ -899,7 +910,8 @@ fun App(
                             // row went, and asking the server again would draw
                             // the old list for as long as that round trip takes.
                             playlists.forget(deleted)
-                            route = Route.Playlists
+                            route = Route.Home
+                            tab = Tab.Playlists
                         },
                     )
 
@@ -908,10 +920,10 @@ fun App(
                         SavedViewModel(container.videoRepository)
                     },
                     mediaBaseUrl = baseUrl,
-                    // The shelf is a row on the playlists page now, so that is
-                    // where leaving it returns to — the rule every other page
-                    // here follows: back goes to whatever listed you.
-                    onBack = { route = Route.Playlists },
+                    // The shelf is the first row on the playlists tab now, so
+                    // that is where leaving it returns to — the rule every other
+                    // page here follows: back goes to whatever listed you.
+                    onBack = { route = Route.Home; tab = Tab.Playlists },
                     onOpenSettings = { route = Route.Setup },
                     onOpenVideo = { watching = WatchSession(it) },
                     onOpenChannel = openChannel,
@@ -975,7 +987,7 @@ fun App(
             // above the routes.
             val browsing = route is Route.Home || route is Route.Search ||
                 route is Route.Channel || route is Route.Saved ||
-                route is Route.Playlists || route is Route.Playlist ||
+                route is Route.Subscriptions || route is Route.Playlist ||
                 route is Route.Voice || route is Route.Language ||
                 route is Route.History || route is Route.Profile
 
@@ -1278,30 +1290,39 @@ fun App(
                     }
                 }
 
-                // The save sheet, drawn last and therefore on top.
-                //
-                // Keyed on the video it was opened for, so opening it from a
-                // second card asks the server again rather than showing the
-                // first card's ticks. It stays composed while it shuts — the
-                // target is held until the exit has played, or the rows would
-                // vanish mid-slide.
-                val savingFor = savingTarget
-                if (savingFor != null) {
-                    SavePlaylistSheet(
-                        viewModel = remember(savingFor) {
-                            SavePlaylistViewModel(savingFor, container.videoRepository)
-                        },
-                        visible = sheetOpen,
-                        mediaBaseUrl = baseUrl,
-                        backdrop = backdrop,
-                        onDismiss = { sheetOpen = false },
-                        onSaved = { saved ->
-                            savedSink?.invoke(saved)
-                            sheetOpen = false
-                        },
-                    )
-                }
+            }
 
+            // The save sheet, drawn last and therefore on top.
+            //
+            // A **sibling** of the watch session's block, not a child of it.
+            // It lived inside `if (session != null && browsing)` and that is
+            // the whole of the fault reported from the phone: with nothing
+            // playing, a card's menu set the target and the sheet had no
+            // parent to be drawn by, so the press did nothing — and opening a
+            // video afterwards composed that branch with the target still set,
+            // so the sheet rose on its own. Six screens open this one sheet,
+            // and none of them is about a video that happens to be playing.
+            //
+            // Keyed on the video it was opened for, so opening it from a
+            // second card asks the server again rather than showing the
+            // first card's ticks. It stays composed while it shuts — the
+            // target is held until the exit has played, or the rows would
+            // vanish mid-slide.
+            val savingFor = savingTarget
+            if (savingFor != null) {
+                SavePlaylistSheet(
+                    viewModel = remember(savingFor) {
+                        SavePlaylistViewModel(savingFor, container.videoRepository)
+                    },
+                    visible = sheetOpen,
+                    mediaBaseUrl = baseUrl,
+                    backdrop = backdrop,
+                    onDismiss = { sheetOpen = false },
+                    onSaved = { saved ->
+                        savedSink?.invoke(saved)
+                        sheetOpen = false
+                    },
+                )
             }
             }
 

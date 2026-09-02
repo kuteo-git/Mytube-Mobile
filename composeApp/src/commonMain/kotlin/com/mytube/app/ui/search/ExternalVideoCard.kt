@@ -242,10 +242,10 @@ private fun ExternalCardMenu(strings: Strings, onSaveToPlaylist: () -> Unit) {
             expanded = open,
             onDismissRequest = { open = false },
             containerColor = Color.Transparent,
-            shape = GlassRadius.panel,
+            shape = GlassRadius.menu,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
-            modifier = Modifier.menuSurface(GlassRadius.panel),
+            modifier = Modifier.menuSurface(GlassRadius.menu),
         ) {
             DropdownMenuItem(
                 text = { Text(strings.saveToPlaylist, color = Tokens.text) },

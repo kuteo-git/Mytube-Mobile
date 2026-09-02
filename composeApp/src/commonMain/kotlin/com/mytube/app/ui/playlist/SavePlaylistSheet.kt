@@ -8,12 +8,9 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -137,12 +134,10 @@ fun BoxScope.SavePlaylistSheetContent(
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(
-                    start = Space.lg,
-                    end = Space.lg,
-                    bottom = WindowInsets.navigationBars.asPaddingValues()
-                        .calculateBottomPadding() + Space.lg,
-                ),
+                // No navigation inset here any more: the sheet floats clear
+                // of the bottom edge and clears the home indicator itself, so
+                // adding it again would be the gap counted twice.
+                .padding(start = Space.lg, end = Space.lg, bottom = Space.lg),
         ) {
             // The title, and the one control that is not a row: making a new
             // playlist. Top right, as on every sheet that offers to add

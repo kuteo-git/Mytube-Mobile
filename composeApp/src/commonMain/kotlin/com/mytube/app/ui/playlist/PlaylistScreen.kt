@@ -42,7 +42,7 @@ import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.DetailBack
 import com.mytube.app.ui.shell.LocalBackdrop
 import com.mytube.app.ui.shell.EmptyState
-import com.mytube.app.ui.shell.GlassButton
+import com.mytube.app.ui.shell.GlassPill
 import com.mytube.app.ui.shell.GlassRadius
 import com.mytube.app.ui.shell.GlassTextField
 import com.mytube.app.ui.shell.TabScaffold
@@ -150,6 +150,21 @@ fun PlaylistContent(
                         state = ready,
                         canPlay = queue.isNotEmpty(),
                         onPlayAll = { queue.firstOrNull()?.let { onOpenVideo(it, queue) } },
+                        // Shuffled **here**, and the shuffled order is what is
+                        // handed over as the queue — not a random first video
+                        // followed by the list in its own order, which is what
+                        // "shuffle" means to nobody. The player already takes a
+                        // queue and reads next and autoplay from it, so there is
+                        // nothing to teach it: a shuffle is an ordering, and
+                        // this screen is where the ordering is decided.
+                        //
+                        // Not persisted, and not a mode. There is no shuffle
+                        // toggle in the player to keep in step with, so this is
+                        // one press that starts one sitting.
+                        onShuffle = {
+                            val shuffled = queue.shuffled()
+                            shuffled.firstOrNull()?.let { onOpenVideo(it, shuffled) }
+                        },
                         onStartRenaming = onStartRenaming,
                         onCancelRenaming = onCancelRenaming,
                         onNameChanged = onNameChanged,
@@ -220,6 +235,7 @@ private fun PlaylistHeader(
     state: PlaylistState.Ready,
     canPlay: Boolean,
     onPlayAll: () -> Unit,
+    onShuffle: () -> Unit,
     onStartRenaming: () -> Unit,
     onCancelRenaming: () -> Unit,
     onNameChanged: (String) -> Unit,
@@ -250,7 +266,16 @@ private fun PlaylistHeader(
 
         Spacer(Modifier.height(Space.md))
 
-        if (canPlay) GlassButton(strings.playAll, onPlayAll, primary = true)
+        // Two pills, the watch page's shape — a mark and a word, side by side.
+        // A filled red button was the one call to action on the page and these
+        // are two equal ways to start the same list; making one of them louder
+        // would be saying the other is a fallback.
+        if (canPlay) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+                GlassPill(PlayIcon, strings.playAll, onPlayAll)
+                GlassPill(ShuffleIcon, strings.shufflePlay, onShuffle)
+            }
+        }
 
         Spacer(Modifier.height(Space.md))
     }
@@ -286,10 +311,10 @@ private fun PlaylistMenu(onRename: () -> Unit, onDelete: () -> Unit) {
             expanded = open,
             onDismissRequest = { open = false },
             containerColor = Color.Transparent,
-            shape = GlassRadius.panel,
+            shape = GlassRadius.menu,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
-            modifier = Modifier.menuSurface(GlassRadius.panel),
+            modifier = Modifier.menuSurface(GlassRadius.menu),
         ) {
             DropdownMenuItem(
                 text = { Text(strings.renamePlaylist, color = Tokens.text) },

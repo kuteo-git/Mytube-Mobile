@@ -336,10 +336,10 @@ fun VideoCardMenu(
             expanded = menuOpen,
             onDismissRequest = { menuOpen = false },
             containerColor = Color.Transparent,
-            shape = GlassRadius.panel,
+            shape = GlassRadius.menu,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
-            modifier = Modifier.menuSurface(GlassRadius.panel),
+            modifier = Modifier.menuSurface(GlassRadius.menu),
         ) {
             if (onSave != null) {
                 DropdownMenuItem(

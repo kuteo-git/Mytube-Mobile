@@ -50,15 +50,19 @@ import com.mytube.app.ui.shell.GlassTextField
 import com.mytube.app.ui.shell.ScreenTitle
 import com.mytube.app.ui.shell.TabScaffold
 import com.mytube.app.ui.shell.detailContentPadding
+import com.mytube.app.ui.shell.tabContentPadding
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.shell.glassSource
+import com.mytube.app.ui.home.BadgeBackground
 import com.mytube.app.ui.theme.Tokens
 
 /**
  * The collections this member keeps.
  *
- * Reached from Settings, where it replaced the "Đã lưu" row — one row, not two:
- * the saved shelf is the first row *here*, which is where it belongs once there
+ * A **tab**, in the middle of the bar where subscriptions used to be: this is a
+ * list a household reaches for many times a sitting, and the list of channels it
+ * follows is one somebody opens when looking for a channel. The saved shelf is
+ * the first row here — one row, not two — which is where it belongs once there
  * is more than one collection.
  */
 @Composable
@@ -72,7 +76,14 @@ fun PlaylistsScreen(
      * had, and the same fix.
      */
     listState: LazyListState,
-    onBack: () -> Unit,
+    /**
+     * Null on the tab, which is not reached from anywhere.
+     *
+     * A back arrow there would be a control that leads nowhere — the setup
+     * screen's rule, which is two things for the same reason: the first screen
+     * of a fresh install and a row in Settings.
+     */
+    onBack: (() -> Unit)?,
     onOpenSettings: () -> Unit,
     onOpenSaved: () -> Unit,
     onOpenPlaylist: (String) -> Unit,
@@ -105,7 +116,7 @@ fun PlaylistsContent(
     state: PlaylistsState,
     mediaBaseUrl: String,
     listState: LazyListState = rememberLazyListState(),
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onOpenSettings: () -> Unit,
     onOpenSaved: () -> Unit,
     onOpenPlaylist: (String) -> Unit,
@@ -141,7 +152,10 @@ fun PlaylistsContent(
             LazyColumn(
                 Modifier.fillMaxSize(),
                 state = listState,
-                contentPadding = detailContentPadding(),
+                // A tab ends above the tab bar; a page ends above nothing but
+                // the miniplayer. The arrow is what tells them apart, and it is
+                // the same fact that decides both.
+                contentPadding = if (onBack == null) tabContentPadding() else detailContentPadding(),
             ) {
                 item(key = "title") {
                     // The "+" is in the title row, not at the end of the list.
@@ -180,6 +194,8 @@ fun PlaylistsContent(
                         mediaBaseUrl = mediaBaseUrl,
                         onClick = onOpenSaved,
                         icon = BookmarkIcon,
+                        // The shelf is one set, not a stack of collections.
+                        stacked = false,
                     )
                 }
 
@@ -202,7 +218,7 @@ fun PlaylistsContent(
             }
         }
 
-        DetailBack(onBack, strings.back)
+        if (onBack != null) DetailBack(onBack, strings.back)
         }
 
         // Outside the recorded node, and last, so it is over the page rather
@@ -235,6 +251,8 @@ private fun PlaylistRow(
     mediaBaseUrl: String,
     onClick: () -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    /** Whether to draw the edge of a card behind the picture. */
+    stacked: Boolean = true,
 ) {
     Row(
         Modifier
@@ -243,9 +261,32 @@ private fun PlaylistRow(
             .padding(horizontal = Space.lg, vertical = Space.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The picture, with the edge of another one showing above it.
+        //
+        // That strip is the whole reason a playlist row reads as a playlist
+        // from across the screen rather than as a video that happens to have a
+        // mark on it: it says there is something behind this picture. Narrower
+        // than the thumbnail and rounded only at the top, because it is the top
+        // of a card underneath — it is drawn, not stacked, since a real second
+        // image behind this one would be a second request for two pixels of it.
+        Column(
+            Modifier.width(THUMBNAIL_WIDTH),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+        if (stacked) {
+            Box(
+                Modifier
+                    .padding(horizontal = STACK_INSET)
+                    .fillMaxWidth()
+                    .height(STACK_HEIGHT)
+                    .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                    .background(Tokens.surfaceHover),
+            )
+            Spacer(Modifier.height(STACK_GAP))
+        }
         Box(
             Modifier
-                .width(THUMBNAIL_WIDTH)
+                .fillMaxWidth()
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(Radius.thumbnail))
                 .background(Tokens.surface),
@@ -259,23 +300,43 @@ private fun PlaylistRow(
                     modifier = Modifier.fillMaxWidth().fillMaxHeight(),
                 )
             }
-            // The mark sits in the corner over the picture, and alone in the
-            // middle of an empty pane when a playlist has nothing in it yet —
-            // an empty grey rectangle reads as a picture that failed to load.
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Tokens.text,
-                modifier = Modifier
-                    .then(
-                        if (thumbnailPath.isEmpty()) {
-                            Modifier
-                        } else {
-                            Modifier.align(Alignment.BottomEnd).padding(Space.xs)
-                        },
+            // Over a picture the mark sits on a **badge** in the corner, small
+            // and dark — the web app's arrangement, and the same
+            // [BadgeBackground] a video card's duration uses. One kind of badge
+            // over a thumbnail, so two of them in one list do not disagree.
+            //
+            // A bare glyph would disappear against whatever the thumbnail
+            // happens to be there, and the one thing a photograph cannot be
+            // relied on to be is dark.
+            //
+            // With no picture there is nothing to be legible against, so the
+            // mark stands alone in the middle of the empty pane: a badge over a
+            // flat surface is a border drawn for its own sake.
+            if (thumbnailPath.isEmpty()) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Tokens.text,
+                    modifier = Modifier.size(20.dp),
+                )
+            } else {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(Space.xs)
+                        .clip(RoundedCornerShape(Radius.badge))
+                        .background(BadgeBackground)
+                        .padding(horizontal = 5.dp, vertical = 3.dp),
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Tokens.text,
+                        modifier = Modifier.size(BADGE_ICON),
                     )
-                    .size(20.dp),
-            )
+                }
+            }
+        }
         }
 
         Spacer(Modifier.width(Space.md))
@@ -298,3 +359,11 @@ private fun PlaylistRow(
 
 /** The same 168dp as the up-next rail's, so the two lists read as one app. */
 private val THUMBNAIL_WIDTH = 140.dp
+
+/** Small, because the badge is a label on a picture rather than a control. */
+private val BADGE_ICON = 12.dp
+
+/** The edge of the card behind this one. */
+private val STACK_HEIGHT = 3.dp
+private val STACK_INSET = 12.dp
+private val STACK_GAP = 2.dp

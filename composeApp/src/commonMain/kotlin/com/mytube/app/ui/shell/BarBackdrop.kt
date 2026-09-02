@@ -332,15 +332,33 @@ val GLASS_SHAPE = RoundedCornerShape(percent = 50)
  * — rather than an error, for the same reason [GlassBackdrop] draws a wash
  * there.
  *
- * **Only one screen may record at a time**, which is what makes this safe to
- * sprinkle: exactly one route is on screen, and the two that overlap during a
- * transition are drawing the same thing anyway.
+ * **Only one node may record at a time, and this enforces it.** A recording
+ * inside a recording is not a bad look but a segfault — Skia optimises the outer
+ * record while the inner one is still open, and the app drops to the springboard
+ * with `SkRecordNoopSaveLayerDrawRestores` at the top of the trace. Measured, on
+ * the day the playlists page became a tab: the page carried its own
+ * `glassSource` because it *was* a route, and `AppShell` already records every
+ * tab's content, so the same composable was correct in one place and fatal in
+ * the other.
+ *
+ * So a screen keeps asking for this whatever it is used as, and the second ask
+ * is a no-op. [LocalGlassRecording] is what carries the answer, and a screen
+ * with no shell around it is still the one that records.
  */
 @Composable
 fun Modifier.glassSource(): Modifier {
+    if (LocalGlassRecording.current) return this
     val backdrop = LocalBackdrop.current ?: return this
     return this.layerBackdrop(backdrop)
 }
+
+/**
+ * Whether something up the tree is already recording the layer.
+ *
+ * Provided by [AppShell] around the tab it draws, and by nothing else: a route
+ * is drawn on its own and records for itself.
+ */
+val LocalGlassRecording = androidx.compose.runtime.compositionLocalOf { false }
 
 /**
  * The same material, for a control that sits **on** the page rather than being

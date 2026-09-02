@@ -28,6 +28,7 @@ import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.GlassPill
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
 
@@ -184,34 +185,14 @@ private fun ActionPill(
     onClick: () -> Unit,
     flipped: Boolean = false,
 ) {
-    // The content follows the surface.
-    //
-    // `glassControl(selected = true)` swaps to the app's **inverted** surface —
-    // solid and light — because a state has to be a different kind of surface
-    // rather than a slightly different shade of the same one. What that means
-    // for anything drawn on it is that white ink disappears: Save in its saved
-    // state was a blank white pill with an invisible bookmark and an invisible
-    // word on it, which is how it was reported. Every selected surface in this
-    // app owes its content the same swap.
-    val ink = if (active) Tokens.invertText else Tokens.text
-
-    Row(
-        modifier = Modifier
-            .glassControl(RoundedCornerShape(percent = 50), selected = active)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = ink,
-            modifier = Modifier
-                .size(20.dp)
-                .scale(scaleX = 1f, scaleY = if (flipped) -1f else 1f),
-        )
-        Spacer(Modifier.width(Space.sm))
-        Text(label, color = ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-    }
-    Spacer(Modifier.height(0.dp))
+    // The design system's pill. It used to be written out here, and the
+    // playlist page needed the same one — two copies of a control is how one
+    // row of them comes to disagree with another about its padding.
+    GlassPill(
+        icon = icon,
+        label = label,
+        onClick = onClick,
+        selected = active,
+        flipped = flipped,
+    )
 }

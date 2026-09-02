@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,7 +43,9 @@ import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.ScreenTitle
 import com.mytube.app.ui.shell.TabRefreshIndicator
 import com.mytube.app.ui.shell.TabScaffold
-import com.mytube.app.ui.shell.tabContentPadding
+import com.mytube.app.ui.shell.detailContentPadding
+import com.mytube.app.ui.shell.DetailBack
+import com.mytube.app.ui.shell.glassSource
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -61,6 +64,7 @@ fun SubscriptionsScreen(
     listState: LazyListState,
     viewModel: SubscriptionsViewModel,
     mediaBaseUrl: String,
+    onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenChannel: (String) -> Unit,
 ) {
@@ -70,6 +74,7 @@ fun SubscriptionsScreen(
         listState = listState,
         state = state,
         mediaBaseUrl = mediaBaseUrl,
+        onBack = onBack,
         onOpenSettings = onOpenSettings,
         onOpenChannel = onOpenChannel,
         onRefresh = viewModel::refresh,
@@ -82,12 +87,18 @@ fun SubscriptionsContent(
     listState: LazyListState = rememberLazyListState(),
     state: SubscriptionsState,
     mediaBaseUrl: String,
+    onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenChannel: (String) -> Unit,
     onRefresh: () -> Unit,
 ) {
     val strings = LocalStrings.current
 
+    // A page now, not a tab: reached from one row in Settings, with no tab bar
+    // under it. So it registers its own backdrop for the panes that float over
+    // it, and carries the arrow every such page owes its reader — Android's
+    // system back leaves the app, and iOS has no system back at all.
+    Box(Modifier.fillMaxSize().glassSource()) {
     TabScaffold(
         loading = state is SubscriptionsState.Loading,
         needsServer = state is SubscriptionsState.NeedsServer,
@@ -112,7 +123,7 @@ fun SubscriptionsContent(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = tabContentPadding(),
+                contentPadding = detailContentPadding(),
             ) {
                 item(key = "title") { ScreenTitle(strings.subscriptionsTitle) }
 
@@ -127,6 +138,8 @@ fun SubscriptionsContent(
                 }
             }
         }
+    }
+    DetailBack(onBack, strings.back)
     }
 }
 
@@ -201,6 +214,7 @@ private fun SubscriptionsPreview() {
                 ),
             ),
             mediaBaseUrl = "",
+            onBack = {},
             onOpenSettings = {},
             onOpenChannel = {},
             onRefresh = {},
@@ -215,6 +229,7 @@ private fun SubscriptionsEmptyPreview() {
         SubscriptionsContent(
             state = SubscriptionsState.Ready(emptyList()),
             mediaBaseUrl = "",
+            onBack = {},
             onOpenSettings = {},
             onOpenChannel = {},
             onRefresh = {},
@@ -230,7 +245,8 @@ private fun SubscriptionsVietnamesePreview() {
             SubscriptionsContent(
                 state = SubscriptionsState.Ready(listOf(sample("cbc", "CBC News", 4_100_000))),
                 mediaBaseUrl = "",
-                onOpenSettings = {},
+                onBack = {},
+            onOpenSettings = {},
                 onOpenChannel = {},
                 onRefresh = {},
             )

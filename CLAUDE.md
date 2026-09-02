@@ -2481,3 +2481,97 @@ its reasoning, since a 16:9 frame fitted into a circle is a stripe with two blan
 caps. The saved shelf has no first video, so it draws its own bookmark; a
 playlist with nothing in it yet draws the collection mark rather than an empty
 grey circle.
+
+## A sheet that was never drawn, and the tabs change hands (2026-09-02)
+
+### The save sheet lived inside the watch session
+
+Reported from the phone: a card's menu → *Save to playlist* did nothing, and
+opening a video afterwards made the sheet rise on its own.
+
+`SavePlaylistSheet` was written inside `if (session != null && browsing)` — the
+branch that exists only while something is playing. With nothing playing the
+press set the target and there was **no parent to draw it**; opening a video then
+composed that branch with the target still set. It is a sibling of that branch
+now, the last child of the root `Box`. Six screens open this one sheet and none
+of them is about a video that happens to be playing.
+
+### A recording inside a recording is a segfault, and now it cannot happen
+
+Moving the playlists page from Settings to the tab bar crashed the app on sight:
+
+```
+EXC_BAD_ACCESS  SkRecordNoopSaveLayerDrawRestores → SkRecordOptimize
+                → RenderNode.endRecording → LayerBackdropNode.draw
+```
+
+The page carried `glassSource()` because it *was* a route, and `AppShell` already
+records every tab's content — so the same composable was correct in one place and
+fatal in the other. The charter already recorded the sibling shape from
+`PullGlass` and `GlassAlert`; this is the same rule failing in a new direction,
+and the third time it has been paid for.
+
+**So the rule is enforced rather than remembered.** `AppShell` provides
+`LocalGlassRecording` around the tab it draws, and `glassSource()` is a no-op
+when something above is already recording. A screen keeps asking whatever it is
+used as, and the second ask does nothing.
+
+### Playlists is a tab; subscriptions is a row in Settings
+
+They swapped places. Both are lists somebody scans for one name; the difference
+is how often — a household opens its own collections many times a sitting, and
+opens the list of who it follows when it is looking for a channel, which is what
+a menu of answers is for. New uploads from those channels already have a fixed
+share of Home, so nothing about the feed changed by moving it.
+
+- **`onBack` is nullable on the playlists page.** A tab is not reached from
+  anywhere, so an arrow there leads nowhere — the setup screen's rule, and the
+  same flag decides the content padding, because a tab ends above the tab bar and
+  a page does not.
+- **Back from a playlist or the shelf returns to the tab**, not to a route that
+  no longer exists.
+- **The tab icon is stroked, not `PlaylistIcon`.** That one is filled, drawn for
+  a badge over a picture; a filled glyph beside two stroked ones is the icon
+  fault this app has already had three times.
+
+### The glass grew a size, a shape and a colour
+
+- **The sheet floats.** `GLASS_MARGIN` at the sides and `max(navigationBars, 16)`
+  under it, so it is inset like the three bars rather than welded to the bottom
+  edge — and its corners are rounded on all four.
+- **`PANEL_RADIUS` is 32dp and is the default** for anything that is not a
+  capsule: the sheet and the alert. It is **concentric** with an iPhone 16e's
+  47.33pt display corner across that 16dp margin — a radius of 47.33 inside a
+  16dp inset draws a corner fatter than the phone's, and the gap then pinches at
+  the corners and opens along the edges.
+  - `GlassRadius.menu` is the one exception at 28dp, because a menu is narrow and
+    the curve that reads as generous across a 390dp sheet arrives while the first
+    row's text is still there.
+- **The one call to action is the brand's red.** `GlassButton(primary = true)`
+  used to wear the inverted surface, which is what *selected* means everywhere
+  else in this app — so a button said "this is on" rather than "press this".
+- **`GlassPill` is the design system's pill**, moved out of `WatchActions` when
+  the playlist page needed the same one. Play all and Shuffle are two of them,
+  neither louder than the other: they are two equal ways into one list, and a
+  filled button on either would call the other a fallback.
+- **Shuffle is an ordering, not a mode.** `queue.shuffled()` is handed over *as
+  the queue*, so next and autoplay stay inside the shuffled order — a random
+  first video followed by the list in its own order is what "shuffle" means to
+  nobody. Nothing in the player changed.
+
+### A playlist row says it is a playlist before it is read
+
+The reference was YouTube's own card: a strip of the picture behind showing above
+the thumbnail, and a small dark badge in the corner. The badge is
+`BadgeBackground` — the same black 0.80 a video card's duration wears, because
+two badges over two thumbnails in one list must not be two materials.
+
+The saved shelf gets no strip: it is one set, not a stack of collections.
+
+### The detail pages had two headings between them
+
+`DetailScaffold` drew the title *beside* the arrow while Saved, History, a
+channel and the search results all put a `ScreenTitle` at the head of their list
+under a floating `DetailBack`. Two screens out of five in the settings menu
+therefore looked like a different app. The scaffold now does what the other four
+do, and `DetailTopRow` is gone.

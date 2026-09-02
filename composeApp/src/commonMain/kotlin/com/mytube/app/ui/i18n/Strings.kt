@@ -176,7 +176,6 @@ interface Strings {
     // --- playlists ---------------------------------------------------------
     /** The Settings row, and the title of the screen behind it. */
     val playlists: String
-    val playlistsDetail: String
 
     /**
      * The menu item on a card, and the title of the sheet it opens.
@@ -200,6 +199,9 @@ interface Strings {
     val emptyPlaylist: String
     val emptyPlaylistDetail: String
     val playAll: String
+
+    /** Play the collection in a random order. */
+    val shufflePlay: String
     val cancel: String
 
     /** "videos", after a count, on a playlist card. */
@@ -212,12 +214,14 @@ interface Strings {
 
     // --- navigation --------------------------------------------------------
     val navHome: String
-    val navSubscriptions: String
     val navSettings: String
     val search: String
 
     // --- subscriptions -----------------------------------------------------
     val subscriptionsTitle: String
+
+    /** What the Settings row for subscriptions says under its name. */
+    val subscriptionsDetail: String
     /** Shown when this member follows nothing yet. */
     val noSubscriptions: String
     val noSubscriptionsDetail: String
@@ -384,7 +388,6 @@ object EnglishStrings : Strings {
     override val profileCurrent = "This device"
     override val savedTitle = "Saved"
     override val playlists = "Playlists"
-    override val playlistsDetail = "Your collections, on every device"
     override val saveToPlaylist = "Save to playlist"
     override val newPlaylist = "New playlist"
     override val playlistName = "Playlist name"
@@ -401,6 +404,7 @@ object EnglishStrings : Strings {
     override val emptyPlaylistDetail =
         "Videos saved to this playlist appear here, in the order they were added."
     override val playAll = "Play all"
+    override val shufflePlay = "Shuffle"
     override val cancel = "Cancel"
     override fun playlistCount(count: Int) = if (count == 1) "1 video" else "$count videos"
     override val noSaved = "Nothing saved yet"
@@ -414,11 +418,11 @@ object EnglishStrings : Strings {
         "These three divide what is left after continue watching, rewatch and new uploads."
 
     override val navHome = "Home"
-    override val navSubscriptions = "Subscriptions"
     override val navSettings = "Settings"
     override val search = "Search"
 
     override val subscriptionsTitle = "Subscriptions"
+    override val subscriptionsDetail = "The channels this household follows"
     override val noSubscriptions = "You do not follow any channels yet"
     override val noSubscriptionsDetail =
         "Channels you subscribe to on YouTube arrive here on the next account scan."
@@ -552,7 +556,6 @@ object VietnameseStrings : Strings {
     override val profileCurrent = "Thiết bị này"
     override val savedTitle = "Đã lưu"
     override val playlists = "Playlist"
-    override val playlistsDetail = "Bộ sưu tập của bạn, trên mọi thiết bị"
     override val saveToPlaylist = "Lưu vào playlist"
     override val newPlaylist = "Playlist mới"
     override val playlistName = "Tên playlist"
@@ -569,6 +572,7 @@ object VietnameseStrings : Strings {
     override val emptyPlaylistDetail =
         "Video lưu vào playlist này sẽ hiện ở đây, theo thứ tự đã thêm."
     override val playAll = "Phát tất cả"
+    override val shufflePlay = "Phát ngẫu nhiên"
     override val cancel = "Huỷ"
     // Vietnamese has no plural form, so one string covers both — the web app's
     // "3 ngàys trước" is what happens when a suffix travels between languages.
@@ -583,11 +587,11 @@ object VietnameseStrings : Strings {
         "Ba phần này chia nhau chỗ còn lại, sau xem tiếp, xem lại và video mới."
 
     override val navHome = "Trang chủ"
-    override val navSubscriptions = "Kênh đăng ký"
     override val navSettings = "Cài đặt"
     override val search = "Tìm kiếm"
 
     override val subscriptionsTitle = "Kênh đăng ký"
+    override val subscriptionsDetail = "Những kênh nhà này theo dõi"
     override val noSubscriptions = "Chưa theo dõi kênh nào"
     override val noSubscriptionsDetail =
         "Kênh bạn đăng ký trên YouTube sẽ về đây ở lần quét tài khoản kế tiếp."

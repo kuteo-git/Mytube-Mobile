@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 /**
- * The three tab icons, outlined.
+ * The tab icons, outlined.
  *
  * Outlines rather than filled shapes, matching the web app's Lucide set, and
  * written out rather than pulled from `material-icons-extended` — several
@@ -34,43 +34,30 @@ private fun stroke(name: String, body: PathBuilder.() -> Unit) =
 
 internal fun tabIcon(tab: Tab): ImageVector = when (tab) {
     Tab.Home -> HomeIcon
-    Tab.Subscriptions -> SubscriptionsIcon
+    Tab.Playlists -> PlaylistsTabIcon
     Tab.Settings -> SettingsIcon
+}
+
+/**
+ * Three lines and a play triangle, stroked like its neighbours.
+ *
+ * Not `PlaylistIcon` from `ui/playlist`: that one is filled, drawn for a badge
+ * over a picture, and a filled glyph beside two stroked ones is the third icon
+ * fault this app has had — the tab bar reads as one set or as none.
+ */
+private val PlaylistsTabIcon: ImageVector by lazy {
+    stroke("Playlists") {
+        moveTo(3f, 6f); lineTo(16f, 6f)
+        moveTo(3f, 11f); lineTo(16f, 11f)
+        moveTo(3f, 16f); lineTo(11f, 16f)
+        moveTo(15f, 14f); lineTo(21f, 17.5f); lineTo(15f, 21f); close()
+    }
 }
 
 private val HomeIcon: ImageVector by lazy {
     stroke("Home") {
         moveTo(3f, 10f); lineTo(12f, 3f); lineTo(21f, 10f)
         lineTo(21f, 20f); lineTo(3f, 20f); close()
-    }
-}
-
-/**
- * Two people, not a stack of cards.
- *
- * The stack was a guess at "a list of things" and it is the icon for a playlist
- * or a library. Compared against the web app on a phone, that tab is **people** —
- * which is what a subscription is, and what makes it read differently from
- * History beside it.
- */
-private val SubscriptionsIcon: ImageVector by lazy {
-    stroke("Subscriptions") {
-        // The person in front.
-        moveTo(9.5f, 11.5f)
-        curveTo(11.2f, 11.5f, 12.5f, 10.2f, 12.5f, 8.5f)
-        curveTo(12.5f, 6.8f, 11.2f, 5.5f, 9.5f, 5.5f)
-        curveTo(7.8f, 5.5f, 6.5f, 6.8f, 6.5f, 8.5f)
-        curveTo(6.5f, 10.2f, 7.8f, 11.5f, 9.5f, 11.5f)
-        close()
-        moveTo(2.5f, 19f)
-        curveTo(2.5f, 15.7f, 5.6f, 13.5f, 9.5f, 13.5f)
-        curveTo(13.4f, 13.5f, 16.5f, 15.7f, 16.5f, 19f)
-        // The one behind, drawn only where it shows past the first.
-        moveTo(16f, 5.9f)
-        curveTo(17.5f, 6.3f, 18.5f, 7.6f, 18.5f, 9f)
-        curveTo(18.5f, 10.4f, 17.6f, 11.6f, 16.3f, 12.1f)
-        moveTo(18.2f, 14.3f)
-        curveTo(20.2f, 15f, 21.5f, 16.6f, 21.5f, 19f)
     }
 }
 

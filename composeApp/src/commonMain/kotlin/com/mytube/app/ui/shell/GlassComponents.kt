@@ -1,6 +1,14 @@
 package com.mytube.app.ui.shell
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.mytube.app.ui.home.Space
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -79,22 +87,57 @@ object GlassRadius {
     val control: CornerBasedShape = RoundedCornerShape(percent = 50)
 
     /**
-     * A panel with content in rows — a menu, a card of settings.
+     * A panel somebody stops at and answers — an alert, a card of settings.
      *
-     * Round enough to belong beside the capsules, square enough that a list of
-     * rows inside it does not have its first and last item clipped by the curve.
+     * [PANEL_RADIUS], the same as [sheet]: the two are one idea at two sizes,
+     * and two radii for one idea is a seam a reader notices without being able
+     * to name it — the lesson `TINT_GLASS` cost when the miniplayer and the tab
+     * bar carried two tints.
      */
-    val panel: CornerBasedShape = RoundedCornerShape(20.dp)
+    val panel: CornerBasedShape = RoundedCornerShape(PANEL_RADIUS)
 
     /**
-     * A sheet's top corners.
+     * A dropdown menu, and the one shape that is **not** [PANEL_RADIUS].
      *
-     * Larger than [panel] because a sheet is the width of the screen: the same
-     * radius that reads as generous on a 200dp menu reads as almost square on a
-     * 390dp sheet.
+     * Four dp short of it, because a menu is narrow: the curve that reads as
+     * generous across a 390dp sheet arrives while the first row's text is still
+     * there on a 200dp menu. A difference in width, not a second opinion about
+     * the shape — and the only exception, written here so the next panel does
+     * not copy it.
      */
-    val sheet: CornerBasedShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    val menu: CornerBasedShape = RoundedCornerShape(28.dp)
+
+    /**
+     * A sheet's corners — all four of them.
+     *
+     * All four because the sheet floats inset from the edges rather than
+     * sitting flush against them, like every other pane of glass in this app.
+     * A shape rounded only at the top is what a sheet welded to the bottom of
+     * the screen needs; this one has a margin under it, and square corners
+     * against that margin read as the sheet having been cut off.
+     *
+     * **Concentric with the screen's own corner.** An iPhone 16e's display
+     * radius is 47.33pt and the sheet is inset by [GLASS_MARGIN]; a rounded
+     * rectangle inside another follows its curve only when the inner radius is
+     * the outer one *minus* the gap, so 47.33 − 16 ≈ 32. Using 47.33 directly
+     * would draw a corner fatter than the phone's, which reads as a mismatch
+     * rather than as a match — the gap between the two curves would pinch at
+     * the corners and open out along the edges.
+     *
+     * Larger than [panel] for the same reason it is not 47: a sheet is nearly
+     * the width of the screen, and the radius that reads as generous on a 200dp
+     * menu reads as almost square on a 390dp sheet.
+     */
+    val sheet: CornerBasedShape = RoundedCornerShape(PANEL_RADIUS)
 }
+
+/**
+ * The one radius everything square-ish in this app is drawn with.
+ *
+ * Concentric with an iPhone 16e's 47.33pt display corner across the 16dp margin
+ * a floating pane keeps — see [GlassRadius.sheet].
+ */
+val PANEL_RADIUS = 32.dp
 
 /**
  * A slider made of the same glass as everything else.
@@ -376,10 +419,26 @@ fun GlassButton(
     enabled: Boolean = true,
     loading: Boolean = false,
 ) {
+    // The one call to action on a screen is the brand's red, not a pane of
+    // glass and not the inverted surface it used to be.
+    //
+    // The inverted surface is what *selected* means everywhere else in this app
+    // — a chip, a tick row, the Save pill — so a button wearing it said "this
+    // is on" rather than "press this". Red says the second thing and says it in
+    // the colour the web app and YouTube both use for it. Everything that is
+    // not the call to action stays glass, which is what makes one of them the
+    // call to action.
+    val filled = primary && enabled
     Box(
         modifier
             .height(BUTTON_HEIGHT)
-            .glassControl(GlassRadius.control, selected = primary && enabled)
+            .then(
+                if (filled) {
+                    Modifier.clip(GlassRadius.control).background(Tokens.brand)
+                } else {
+                    Modifier.glassControl(GlassRadius.control)
+                },
+            )
             // Inside the pane, so a button sized by its label is a capsule
             // rather than a circle with the word hanging out of both ends.
             // Measured: "Play all" on a playlist page, before this line.
@@ -401,18 +460,61 @@ fun GlassButton(
     ) {
         if (loading) {
             CircularProgressIndicator(
-                color = if (primary) Tokens.invertText else Tokens.text,
+                color = Tokens.text,
                 strokeWidth = 2.dp,
                 modifier = Modifier.size(18.dp),
             )
         } else {
             Text(
                 text = label,
-                color = if (primary && enabled) Tokens.invertText else Tokens.text,
+                color = Tokens.text,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
             )
         }
+    }
+}
+
+/**
+ * A pill with a mark on it — the shape the watch page's actions are.
+ *
+ * Here rather than beside those actions because the playlist page needed the
+ * same one, and a second copy is how two rows of controls in one app come to
+ * disagree about their padding. `WatchActions` draws its row through this.
+ *
+ * **Selected is a change of kind, and the content follows it.** `glassControl`
+ * swaps to the app's inverted surface — solid and light — so white ink on it
+ * disappears: the Save pill in its saved state was a blank white capsule with
+ * an invisible bookmark on it, which is how it was reported.
+ */
+@Composable
+fun GlassPill(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    /** Vertically mirrored, for a thumb pointing the other way. */
+    flipped: Boolean = false,
+) {
+    val ink = if (selected) Tokens.invertText else Tokens.text
+    Row(
+        modifier
+            .glassControl(GlassRadius.control, selected = selected)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = ink,
+            modifier = Modifier
+                .size(20.dp)
+                .scale(scaleX = 1f, scaleY = if (flipped) -1f else 1f),
+        )
+        Spacer(Modifier.width(Space.sm))
+        Text(label, color = ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
 

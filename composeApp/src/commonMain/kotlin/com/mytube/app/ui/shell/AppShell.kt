@@ -60,7 +60,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
  * them takes a tab's width, and a fourth tab in what was left truncated every
  * label.
  */
-enum class Tab { Home, Subscriptions, Settings }
+enum class Tab { Home, Playlists, Settings }
 
 @Composable
 fun AppShell(
@@ -125,7 +125,13 @@ fun AppShell(
         LocalTopBarHeight provides topBarHeight,
     ) {
         Box(Modifier.fillMaxSize().background(Tokens.bg)) {
-            Box(Modifier.fillMaxSize().then(source)) { content() }
+            // The recording, and the flag that stops a tab opening a second
+            // one inside it — see [glassSource], which crashed here.
+            Box(Modifier.fillMaxSize().then(source)) {
+                CompositionLocalProvider(LocalGlassRecording provides (backdrop != null)) {
+                    content()
+                }
+            }
 
             // The top bar floats over the scrolling content rather than pushing
             // it down. That is the web app's arrangement and it is written down
@@ -161,7 +167,7 @@ fun AppShell(
                 strings = { tab ->
                     when (tab) {
                         Tab.Home -> strings.navHome
-                        Tab.Subscriptions -> strings.navSubscriptions
+                        Tab.Playlists -> strings.playlists
                         Tab.Settings -> strings.navSettings
                     }
                 },

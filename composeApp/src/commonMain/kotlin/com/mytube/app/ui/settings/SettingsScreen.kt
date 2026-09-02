@@ -92,7 +92,7 @@ fun SettingsScreen(
     onOpenServer: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenHistory: () -> Unit,
-    onOpenPlaylists: () -> Unit,
+    onOpenSubscriptions: () -> Unit,
     onOpenVoice: () -> Unit,
     onOpenLanguage: () -> Unit,
     onPickLanguage: (Language) -> Unit,
@@ -156,14 +156,20 @@ fun SettingsScreen(
                 )
             }
 
-            // One row, not two. The saved shelf did not disappear — it is the
-            // first row *on* the playlists page, which is where it belongs once
-            // there is more than one collection to keep things in.
-            item(key = "playlists") {
+            // Subscriptions, which used to be a tab and is a row here.
+            //
+            // It is a list somebody scans for one channel, and the reason it
+            // came off the tab bar is how *often*: collections are opened many
+            // times a sitting and the list of who this household follows is
+            // opened when somebody is looking for a channel — which is what a
+            // menu of answers is for. New uploads from those channels already
+            // have their own fixed share of Home, so nothing about the feed
+            // changed by moving this.
+            item(key = "subscriptions") {
                 SettingRow(
-                    label = strings.playlists,
-                    value = strings.playlistsDetail,
-                    onClick = onOpenPlaylists,
+                    label = strings.subscriptionsTitle,
+                    value = strings.subscriptionsDetail,
+                    onClick = onOpenSubscriptions,
                 )
             }
 
@@ -277,7 +283,7 @@ private fun SettingsPreview() {
             onOpenHistory = {},
             onOpenVoice = {},
             onOpenLanguage = {},
-            onOpenPlaylists = {},
+            onOpenSubscriptions = {},
             onPickLanguage = {},
             onChangeMix = {},
         )
@@ -298,7 +304,7 @@ private fun SettingsUnconfiguredPreview() {
             onOpenHistory = {},
             onOpenVoice = {},
             onOpenLanguage = {},
-            onOpenPlaylists = {},
+            onOpenSubscriptions = {},
             onPickLanguage = {},
             onChangeMix = {},
         )
@@ -319,7 +325,7 @@ private fun SettingsVietnamesePreview() {
             onOpenHistory = {},
                 onOpenVoice = {},
                 onOpenLanguage = {},
-                onOpenPlaylists = {},
+                onOpenSubscriptions = {},
                 onPickLanguage = {},
                 onChangeMix = {},
             )

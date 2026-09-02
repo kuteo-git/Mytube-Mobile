@@ -56,3 +56,25 @@ val PlayIcon: ImageVector by lazy {
         moveTo(7f, 4f); lineTo(20f, 12f); lineTo(7f, 20f); close()
     }
 }
+
+/**
+ * Two crossing arrows — the mark every player uses for a shuffled order.
+ *
+ * Drawn as strokes rather than a filled outline: at 20dp a filled pair of
+ * arrows closes up into a blob, and the whole of what this glyph says is that
+ * two paths cross.
+ */
+val ShuffleIcon: ImageVector by lazy {
+    icon("Shuffle") {
+        // The two crossing bars.
+        moveTo(3f, 5.6f); lineTo(6.6f, 5.6f); lineTo(17.4f, 18.4f); lineTo(21f, 18.4f)
+        lineTo(21f, 16.4f); lineTo(18.3f, 16.4f); lineTo(7.5f, 3.6f); lineTo(3f, 3.6f); close()
+        moveTo(3f, 20.4f); lineTo(7.5f, 20.4f); lineTo(11.2f, 16f); lineTo(9.9f, 14.5f)
+        lineTo(6.6f, 18.4f); lineTo(3f, 18.4f); close()
+        moveTo(14.1f, 7.5f); lineTo(15.4f, 9.0f); lineTo(18.3f, 5.6f); lineTo(21f, 5.6f)
+        lineTo(21f, 3.6f); lineTo(17.4f, 3.6f); close()
+        // The two arrowheads, top and bottom right.
+        moveTo(19.5f, 2f); lineTo(23f, 4.6f); lineTo(19.5f, 7.2f); close()
+        moveTo(19.5f, 14.8f); lineTo(23f, 17.4f); lineTo(19.5f, 20f); close()
+    }
+}
