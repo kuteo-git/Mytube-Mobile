@@ -1035,8 +1035,16 @@ leave that name true of half its members.
   somebody wants; `startNarration` does the work. Folded together, the remembered
   case would have had to flip a boolean it already knew the value of just to
   reach the code that starts the pass.
-- **A broadcast is never narrated on open.** The pass reads a caption file, and
-  one that is still being spoken has none.
+- **A broadcast is never narrated on open.** ~~The pass reads a caption file, and
+  one that is still being spoken has none.~~ **Wrong, and corrected on
+  2026-09-03** — measured against YouTube while three streams were on air:
+  Al Jazeera English carries an `en` automatic track, Sky News carries none, and
+  a 24/7 music stream would not give up its metadata at all. Some broadcasts do
+  have captions.
+
+  The behaviour is unchanged and the reason is different: **a broadcast has no
+  end**, which is what the pass is built on. See "A live broadcast has captions
+  and no end" below.
 
 ## "Watched" belongs on the Continue watching rail
 
@@ -2926,3 +2934,42 @@ environment. Measured after, against the library:
 
 **A version is part of the measurement.** Two days were nearly spent reading
 correct code because nobody asked what was actually running.
+
+## A live broadcast has captions and no end (2026-09-03)
+
+The note above said a broadcast has no caption file. Measured, that is false:
+YouTube publishes automatic captions for some live streams and not others, and
+what came back was the words being spoken.
+
+| stream | automatic captions, while live |
+|---|---|
+| Al Jazeera English `gCNeDWCI0vo` | **`en`, vtt** |
+| Sky News `YzWg-1a-uZA` | none |
+| a 24/7 music stream `jfKfPfyJRdk` | metadata refused outright |
+
+Pulling Al Jazeera's returned 85 KB of real speech — and it arrived as
+`frag 365/720` with four minutes to go, because it is not a file being
+downloaded. **It is a feed keeping pace with the broadcast**, a few seconds of
+speech per fragment.
+
+So the reason narration is refused for a broadcast is not that there is nothing
+to read. It is that **three things the pass is built on are missing**, and each
+would be missing even with a perfect transcript:
+
+- **No zero.** `X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:8478079648` — the
+  times count from when *this listener* started, not from when the broadcast
+  did. Every cue index, every resume position and every clip's `startSeconds` is
+  an offset from a beginning that a live stream does not have.
+- **No next cue, so no slot.** `slotFor` is the gap to the line that follows,
+  and that line has not been said yet. Without it there is no tempo to fit the
+  speech to, which is the whole mechanism that keeps a spoken line inside the
+  gap it belongs in.
+- **The text rewrites itself.** Live ASR re-emits the same passage with a
+  different transcription seconds later. Translating and speaking a line as it
+  first appears is paying twice for a sentence that was about to change.
+
+**Narrating a broadcast is therefore a second architecture, not a parameter on
+this one**: follow a cue feed, translate each line as it settles, speak it at a
+default tempo because there is no slot to fit, and accept running a few seconds
+behind the original — which is simultaneous interpreting, and is not what the
+pass does. Recorded as designed-against rather than forgotten.
