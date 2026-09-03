@@ -17,7 +17,14 @@ import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.AVFAudio.setActive
 import platform.AVFoundation.AVPlayer
+import platform.AVFoundation.AVMediaCharacteristicLegible
+import platform.AVFoundation.AVMediaSelectionGroup
+import platform.AVFoundation.AVMediaSelectionOption
 import platform.AVFoundation.AVPlayerItem
+import platform.AVFoundation.asset
+import platform.AVFoundation.extendedLanguageTag
+import platform.AVFoundation.mediaSelectionGroupForMediaCharacteristic
+import platform.AVFoundation.selectMediaOption
 import platform.AVFoundation.AVPlayerItemStatusFailed
 import platform.AVFoundation.status
 import platform.AVFoundation.error
@@ -157,15 +164,57 @@ class AvVideoPlayer : VideoPlayer {
     /**
      * The language wanted, kept for the screen to read.
      *
-     * AVPlayer cannot be handed a caption file that is not in the HLS manifest,
-     * and this server's manifest carries none — the captions are separate `.vtt`
-     * files on disk. So nothing is selected in the player: the watch screen
-     * fetches the file, parses it, and draws the words over the picture. The
-     * player says so through `rendersSubtitles`.
+     * AVPlayer cannot be handed a caption file that is not in the HLS manifest.
+     * For a recorded video this server's manifest carries none — the captions
+     * are separate `.vtt` files on disk — so the watch screen fetches the file,
+     * parses it, and draws the words itself.
+     *
+     * A broadcast is the other way round: its captions arrive *inside* the
+     * manifest, as a playlist the gateway names in the master it writes. There
+     * is no file to fetch and nothing for the screen to draw, and AVPlayer
+     * renders them once the track is selected.
+     *
+     * So this is asked of the item rather than declared for the platform: the
+     * player renders subtitles exactly when it has a track to render.
      */
-    override val rendersSubtitles: Boolean = false
+    override val rendersSubtitles: Boolean
+        get() = legibleGroup() != null
 
-    override fun showSubtitles(language: String) = Unit
+    /**
+     * The item's caption tracks, or null when it has none.
+     *
+     * `AVMediaCharacteristicLegible` is the characteristic HLS subtitle
+     * renditions are grouped under. A recorded video from this server has no
+     * such group at all, which is what makes [rendersSubtitles] answer
+     * correctly without being told what kind of video is playing.
+     */
+    private fun legibleGroup(): AVMediaSelectionGroup? {
+        val group = av.currentItem?.asset
+            ?.mediaSelectionGroupForMediaCharacteristic(AVMediaCharacteristicLegible)
+            ?: return null
+        return if (group.options.isEmpty()) null else group
+    }
+
+    override fun showSubtitles(language: String) {
+        val item = av.currentItem ?: return
+        val group = legibleGroup() ?: return
+
+        if (language.isEmpty()) {
+            // Off is a selection of its own, not the absence of one: leaving the
+            // previous option in place would show captions nobody asked for.
+            item.selectMediaOption(null, group)
+            return
+        }
+
+        val option = group.options
+            .filterIsInstance<AVMediaSelectionOption>()
+            .firstOrNull { it.extendedLanguageTag == language }
+            ?: group.options
+                .filterIsInstance<AVMediaSelectionOption>()
+                .firstOrNull { it.extendedLanguageTag?.startsWith("$language-") == true }
+            ?: return
+        item.selectMediaOption(option, group)
+    }
 
     override fun play() = av.play()
 

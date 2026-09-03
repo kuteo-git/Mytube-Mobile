@@ -17,6 +17,7 @@ data class StreamDto(
     val live: SourceDto? = null,
     /** Only sent beside `live`, and only when the broadcast publishes captions. */
     val liveCaptions: Boolean = false,
+    val liveCaptionsLang: String = "",
     val upcoming: Boolean = false,
     val unavailable: Boolean = false,
     val reason: String? = null,
@@ -56,6 +57,7 @@ fun StreamDto.toDomain(baseUrl: String, maxHeight: Int): Stream = when {
         height = if (live.height > 0) live.height else maxHeight,
         isLive = true,
         hasLiveCaptions = liveCaptions,
+        liveCaptionsLanguage = liveCaptionsLang,
     )
     hls != null && hls.url.isNotBlank() -> Stream.Playable(
         url = baseUrl.trimEnd('/') + hls.url + capQuery(hls.url, maxHeight),

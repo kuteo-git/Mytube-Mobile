@@ -7,6 +7,7 @@ import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.Narration
+import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Stream
@@ -434,6 +435,9 @@ class WatchViewModel(
         val current = _state.value as? WatchState.Playing ?: return
         val track = current.video.subtitles.firstOrNull { it.language == language }
         if (language.isEmpty() || track == null) return
+        // A track with no file is one the player renders — a broadcast's, which
+        // lives in the manifest. There is nothing here to fetch.
+        if (track.url.isEmpty()) return
         viewModelScope.launch {
             val cues = runCatching {
                 videos.subtitleCues(mediaBaseUrl.trimEnd('/') + track.url)
@@ -829,7 +833,23 @@ class WatchViewModel(
                         player.setNarrationLevels(voiceLevel, duckLevel)
 
                         WatchState.Playing(
-                            video = video,
+                            // A broadcast's captions are inside the HLS
+                            // manifest rather than beside the video on disk, so
+                            // they never reach `video.subtitles` — and the CC
+                            // control is drawn from that list. The track is
+                            // added here, with no URL, because there is no file:
+                            // the player renders it, and `loadCues` skips a
+                            // track with nothing to fetch.
+                            video = if (stream is Stream.Playable && stream.hasLiveCaptions) {
+                                video.copy(subtitles = video.subtitles + SubtitleTrack(
+                                    language = stream.liveCaptionsLanguage,
+                                    label = stream.liveCaptionsLanguage.uppercase(),
+                                    url = "",
+                                    generated = true,
+                                ))
+                            } else {
+                                video
+                            },
                             playback = PlaybackState(),
                             isLive = stream.isLive,
                             hasLiveCaptions = stream.hasLiveCaptions,
