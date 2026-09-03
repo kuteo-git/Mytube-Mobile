@@ -85,6 +85,15 @@ fun BoxScope.PlayerSettingsPanel(
     bottomInset: Dp,
     subtitles: List<SubtitleTrack>,
     subtitleLanguage: String,
+    /**
+     * Whether narration can be offered for what is playing.
+     *
+     * False only for a broadcast that publishes no captions — there is nothing
+     * to read, and a switch that turns on and stays at nothing is the dead
+     * control §5 of the server charter refuses. The row is absent rather than
+     * disabled: a disabled switch invites a second press.
+     */
+    canNarrate: Boolean,
     narrating: Boolean,
     narration: Narration,
     autoplay: Boolean,
@@ -149,13 +158,15 @@ fun BoxScope.PlayerSettingsPanel(
                 Spacer(Modifier.height(Space.lg))
             }
 
-            SwitchRow(
-                label = strings.narration,
-                checked = narrating,
-                onToggle = onToggleNarration,
-            )
+            if (canNarrate) {
+                SwitchRow(
+                    label = strings.narration,
+                    checked = narrating,
+                    onToggle = onToggleNarration,
+                )
 
-            Spacer(Modifier.height(Space.md))
+                Spacer(Modifier.height(Space.md))
+            }
             SwitchRow(
                 label = strings.autoplay,
                 checked = autoplay,

@@ -589,6 +589,10 @@ fun WatchContent(
                 subtitles = state.video.subtitles,
                 subtitleLanguage = state.subtitleLanguage,
                 onSelectSubtitles = onSelectSubtitles,
+                // A recorded video always has captions to read, or a pass that
+                // finds none and says so. A broadcast is the only case where
+                // the answer is known in advance and is no.
+                canNarrate = !state.isLive || state.hasLiveCaptions,
                 narrating = state.narrating,
                 narration = state.narration,
                 autoplay = state.autoplay,

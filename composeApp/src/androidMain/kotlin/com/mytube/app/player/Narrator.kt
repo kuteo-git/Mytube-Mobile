@@ -2,7 +2,9 @@ package com.mytube.app.player
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.mytube.app.domain.player.NarrationHost
@@ -54,6 +56,24 @@ class AndroidNarrationHost(context: Context, private val video: Player) : Narrat
     override val videoIsPlaying: Boolean get() = video.isPlaying
 
     override val videoPositionSeconds: Double get() = video.currentPosition / 1000.0
+
+    /**
+     * The playhead on the wall clock, for a live stream that carries one.
+     *
+     * Media3 fills `windowStartTimeMs` from the HLS playlist's
+     * `EXT-X-PROGRAM-DATE-TIME`, and leaves it `TIME_UNSET` for anything
+     * without one — which is every recorded video, and is reported here as the
+     * `0` the port defines as "no clock".
+     */
+    override val videoEpochMillis: Long
+        get() {
+            val timeline = video.currentTimeline
+            if (timeline.isEmpty) return 0
+            val window = Timeline.Window()
+            timeline.getWindow(video.currentMediaItemIndex, window)
+            if (window.windowStartTimeMs == C.TIME_UNSET) return 0
+            return window.windowStartTimeMs + video.currentPosition
+        }
 
     override fun videoVolume(): Float = video.volume
 

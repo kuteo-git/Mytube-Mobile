@@ -2964,12 +2964,92 @@ would be missing even with a perfect transcript:
   and that line has not been said yet. Without it there is no tempo to fit the
   speech to, which is the whole mechanism that keeps a spoken line inside the
   gap it belongs in.
-- **The text rewrites itself.** Live ASR re-emits the same passage with a
-  different transcription seconds later. Translating and speaking a line as it
-  first appears is paying twice for a sentence that was about to change.
+- ~~**The text rewrites itself.**~~ **Wrong, and corrected the same day.** That
+  was measured on yt-dlp's *concatenated* output, which is the VOD auto-caption
+  format, not what a live segment contains. Read from the segments themselves,
+  consecutive ones do not revise each other: a cue that spans a boundary is
+  **split**, appearing at the end of one and again at the start of the next with
+  the same words — `"shows the aftermath of"` at 3→5s and then at 0→1s. So the
+  join is a de-duplication, and the real third obstacle is smaller than the one
+  written here: **the lines arrive as fragments**, not sentences, and
+  translating "shows the aftermath of" on its own is what machine translation
+  handles worst.
 
 **Narrating a broadcast is therefore a second architecture, not a parameter on
 this one**: follow a cue feed, translate each line as it settles, speak it at a
 default tempo because there is no slot to fit, and accept running a few seconds
 behind the original — which is simultaneous interpreting, and is not what the
 pass does. Recorded as designed-against rather than forgotten.
+
+
+## Narrating a broadcast (2026-09-03)
+
+Built after the entry above recorded why it could not be, and one of that
+entry's three reasons turned out to be measured from the wrong place. What
+stood was decisive enough on its own: a broadcast has no zero and no next cue.
+
+### The feed is a playlist, which is why this was possible at all
+
+The load-bearing measurement, and it arrived after the design questions had been
+settled — reversing one of the answers. YouTube's live caption "URL" is a
+**rolling HLS playlist**, the same shape `live.go` already proxies for video:
+
+```
+#EXT-X-TARGETDURATION:5
+#EXT-X-MEDIA-SEQUENCE:616251
+#EXT-X-PROGRAM-DATE-TIME:2026-09-03T11:55:35.032+00:00
+```
+
+- **`EXT-X-PROGRAM-DATE-TIME` is an absolute wall clock**, and the *video*
+  playlist carries one too. The gateway rewrites only address lines and passes
+  every `#` tag through, so it reaches the player untouched.
+- So the time base is two additions and no presentation timestamps:
+  `segment(sq) = PDT + (sq − MEDIA-SEQUENCE) × EXTINF`, and a cue's clock is its
+  segment's plus its own offset — cue times inside a segment run 0..5s relative
+  to it. Confirmed independently: consecutive segments' `X-TIMESTAMP-MAP` values
+  differ by **450000** ticks of a 90 kHz clock, exactly the five seconds the
+  playlist claims.
+- **The earlier design gave up on anchoring and was wrong to.** It had concluded
+  the feed carried no absolute time, having only seen `X-TIMESTAMP-MAP`, which
+  counts from when this listener started. Anchoring on the clock costs one small
+  platform call per side — `AVPlayerItem.currentDate()`, and ExoPlayer's
+  `windowStartTimeMs` plus the position — and avoids reaching into PTS, which
+  would have cracked the seam §3 exists to keep.
+
+### What the pass does differently
+
+`runLiveNarration` is beside `runNarration`, not inside it. Every step of the
+recorded pass is indexed against a caption file that exists in full.
+
+- **A clause waits for the clause after it.** The gap between their starts *is*
+  its slot, and without a slot there is no tempo — the whole mechanism that
+  keeps a spoken line inside its gap. One clause of latency, bought knowingly.
+- **A line further behind than 25 seconds is dropped, not queued.** Translation
+  and speech can fall behind a broadcast, and a queue that drains slower than it
+  fills never recovers. Same judgement as `tempoFor`'s `errTooFast`: one line
+  lost beats two spoiled.
+- **Clauses, not cues.** Live captions arrive as fragments, so `clauseBuilder`
+  and `firstClauseBoundary` are reused exactly as the recorded path uses them.
+- **The manifest gained a clock, not a second manifest.** `startsAtUnixMillis`
+  is set for a live clip and `startSeconds` for a recorded one, and
+  `narrationClip.order()` sorts by whichever is present — the sort matters
+  because `nextClipAfter` buffers the *first* clip after the playhead.
+- **`translateLines` and `spokenClip` were split out** of the recorded path so
+  both callers share one cache partition and one tempo rule rather than growing
+  a second copy that drifts.
+
+### Two decisions about cost
+
+- **The toggle is absent, not disabled, when a broadcast has no captions.** The
+  server answers `liveCaptions` on the stream response — it genuinely varies,
+  and a control that fails on press for half of live streams is the dead button
+  §5 of the server charter refuses. A disabled switch invites a second press.
+- **A remembered preference does not start a broadcast narrating.** A recorded
+  pass ends; this one does not, so a switch left on from yesterday would
+  translate and speak for as long as the stream stayed open.
+
+### Not measured
+
+The pass compiles, its arithmetic is tested against a playlist and two segments
+copied from a real broadcast, and **nothing has been heard**. The number most
+likely to be wrong is the staleness bound, and only listening will say so.

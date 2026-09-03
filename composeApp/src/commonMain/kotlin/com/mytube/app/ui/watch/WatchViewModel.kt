@@ -120,6 +120,14 @@ sealed interface WatchState {
         val narration: Narration = Narration.Empty,
         /** A broadcast on air: no length, no end, and nothing to resume. */
         val isLive: Boolean = false,
+        /**
+         * Whether narration can be offered for this broadcast.
+         *
+         * Only a broadcast has an answer here, and it is the server's: some
+         * streams publish captions and some do not. Recorded videos are handled
+         * by [canNarrate] below, which is what every screen reads.
+         */
+        val hasLiveCaptions: Boolean = false,
         val comments: List<Comment> = emptyList(),
         /** An import is running because the catalogue held none. */
         val loadingComments: Boolean = false,
@@ -824,6 +832,7 @@ class WatchViewModel(
                             video = video,
                             playback = PlaybackState(),
                             isLive = stream.isLive,
+                            hasLiveCaptions = stream.hasLiveCaptions,
                             subtitleLanguage = language,
                             autoplay = preferences.autoplay(),
                             voiceLevel = voiceLevel,
@@ -855,8 +864,15 @@ class WatchViewModel(
             // `loadCues` reads the current Playing state to find the track's
             // URL, and at that point there is not one yet.
             (_state.value as? WatchState.Playing)?.let { loadCues(it.subtitleLanguage) }
-            // A broadcast is never narrated: the pass reads a caption file, and
-            // one that is still being spoken has none.
+            // A remembered preference does not start a broadcast narrating,
+            // even one that could be.
+            //
+            // A recorded pass ends; a broadcast's does not, so leaving the
+            // switch on from yesterday would translate and speak for as long as
+            // the stream stayed open. That is a real cost to spend on somebody
+            // who has not asked for it *here* — so a broadcast is narrated only
+            // by pressing the switch, which is one press and says what it costs
+            // by being deliberate.
             if (preferences.narration() && _state.value.let {
                     it is WatchState.Playing && !it.isLive
                 }

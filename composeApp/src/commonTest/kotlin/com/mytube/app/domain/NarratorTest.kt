@@ -24,6 +24,9 @@ class NarratorTest {
     private class FakeHost : NarrationHost {
         override var videoIsPlaying = true
         override var videoPositionSeconds = 0.0
+
+        /** Zero unless a test is about a broadcast, which is what the port means by "no clock". */
+        override var videoEpochMillis = 0L
         var volume = 1f
         val spoken = mutableListOf<String>()
         var silenced = 0
@@ -236,6 +239,59 @@ class NarratorTest {
         advanceTimeBy(1_000)
 
         assertEquals(listOf("b.wav"), host.prepared)
+        narrator.release()
+    }
+
+    // ---- a broadcast, whose lines are placed by the clock ------------------
+
+    private fun liveClip(atMillis: Long, seconds: Double, url: String) =
+        NarrationClip(
+            startSeconds = 0.0,
+            durationSeconds = seconds,
+            clipUrl = url,
+            text = url,
+            startsAtEpochMillis = atMillis,
+        )
+
+    @Test
+    fun `a broadcast's lines are chosen by the wall clock, not the position`() = runTest {
+        val host = FakeHost()
+        val narrator = Narrator(host, TestScope(testScheduler))
+
+        // The position says nothing useful about a live stream: it counts from
+        // wherever this listener joined. Only the clock places these lines.
+        host.videoPositionSeconds = 0.0
+        host.videoEpochMillis = 1_700_000_010_000
+
+        narrator.setClips(
+            listOf(
+                liveClip(1_700_000_000_000, 5.0, "before.wav"),
+                liveClip(1_700_000_010_000, 5.0, "now.wav"),
+                liveClip(1_700_000_015_000, 5.0, "next.wav"),
+            ),
+        )
+        advanceTimeBy(400)
+
+        assertEquals(listOf("now.wav"), host.spoken)
+        assertEquals(listOf("next.wav"), host.prepared)
+        narrator.release()
+    }
+
+    @Test
+    fun `a broadcast falls silent between lines`() = runTest {
+        val host = FakeHost()
+        val narrator = Narrator(host, TestScope(testScheduler))
+
+        host.videoEpochMillis = 1_700_000_010_000
+        narrator.setClips(listOf(liveClip(1_700_000_010_000, 2.0, "a.wav")))
+        advanceTimeBy(400)
+        assertEquals(listOf("a.wav"), host.spoken)
+
+        // Past the end of its two seconds. A line whose time is up stops, the
+        // same as a recorded one.
+        host.videoEpochMillis = 1_700_000_013_000
+        advanceTimeBy(400)
+        assertTrue(host.silenced > 0)
         narrator.release()
     }
 }

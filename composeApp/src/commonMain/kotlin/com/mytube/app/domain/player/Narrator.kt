@@ -4,6 +4,8 @@ import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.clipAt
+import com.mytube.app.domain.model.clipAtEpoch
+import com.mytube.app.domain.model.nextClipAfterEpoch
 import com.mytube.app.domain.model.nextClipAfter
 import com.mytube.app.domain.model.levelsFor
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +29,16 @@ interface NarrationHost {
 
     /** Where the video has got to. */
     val videoPositionSeconds: Double
+
+    /**
+     * Where the video has got to on the wall clock, or `0` when it has none.
+     *
+     * Only a live stream carrying `EXT-X-PROGRAM-DATE-TIME` has one, which is
+     * how a broadcast's lines are placed: they have no zero to be an offset
+     * from. `AVPlayerItem.currentDate()` answers this on iOS; on Android it is
+     * the window's start plus the position.
+     */
+    val videoEpochMillis: Long
 
     /** The video's current level, read once when narration starts. */
     fun videoVolume(): Float
@@ -100,6 +112,16 @@ class Narrator(
 
     /** The address handed to [NarrationHost.prepare], so it is handed over once. */
     private var prepared: String = ""
+
+    /**
+     * Whether these lines are placed by the wall clock.
+     *
+     * Read from the clips themselves rather than passed in: the player already
+     * knows what it is playing, and a second flag saying the same thing is a
+     * second thing that can disagree. A list is all of one kind, so the first
+     * clip settles it.
+     */
+    private val live: Boolean get() = clips.firstOrNull()?.isLive == true
 
     /** The video's own level, remembered so the ducking can be undone exactly. */
     private var master: Float = 1f
@@ -182,7 +204,15 @@ class Narrator(
             return
         }
 
-        val due = clipAt(clips, host.videoPositionSeconds)
+        // A broadcast's lines are placed by the clock and a recording's by an
+        // offset, and one list is only ever one kind — the server writes one or
+        // the other, never both. Choosing here rather than inside the
+        // comparison keeps the two ideas of "now" apart.
+        val due = if (live) {
+            clipAtEpoch(clips, host.videoEpochMillis)
+        } else {
+            clipAt(clips, host.videoPositionSeconds)
+        }
         if (due == null) {
             if (speaking != null) hush()
             return
@@ -207,7 +237,11 @@ class Narrator(
      * thing this class exists to keep in one place.
      */
     private fun readyNext() {
-        val next = nextClipAfter(clips, host.videoPositionSeconds) ?: return
+        val next = if (live) {
+            nextClipAfterEpoch(clips, host.videoEpochMillis)
+        } else {
+            nextClipAfter(clips, host.videoPositionSeconds)
+        } ?: return
         if (next.clipUrl == prepared) return
         prepared = next.clipUrl
         host.prepare(next.clipUrl)
