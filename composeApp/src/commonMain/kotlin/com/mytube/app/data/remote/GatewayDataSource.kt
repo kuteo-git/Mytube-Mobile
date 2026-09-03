@@ -305,6 +305,13 @@ class GatewayDataSource(private val client: HttpClient) {
         }.orThrow()
     }
 
+    /** Cancel a running pass. Answers 204 whether or not one was running. */
+    suspend fun stopNarration(baseUrl: String, userId: String, videoId: String) {
+        client.delete("${baseUrl.trimEnd('/')}/api/videos/$videoId/narration") {
+            identify(userId)
+        }.orThrow()
+    }
+
     suspend fun narration(baseUrl: String, userId: String, videoId: String): NarrationDto =
         client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/narration") {
             identify(userId)

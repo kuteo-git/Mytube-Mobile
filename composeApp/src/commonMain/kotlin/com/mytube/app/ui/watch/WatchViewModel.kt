@@ -21,6 +21,7 @@ import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
 import com.mytube.app.domain.repository.VideoRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -640,7 +641,35 @@ class WatchViewModel(
      */
     fun stop() {
         report(force = true)
+        stopNarrationPass()
         player.stop()
+    }
+
+    /**
+     * Tell the server to stop translating and speaking this video.
+     *
+     * Only from [stop], which is the close button. Switching narration off does
+     * not do this — the pass is writing lines to disk that the next viewing
+     * would otherwise pay for again — and neither does shrinking to the
+     * miniplayer, which is still watching. Closing is the one act that means
+     * "done with this video", and it is the line the player already draws
+     * between `stop` and `release`.
+     *
+     * `NonCancellable`, because this is sent at the exact moment the screen
+     * goes away. `viewModelScope` survives that today only because this
+     * ViewModel is held in a `remember` and nothing calls `clear()` on it —
+     * which is a fact about the *caller* and the wrong thing for a request to
+     * depend on. Without it, the day this moves into a ViewModelStore the
+     * server carries on spending and nothing says why.
+     */
+    private fun stopNarrationPass() {
+        val current = _state.value as? WatchState.Playing ?: return
+        if (!current.narrating) return
+        narrationPoll?.cancel()
+        narrationPoll = null
+        viewModelScope.launch(NonCancellable) {
+            runCatching { narration.stop(current.video.id) }
+        }
     }
 
     /**

@@ -49,6 +49,9 @@ class NarrationRepositoryImpl(
     override suspend fun start(videoId: String, fromSeconds: Double) =
         gateway.startNarration(requireBase(), server.profileId(), videoId, fromSeconds)
 
+    override suspend fun stop(videoId: String) =
+        gateway.stopNarration(requireBase(), server.profileId(), videoId)
+
     override suspend fun state(videoId: String): Narration {
         val base = requireBase()
         return gateway.narration(base, server.profileId(), videoId).toDomain(base)

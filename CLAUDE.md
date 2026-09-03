@@ -2880,3 +2880,49 @@ it was the last two times: there was nothing here to call.
   The same shape as the lock screen's `IsLiveStream` one day earlier: a fact
   computed from another fact, where the source's edge value means something the
   derived one reads as an answer.
+
+## Closing a video stops the server spending on it (2026-09-03)
+
+`NarrationRepository` had `start` and `state` and no way to say stop, so
+pressing the close button ended the *polling* and left the gateway translating
+and speaking to the end of a video nobody was watching. On a three-hour film
+that is hours of model calls and speech for two minutes of viewing. The route
+to cancel had existed all along; nothing here called it.
+
+That was not a decision anybody made — it was the shape of a missing method —
+and the line it should follow was already drawn one layer down.
+
+- **Only the close button.** `stop()` on the player means the viewer is done;
+  `release()` means this screen is done and the sound carries on. Narration
+  takes the same split: switching the toggle off does not cancel, because the
+  pass is writing lines to disk that the next viewing would otherwise pay for
+  again, and shrinking to the miniplayer does not cancel, because that is still
+  watching.
+- **Nothing is lost.** Everything translated and spoken is on disk and skipped
+  by the next pass. What ends is the work still to come.
+- **`NonCancellable`, and the reason is a fact about the caller.** This request
+  is sent at the exact moment the screen goes away. `viewModelScope` survives
+  that *today* only because the watch ViewModel is held in a `remember` and
+  nothing calls `clear()` on it — which is the wrong thing for a request to
+  depend on. Without it, the day this moves into a `ViewModelStore` the server
+  carries on spending and nothing anywhere says why.
+
+### And the fault reported as "seek does not start narration" was a stale binary
+
+Measured before changing a line: the gateway answering on :8180 was built
+**2 Sep 15:37**, and `?from=` was committed **3 Sep 11:33**. The old binary read
+no such parameter, saw a pass already running, and returned it — so every seek
+did nothing, exactly as reported, with correct code on both sides.
+
+Rebuilt and swapped the gateway process alone, reusing the running one's
+environment. Measured after, against the library:
+
+| | |
+|---|---|
+| `?from=600` | first clip at **599.5s** |
+| 600 → 610 | no reorder; `done` carries on 123 → 139 |
+| → 1800 | reordered; nine clips around 1800 within 14s |
+| the manifest | still sorted, and the 136 clips already made were kept |
+
+**A version is part of the measurement.** Two days were nearly spent reading
+correct code because nobody asked what was actually running.

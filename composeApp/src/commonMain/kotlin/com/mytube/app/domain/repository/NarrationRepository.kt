@@ -28,5 +28,20 @@ interface NarrationRepository {
     suspend fun start(videoId: String, fromSeconds: Double)
 
     /** What is ready so far. */
+    /**
+     * Stop spending on this video now.
+     *
+     * Not "undo it": everything already translated and spoken is on disk, and
+     * the next pass picks it up. What ends is the work still to come.
+     *
+     * Called when a viewer closes the video, and deliberately **not** when they
+     * switch narration off or shrink it to the miniplayer. Switching off is a
+     * statement about this playing; the pass is writing lines the next viewing
+     * would otherwise pay for again. The miniplayer is still watching. Closing
+     * is the one act that means "I am done with this video", and it is the same
+     * line the player already draws between `stop` and `release`.
+     */
+    suspend fun stop(videoId: String)
+
     suspend fun state(videoId: String): Narration
 }
