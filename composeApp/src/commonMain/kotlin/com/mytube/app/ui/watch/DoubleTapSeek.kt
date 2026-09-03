@@ -40,11 +40,21 @@ import com.mytube.app.ui.theme.Tokens
 data class SeekRipple(
     /** Negative for backwards. Zero means nothing is showing. */
     val seconds: Int = 0,
+    /**
+     * Which half was tapped.
+     *
+     * Stored rather than read off the sign of [seconds], and that is not a
+     * detail: hiding sets the seconds to zero, and zero is not positive — so a
+     * derived side flipped to *left* for the whole of the fade-out, and a jump
+     * forward ended by darkening the wrong half of the picture. Reported from
+     * the phone exactly that way. The side outlives the number because it is
+     * still being drawn after the number has gone.
+     */
+    val forward: Boolean = true,
     /** Bumped on every double tap, so a repeat re-runs the animation. */
     val taps: Int = 0,
 ) {
     val visible: Boolean get() = seconds != 0
-    val forward: Boolean get() = seconds > 0
 }
 
 /**

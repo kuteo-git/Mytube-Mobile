@@ -2871,3 +2871,12 @@ it was the last two times: there was nothing here to call.
   next tap of the run.
 - **One arrow, mirrored.** Two vectors for a shape that must stay identical is
   two places for it to stop being.
+- **Which side was tapped is stored, not derived from the sign of the jump.**
+  Hiding the badge sets the seconds to zero, and zero is not positive — so a
+  derived side flipped to *left* for the whole of the fade-out, and a forward
+  jump ended by darkening the wrong half of the picture. The side has to outlive
+  the number because it is still being drawn after the number has gone.
+
+  The same shape as the lock screen's `IsLiveStream` one day earlier: a fact
+  computed from another fact, where the source's edge value means something the
+  derived one reads as an answer.

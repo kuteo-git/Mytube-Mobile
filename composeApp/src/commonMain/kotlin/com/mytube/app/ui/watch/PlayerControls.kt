@@ -217,7 +217,9 @@ fun PlayerControls(
     LaunchedEffect(ripple.taps) {
         if (!ripple.visible) return@LaunchedEffect
         kotlinx.coroutines.delay(RIPPLE_LINGER_MILLIS)
-        ripple = SeekRipple()
+        // The side is carried over, not defaulted: it is what the fade-out is
+        // still drawn on.
+        ripple = ripple.copy(seconds = 0)
     }
 
     Box(
@@ -250,7 +252,7 @@ fun PlayerControls(
                         } else {
                             0
                         }
-                        ripple = SeekRipple(running + step, ripple.taps + 1)
+                        ripple = SeekRipple(running + step, forward, ripple.taps + 1)
                         // Deliberately not touching `visible`. Double-tapping a
                         // bare picture on the reference jumps and leaves it
                         // bare; showing the controls here would put the transport
