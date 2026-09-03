@@ -3048,8 +3048,59 @@ recorded pass is indexed against a caption file that exists in full.
   pass ends; this one does not, so a switch left on from yesterday would
   translate and speak for as long as the stream stayed open.
 
-### Not measured
+### Measured, and it reversed the placement
 
-The pass compiles, its arithmetic is tested against a playlist and two segments
-copied from a real broadcast, and **nothing has been heard**. The number most
-likely to be wrong is the staleness bound, and only listening will say so.
+Run against Al Jazeera English on air, the pass produced Vietnamese from live
+English — and the two numbers beside the first lines settled a question the
+design had got wrong:
+
+| | |
+|---|---|
+| first line, behind the moment it was said | **33s** |
+| second | **44s** |
+
+That delay is not a fault to tune away; it is the sum of the design. A clause
+runs about eleven seconds, the clause *after* it must begin before there is a
+slot, then translation and speech. Thirty seconds is the floor.
+
+**And a viewer of a broadcast sits at the live edge, which is *now*.** A clip
+whose window closed twenty seconds ago never contains the playhead, so matching
+on the wall clock plays nothing at all — the placement was correct and
+unusable, right for the one viewer who has seeked back into the DVR window and
+wrong for everybody else.
+
+So a broadcast's lines are **said in turn as they arrive**. That is simultaneous
+interpreting, which is what narrating live speech has always been: the voice
+runs behind the picture and does not catch up. `startsAtEpochMillis` still
+decides the order and what is new; it no longer decides the moment, and
+`videoEpochMillis` was removed from the port rather than left as a reading
+nobody takes.
+
+- **The queue skips rather than trails.** A phone in a pocket for two minutes
+  comes back to a pile, and reading it in order puts the voice further behind
+  with every line. Anything more than 30s behind the newest line is passed over
+  — the same judgement the server makes when it drops one that arrived late.
+- **The countdown is in ticks, not on a clock.** The tick is the only time this
+  class has, and a wall clock inside it would be a second idea of "now" that
+  every test would have to fake separately.
+
+### Two faults the first run found
+
+- **A caption playlist is not a thirty-second window.** Measured: **2880
+  segments**, four hours of DVR. The first poll read all of it, produced 203
+  clauses, and then worked through them one at a time while the feed ran away.
+  A pass now places itself at the live edge and reads nothing from the first
+  playlist — the recorded pass's "start where the viewer is", arriving from the
+  other direction.
+- **A backlog must never block the poll.** Stale lines are dropped in one sweep
+  before any request is made, and at most one line is spoken per poll. Reaching
+  a stale line only after translating the ones in front of it is how a pass that
+  has fallen behind stays behind.
+
+### And the test that flattered the code
+
+`TestFeedJoinsACueSplitAcrossSegments` was written with a full stop in its
+sample text — one that does not exist. **YouTube's live ASR carries no
+punctuation at all**, so `firstClauseBoundary` never fires and every clause is
+closed by the word count instead. Inventing the data made the test pass on a
+path the real feed never takes.

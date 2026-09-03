@@ -4,8 +4,6 @@ import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.clipAt
-import com.mytube.app.domain.model.clipAtEpoch
-import com.mytube.app.domain.model.nextClipAfterEpoch
 import com.mytube.app.domain.model.nextClipAfter
 import com.mytube.app.domain.model.levelsFor
 import kotlinx.coroutines.CoroutineScope
@@ -29,16 +27,6 @@ interface NarrationHost {
 
     /** Where the video has got to. */
     val videoPositionSeconds: Double
-
-    /**
-     * Where the video has got to on the wall clock, or `0` when it has none.
-     *
-     * Only a live stream carrying `EXT-X-PROGRAM-DATE-TIME` has one, which is
-     * how a broadcast's lines are placed: they have no zero to be an offset
-     * from. `AVPlayerItem.currentDate()` answers this on iOS; on Android it is
-     * the window's start plus the position.
-     */
-    val videoEpochMillis: Long
 
     /** The video's current level, read once when narration starts. */
     fun videoVolume(): Float
@@ -114,7 +102,7 @@ class Narrator(
     private var prepared: String = ""
 
     /**
-     * Whether these lines are placed by the wall clock.
+     * Whether these lines came from a broadcast.
      *
      * Read from the clips themselves rather than passed in: the player already
      * knows what it is playing, and a second flag saying the same thing is a
@@ -122,6 +110,18 @@ class Narrator(
      * clip settles it.
      */
     private val live: Boolean get() = clips.firstOrNull()?.isLive == true
+
+    /** The moment of the last broadcast line begun, so the next one follows it. */
+    private var lastLiveStart = 0L
+
+    /**
+     * Milliseconds left of the line now speaking, counted down by the tick.
+     *
+     * A count rather than a clock: the tick is the only time this class has,
+     * and a wall clock here would be a second idea of "now" that a test would
+     * have to fake separately.
+     */
+    private var speakingLeft = 0L
 
     /** The video's own level, remembered so the ducking can be undone exactly. */
     private var master: Float = 1f
@@ -191,6 +191,8 @@ class Narrator(
         host.silence()
         speaking = null
         prepared = ""
+        lastLiveStart = 0
+        speakingLeft = 0
         // Back to where it was, not up to 1.0: raising it would undo the
         // viewer's own volume setting on the way out of narration.
         host.setVideoVolume(master)
@@ -201,18 +203,14 @@ class Narrator(
         // before a pause carries on talking over a still frame.
         if (!host.videoIsPlaying) {
             if (speaking != null) hush()
+            speakingLeft = 0
             return
         }
+        if (live) tickLive() else tickRecorded()
+    }
 
-        // A broadcast's lines are placed by the clock and a recording's by an
-        // offset, and one list is only ever one kind — the server writes one or
-        // the other, never both. Choosing here rather than inside the
-        // comparison keeps the two ideas of "now" apart.
-        val due = if (live) {
-            clipAtEpoch(clips, host.videoEpochMillis)
-        } else {
-            clipAt(clips, host.videoPositionSeconds)
-        }
+    private fun tickRecorded() {
+        val due = clipAt(clips, host.videoPositionSeconds)
         if (due == null) {
             if (speaking != null) hush()
             return
@@ -221,27 +219,85 @@ class Narrator(
             readyNext()
             return
         }
+        start(due)
+        readyNext()
+    }
 
+    /**
+     * A broadcast's lines are spoken in turn, as they arrive.
+     *
+     * **Not matched to the playhead**, and that reverses how this was first
+     * written. A line is placed on the wall clock correctly and is ready about
+     * thirty seconds after it was said — the clause has to end, the clause
+     * after it has to begin so there is a slot, then it is translated and
+     * spoken. A viewer of a broadcast sits at the live edge, which is *now*, so
+     * a window that closed twenty seconds ago never contains the playhead and
+     * nothing would ever play. Measured: the first two lines were 33 and 44
+     * seconds behind.
+     *
+     * So this is simultaneous interpreting, which is what narrating live speech
+     * has always been: the voice runs behind the picture and does not catch up.
+     * `startsAtEpochMillis` still decides the *order* and what is new; it no
+     * longer decides the moment.
+     */
+    private fun tickLive() {
+        if (speakingLeft > 0) {
+            speakingLeft -= TICK_MILLIS
+            if (speakingLeft > 0) return
+        }
+
+        val next = nextLive()
+        if (next == null) {
+            if (speaking != null) hush()
+            return
+        }
+        lastLiveStart = next.startsAtEpochMillis
+        speakingLeft = (next.durationSeconds * 1000).toLong()
+        start(next)
+
+        // One ahead, as the recorded path does, so the fetch is not paid for at
+        // the moment the line is due.
+        val after = nextLive()
+        if (after != null && after.clipUrl != prepared) {
+            prepared = after.clipUrl
+            host.prepare(after.clipUrl)
+        }
+    }
+
+    /**
+     * The next broadcast line to say, skipping anything the queue has fallen
+     * too far behind to be worth saying.
+     *
+     * The bound is against the *newest* line rather than a clock, for the same
+     * reason [speakingLeft] is a count: this class has no clock. A phone that
+     * was in a pocket for two minutes comes back to a pile, and reading it out
+     * in order would put the voice further behind with every line.
+     */
+    private fun nextLive(): NarrationClip? {
+        val newest = clips.lastOrNull()?.startsAtEpochMillis ?: return null
+        return clips.firstOrNull {
+            it.startsAtEpochMillis > lastLiveStart &&
+                newest - it.startsAtEpochMillis <= LIVE_BACKLOG_MILLIS
+        }
+    }
+
+    /** Duck the video and begin a line. */
+    private fun start(clip: NarrationClip) {
         val levels = levels()
         host.setVideoVolume(levels.video)
-        speaking = due
-        host.speak(due.clipUrl, levels.narration)
-        readyNext()
+        speaking = clip
+        host.speak(clip.clipUrl, levels.narration)
     }
 
     /**
      * Buffer the line after the one on screen.
      *
-     * One ahead, not several: the clips are seconds apart and a platform holding
-     * a queue of them is a platform deciding when they play, which is the one
-     * thing this class exists to keep in one place.
+     * One ahead, not several: the clips are seconds apart and a platform
+     * holding a queue of them is a platform deciding when they play, which is
+     * the one thing this class exists to keep in one place.
      */
     private fun readyNext() {
-        val next = if (live) {
-            nextClipAfterEpoch(clips, host.videoEpochMillis)
-        } else {
-            nextClipAfter(clips, host.videoPositionSeconds)
-        } ?: return
+        val next = nextClipAfter(clips, host.videoPositionSeconds) ?: return
         if (next.clipUrl == prepared) return
         prepared = next.clipUrl
         host.prepare(next.clipUrl)
@@ -267,5 +323,15 @@ class Narrator(
          * half, and it is four comparisons against a list, not four requests.
          */
         const val TICK_MILLIS = 100L
+
+        /**
+         * How far behind the newest line a broadcast's queue may run.
+         *
+         * Half a minute is about the delay the pass has anyway; twice that and
+         * the voice is describing a different story. Skipping to the newest
+         * costs the lines in between, which is the same judgement the server
+         * makes when it drops one that arrived too late.
+         */
+        const val LIVE_BACKLOG_MILLIS = 30_000L
     }
 }

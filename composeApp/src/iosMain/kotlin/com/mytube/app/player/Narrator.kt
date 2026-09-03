@@ -5,8 +5,6 @@ import kotlinx.cinterop.ExperimentalForeignApi
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
-import platform.AVFoundation.currentDate
-import platform.AVFoundation.currentItem
 import platform.AVFoundation.currentTime
 import platform.AVFoundation.pause
 import platform.AVFoundation.play
@@ -18,7 +16,6 @@ import platform.AVFoundation.seekToTime
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMake
 import platform.Foundation.NSURL
-import platform.Foundation.timeIntervalSince1970
 
 /**
  * AVFoundation behind [NarrationHost].
@@ -74,19 +71,6 @@ class IosNarrationHost(private val video: AVPlayer) : NarrationHost {
 
     override val videoPositionSeconds: Double
         get() = CMTimeGetSeconds(video.currentTime())
-
-    /**
-     * The playhead on the wall clock, for a live stream that carries one.
-     *
-     * `currentDate()` is AVFoundation's reading of `EXT-X-PROGRAM-DATE-TIME`,
-     * and it is null for anything without one — every recorded video — which
-     * is reported here as the `0` the port defines as "no clock".
-     */
-    override val videoEpochMillis: Long
-        get() {
-            val date = video.currentItem?.currentDate() ?: return 0
-            return (date.timeIntervalSince1970 * 1000).toLong()
-        }
 
     override fun videoVolume(): Float = video.volume
 

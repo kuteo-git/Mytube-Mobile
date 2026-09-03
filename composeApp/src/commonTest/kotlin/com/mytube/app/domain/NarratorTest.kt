@@ -24,9 +24,6 @@ class NarratorTest {
     private class FakeHost : NarrationHost {
         override var videoIsPlaying = true
         override var videoPositionSeconds = 0.0
-
-        /** Zero unless a test is about a broadcast, which is what the port means by "no clock". */
-        override var videoEpochMillis = 0L
         var volume = 1f
         val spoken = mutableListOf<String>()
         var silenced = 0
@@ -242,7 +239,7 @@ class NarratorTest {
         narrator.release()
     }
 
-    // ---- a broadcast, whose lines are placed by the clock ------------------
+    // ---- a broadcast, whose lines are said in turn as they arrive ---------
 
     private fun liveClip(atMillis: Long, seconds: Double, url: String) =
         NarrationClip(
@@ -254,44 +251,50 @@ class NarratorTest {
         )
 
     @Test
-    fun `a broadcast's lines are chosen by the wall clock, not the position`() = runTest {
+    fun `a broadcast's lines are said in turn, not matched to the playhead`() = runTest {
         val host = FakeHost()
         val narrator = Narrator(host, TestScope(testScheduler))
 
-        // The position says nothing useful about a live stream: it counts from
-        // wherever this listener joined. Only the clock places these lines.
+        // The position says nothing about where these belong: a broadcast has
+        // no zero, and by the time a line has been translated its moment on the
+        // clock is half a minute gone. Matching either number would play
+        // nothing at all.
         host.videoPositionSeconds = 0.0
-        host.videoEpochMillis = 1_700_000_010_000
-
         narrator.setClips(
             listOf(
-                liveClip(1_700_000_000_000, 5.0, "before.wav"),
-                liveClip(1_700_000_010_000, 5.0, "now.wav"),
-                liveClip(1_700_000_015_000, 5.0, "next.wav"),
+                liveClip(1_700_000_000_000, 2.0, "one.wav"),
+                liveClip(1_700_000_002_000, 2.0, "two.wav"),
             ),
         )
-        advanceTimeBy(400)
 
-        assertEquals(listOf("now.wav"), host.spoken)
-        assertEquals(listOf("next.wav"), host.prepared)
+        advanceTimeBy(150)
+        assertEquals(listOf("one.wav"), host.spoken)
+        // The next line is buffered while this one runs.
+        assertEquals(listOf("two.wav"), host.prepared)
+
+        // Two seconds is this line's own length, and the next follows it.
+        advanceTimeBy(2_100)
+        assertEquals(listOf("one.wav", "two.wav"), host.spoken)
         narrator.release()
     }
 
     @Test
-    fun `a broadcast falls silent between lines`() = runTest {
+    fun `a broadcast skips a backlog rather than falling further behind`() = runTest {
         val host = FakeHost()
         val narrator = Narrator(host, TestScope(testScheduler))
 
-        host.videoEpochMillis = 1_700_000_010_000
-        narrator.setClips(listOf(liveClip(1_700_000_010_000, 2.0, "a.wav")))
-        advanceTimeBy(400)
-        assertEquals(listOf("a.wav"), host.spoken)
+        // A phone in a pocket comes back to a pile. Reading it out in order
+        // would put the voice further behind with every line, so everything
+        // older than the bound is passed over.
+        narrator.setClips(
+            listOf(
+                liveClip(1_700_000_000_000, 2.0, "ancient.wav"),
+                liveClip(1_700_000_100_000, 2.0, "recent.wav"),
+            ),
+        )
+        advanceTimeBy(150)
 
-        // Past the end of its two seconds. A line whose time is up stops, the
-        // same as a recorded one.
-        host.videoEpochMillis = 1_700_000_013_000
-        advanceTimeBy(400)
-        assertTrue(host.silenced > 0)
+        assertEquals(listOf("recent.wav"), host.spoken)
         narrator.release()
     }
 }
