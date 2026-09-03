@@ -286,3 +286,16 @@ internal val SaveIcon: ImageVector by lazy {
         lineTo(6f, 21f); close()
     }
 }
+
+/**
+ * One filled triangle, for the double-tap ripple.
+ *
+ * Drawn pointing right and mirrored for the backward side rather than kept as
+ * two vectors: the pair must stay identical, and two copies of a shape are two
+ * places for it to stop being.
+ */
+internal val SeekArrowIcon: ImageVector by lazy {
+    filled("SeekArrow") {
+        moveTo(7f, 4f); lineTo(18f, 12f); lineTo(7f, 20f); close()
+    }
+}

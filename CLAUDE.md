@@ -2805,3 +2805,69 @@ position, where the two cannot disagree.
 - **A picture that lands late is only applied if it is still the right picture.**
   A viewer can press next while it is in flight, and without the check the lock
   screen shows the previous video under the new title.
+
+## A pass that begins where the viewer is (2026-09-03)
+
+Reported by comparing the two clients: on the web, seeking to 1:20 and turning
+narration on starts translating and speaking **at 1:20**; on mobile it always
+started at 0:00, so the first thing heard was the opening of a video the picture
+had long left behind. A pass takes minutes, and every one of those minutes was
+being spent on lines already gone past.
+
+The endpoint had no way to say otherwise — `runNarration` ran cue 0 to the end,
+full stop. So the work is in the server repository first, again, for the reason
+it was the last two times: there was nothing here to call.
+
+- **From the position to the end, then back for the beginning.** Not a filter,
+  and nothing is skipped: the earlier half is wanted by anybody who seeks
+  backwards or watches it again tomorrow, and by then it is already paid for.
+- **`start(videoId, fromSeconds)` has no default.** A caller that omits it is a
+  caller that has silently asked for the beginning, which is the exact fault
+  being fixed — the lesson `startAtBeginning` cost, applied before it could be
+  paid for a second time.
+- **A seek retargets a running pass, and the threshold lives on the server.**
+  The app asks again on every seek; the gateway answers a request for a place it
+  is already working from by doing nothing. Putting a "far enough" number on
+  both sides would be two rules that can disagree about what far means.
+  - Thirty seconds is what separates *skipping* from catching a line again. A
+    nudge of the bar must not reorder a pass.
+  - **The clips survive a retarget.** The client replaces its whole list from
+    every poll, so emptying `Clips` on the server would silence a narration that
+    is playing perfectly well. What resets is `Done`, which counts this run.
+  - **A cancelled run must not write over its replacement.** It is between two
+    cues when the cancel lands, and every registry write would otherwise report
+    the *new* pass as idle. A generation number on the pass is what each
+    goroutine checks before touching anything.
+  - **The manifest is kept sorted by start, one clip per cue.** A retargeted pass
+    walks the cues in a different order and some of them twice. `clipAt` scans
+    and does not care; `nextClipAfter` takes the *first* clip starting after the
+    playhead in order to buffer it, and on an unsorted list that buffers the
+    wrong file — which is the fault the buffering was added to fix.
+
+## Double tap to jump, and the tap it must not steal (2026-09-03)
+
+- **One `detectTapGestures` carrying both, not a `clickable` beside it.** Two
+  recognisers each see the first tap, so the controls would appear *and* the
+  video would jump. That is the same shape as the seek bar's rule — two
+  `pointerInput`s there because the gestures are genuinely different — and the
+  opposite conclusion, because here they are the same gesture read two ways.
+- **The cost is stated rather than hidden: showing the controls now waits ~300ms**,
+  the double-tap window, because until it expires nobody knows which gesture this
+  was. That is what the reference does too, and it is the price of the two never
+  firing together.
+- **A double tap does not touch the controls.** Double-tapping a bare picture
+  jumps and leaves it bare; showing the controls would put the transport discs
+  under a finger that is still tapping — and the third tap of a run is exactly
+  the one somebody is making when they mean to keep going.
+- **The badge accumulates, and only in one direction.** Four taps on the right is
+  one request for forty seconds; a badge flashing "10" four times leaves somebody
+  counting flashes. A tap on the other side is a new intention rather than twenty
+  seconds off this one.
+- **How long it shows and how long it may be added to are two durations.** The
+  fade is 260ms and the run stays open for 700, so a badge on its way out can
+  still be caught. Tying them together makes a total that cannot be reached.
+- **The ripple takes no pointer events.** It is drawn over the picture while a
+  finger is still on it, and anything there that consumed a touch would eat the
+  next tap of the run.
+- **One arrow, mirrored.** Two vectors for a shape that must stay identical is
+  two places for it to stop being.

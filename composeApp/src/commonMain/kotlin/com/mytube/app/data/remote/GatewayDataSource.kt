@@ -290,9 +290,18 @@ class GatewayDataSource(private val client: HttpClient) {
      * held open that long dies to a phone locking its screen, taking the pass
      * with it. Progress is read from [narration].
      */
-    suspend fun startNarration(baseUrl: String, userId: String, videoId: String) {
+    suspend fun startNarration(
+        baseUrl: String,
+        userId: String,
+        videoId: String,
+        fromSeconds: Double,
+    ) {
         client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/narration") {
             identify(userId)
+            // Whole seconds, as `wholeSeconds` does for progress: a position is
+            // a place in a video and the server rounds to a cue anyway, so
+            // sending sixteen decimal places says a precision nobody has.
+            parameter("from", wholeSeconds(fromSeconds))
         }.orThrow()
     }
 

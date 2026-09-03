@@ -128,7 +128,15 @@ fun BoxScope.SavePlaylistSheetContent(
     GlassSheet(
         visible = visible && !creating,
         backdrop = backdrop,
-        scrim = SHEET_SCRIM,
+        // No scrim, like the player's settings.
+        //
+        // The rule this used to follow — dim what the sheet has no
+        // relationship with — put two sheets of the same material over the
+        // same page behaving differently, and that difference is what was
+        // reported: pressing Save darkened everything while the gear beside it
+        // did not. Consistency between two panes a viewer meets one after the
+        // other beats the finer distinction between what each is about.
+        scrim = Color.Transparent,
         onDismiss = onDismiss,
         maxHeightFraction = SHEET_FRACTION,
     ) {
@@ -384,4 +392,3 @@ private val LIST_MAX_HEIGHT = 340.dp
  */
 private const val SHEET_FRACTION = 0.62f
 
-private val SHEET_SCRIM = Color.Black.copy(alpha = 0.5f)

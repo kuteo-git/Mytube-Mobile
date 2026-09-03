@@ -95,6 +95,8 @@ interface Strings {
     val play: String
     val pause: String
     val back: String
+    /** On the double-tap ripple. Takes the total, which grows as taps repeat. */
+    fun seconds(count: Int): String
     val skipBack: String
     val skipForward: String
     val like: String
@@ -331,6 +333,7 @@ object EnglishStrings : Strings {
     override val play = "Play"
     override val pause = "Pause"
     override val back = "Back"
+    override fun seconds(count: Int) = "$count seconds"
     override val skipBack = "Back 10 seconds"
     override val skipForward = "Forward 10 seconds"
     override val like = "Like"
@@ -506,6 +509,7 @@ object VietnameseStrings : Strings {
     override val play = "Phát"
     override val pause = "Tạm dừng"
     override val back = "Quay lại"
+    override fun seconds(count: Int) = "$count giây"
     override val skipBack = "Lùi 10 giây"
     override val skipForward = "Tới 10 giây"
     override val like = "Thích"

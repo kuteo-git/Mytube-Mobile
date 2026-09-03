@@ -356,7 +356,35 @@ class WatchViewModel(
         if (playing) player.pause() else player.play()
     }
 
-    fun seekTo(seconds: Double) = player.seekTo(seconds)
+    fun seekTo(seconds: Double) {
+        player.seekTo(seconds)
+        retargetNarration(seconds)
+    }
+
+    /**
+     * Tell a running pass where the viewer went.
+     *
+     * The server works from one end of the video to the other, and a seek makes
+     * that the wrong order: somebody who jumps to 20:00 is waiting for 20:00
+     * while the pass is still translating minute three. Asking again moves the
+     * front of the queue.
+     *
+     * **The threshold is the server's, not this one's.** It answers a request
+     * for a place it is already working from by doing nothing, so a nudge of the
+     * bar costs one call and no work — and putting the number here as well
+     * would be two rules that can disagree about what "far" means.
+     *
+     * Fire and forget: a failed retarget leaves a pass running in the order it
+     * had, which is the state this is an improvement on rather than a
+     * requirement for.
+     */
+    private fun retargetNarration(seconds: Double) {
+        val current = _state.value as? WatchState.Playing ?: return
+        if (!current.narrating) return
+        viewModelScope.launch {
+            runCatching { narration.start(current.video.id, seconds) }
+        }
+    }
 
     /**
      * Turn the Vietnamese voice on or off.
@@ -509,7 +537,16 @@ class WatchViewModel(
 
         narrationPoll?.cancel()
         narrationPoll = viewModelScope.launch {
-            runCatching { narration.start(current.video.id) }
+            // From where the playhead is, not from zero. A pass takes minutes,
+            // and somebody who turns narration on twenty minutes into a film is
+            // waiting for minute twenty — the server speaks from there to the
+            // end and then goes back for the beginning, so nothing is lost.
+            //
+            // Read here rather than passed in, because this is called from two
+            // places and one of them is a remembered preference firing as the
+            // video opens, where the position is whatever was resumed to.
+            val from = current.playback.positionSeconds
+            runCatching { narration.start(current.video.id, from) }
                 .onFailure { return@launch }
             while (true) {
                 val state = runCatching { narration.state(current.video.id) }.getOrNull()
@@ -543,6 +580,7 @@ class WatchViewModel(
         val target = (playback.positionSeconds + bySeconds)
             .coerceIn(0.0, maxOf(playback.durationSeconds - 1, 0.0))
         player.seekTo(target)
+        retargetNarration(target)
     }
 
     /**

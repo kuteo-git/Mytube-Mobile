@@ -207,17 +207,63 @@ fun PlayerControls(
         visible = false
     }
 
+    // The double-tap jump, and the badge that says what it did.
+    //
+    // `taps` accumulates so a run reads 10, 20, 30 rather than flashing "10"
+    // three times, and it is cleared by a coroutine rather than by the fade:
+    // how it looks and how long it may still be added to are two different
+    // durations, and tying them together makes a badge that cannot be caught.
+    var ripple by remember { mutableStateOf(SeekRipple()) }
+    LaunchedEffect(ripple.taps) {
+        if (!ripple.visible) return@LaunchedEffect
+        kotlinx.coroutines.delay(RIPPLE_LINGER_MILLIS)
+        ripple = SeekRipple()
+    }
+
     Box(
         modifier
             .fillMaxSize()
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-            ) {
-                visible = !visible
-                lastTouch++
+            // One `detectTapGestures` with both, not a clickable beside it.
+            //
+            // Two recognisers would each see the first tap and the toggle would
+            // fire *and* the jump — which is the fault this screen already paid
+            // for once on the seek bar, where a tap derived from a drag stopped
+            // working. Here it costs the opposite: the single tap waits for the
+            // double-tap window to expire before showing the controls, about
+            // 300ms. That delay is the price of the two gestures never
+            // disagreeing, and it is what the reference does too.
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        visible = !visible
+                        lastTouch++
+                    },
+                    onDoubleTap = { offset ->
+                        val forward = offset.x >= size.width / 2f
+                        val step = if (forward) SKIP_SECONDS.toInt() else -SKIP_SECONDS.toInt()
+                        onSkip(if (forward) SKIP_SECONDS else -SKIP_SECONDS)
+                        // Only added to while the run is going the same way. A
+                        // tap on the other side is a new intention, not
+                        // twenty seconds less of this one.
+                        val running = if (ripple.visible && ripple.forward == forward) {
+                            ripple.seconds
+                        } else {
+                            0
+                        }
+                        ripple = SeekRipple(running + step, ripple.taps + 1)
+                        // Deliberately not touching `visible`. Double-tapping a
+                        // bare picture on the reference jumps and leaves it
+                        // bare; showing the controls here would put the transport
+                        // discs under a finger that is still tapping.
+                        lastTouch++
+                    },
+                )
             },
     ) {
+        // Under the controls, over the picture. A finger doing this is often
+        // still on the screen, so it must take no pointer events of its own —
+        // see the note on `SeekRippleOverlay`.
+        SeekRippleOverlay(ripple, Modifier.matchParentSize())
         // Out of the way while scrubbing. YouTube does this and the reason is
         // plain on a phone: the transport discs sit in the middle of the frame,
         // which is the half of the picture somebody dragging the bar is trying
