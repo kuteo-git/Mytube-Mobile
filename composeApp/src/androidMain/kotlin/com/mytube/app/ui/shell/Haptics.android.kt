@@ -1,4 +1,4 @@
-package com.mytube.app.ui.watch
+package com.mytube.app.ui.shell
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.runtime.Composable
@@ -14,9 +14,25 @@ import androidx.compose.ui.platform.LocalView
  * check: a phone with feedback switched off gets silence from this call.
  */
 @Composable
-actual fun rememberSeekTick(): () -> Unit {
+actual fun rememberSelectionTick(): () -> Unit {
     val view = LocalView.current
     return remember(view) {
         { view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
+    }
+}
+
+/**
+ * `CONTEXT_CLICK`, the firmest of the constants that are still a single knock.
+ *
+ * Not `CONFIRM`: that one is Android's answer to a task completing — a
+ * fingerprint accepted, a payment taken — and a video sliding into a bar is not
+ * an outcome anybody was waiting on. Not `LONG_PRESS` either, which is a
+ * gesture being recognised rather than a thing arriving.
+ */
+@Composable
+actual fun rememberLandingKnock(): () -> Unit {
+    val view = LocalView.current
+    return remember(view) {
+        { view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK) }
     }
 }

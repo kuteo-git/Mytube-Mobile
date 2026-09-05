@@ -58,6 +58,7 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.i18n.LocalStrings
 import androidx.compose.runtime.CompositionLocalProvider
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.GlassItem
 import com.mytube.app.ui.shell.LocalGlassVisible
 import com.mytube.app.ui.shell.GlassPane
@@ -831,7 +832,7 @@ private fun SeekBar(
     // so the finger wins while it is down.
     val shown = if (dragging) scrub else progress
 
-    val tick = rememberSeekTick()
+    val tick = rememberSelectionTick()
     // The notch last reported, so one is felt per crossing rather than per frame.
     var lastNotch by remember { mutableStateOf(-1) }
 

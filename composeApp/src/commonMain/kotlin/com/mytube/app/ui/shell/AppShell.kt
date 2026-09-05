@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
@@ -273,6 +274,10 @@ private fun BottomBar(
 ) {
     val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val height = with(LocalDensity.current) { (navBar + Size.topBar).toPx() }
+    // One generator for the whole bar. Four controls that all mean "go
+    // somewhere" should feel identical, and four `remember`s would be four
+    // Taptic generators warming up for the same row.
+    val tick = rememberSelectionTick()
 
     Box(
         modifier
@@ -321,7 +326,14 @@ private fun BottomBar(
                             icon = tabIcon(tab),
                             label = strings(tab),
                             selected = tab == current,
-                            onClick = { onSelect(tab) },
+                            onClick = {
+                                // Pressing the tab already on scrolls it to the
+                                // top rather than moving anywhere, and a tick
+                                // for that would say the selection changed when
+                                // it did not. Same rule as the chip row.
+                                if (tab != current) tick()
+                                onSelect(tab)
+                            },
                         )
                     }
                 }
@@ -343,7 +355,7 @@ private fun BottomBar(
                     .clickable(
                         interactionSource = searchSource,
                         indication = null,
-                        onClick = onSearch,
+                        onClick = { tick(); onSearch() },
                     ),
                 contentAlignment = Alignment.Center,
             ) {
