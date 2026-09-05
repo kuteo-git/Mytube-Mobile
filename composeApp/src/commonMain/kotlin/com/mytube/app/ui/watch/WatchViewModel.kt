@@ -582,16 +582,16 @@ class WatchViewModel(
     }
 
     /**
-     * Move by a number of seconds, clamped to the video.
+     * Move by a number of seconds, clamped to whatever this video has.
      *
-     * The clamp is not decoration: seeking past the end on a media playlist
-     * leaves some players buffering toward a position that will never arrive,
-     * which looks exactly like a stream that has died.
+     * The arithmetic is `PlaybackState`'s, beside the bar's own `seekTarget`:
+     * a jump and a drag are the same question about where a position may land,
+     * and answering it twice is how a broadcast ended up with a jump that went
+     * to zero while the bar worked. @see PlaybackState.skipTarget
      */
     fun skip(bySeconds: Double) {
         val playback = (_state.value as? WatchState.Playing)?.playback ?: return
-        val target = (playback.positionSeconds + bySeconds)
-            .coerceIn(0.0, maxOf(playback.durationSeconds - 1, 0.0))
+        val target = playback.skipTarget(bySeconds)
         player.seekTo(target)
         retargetNarration(target)
     }

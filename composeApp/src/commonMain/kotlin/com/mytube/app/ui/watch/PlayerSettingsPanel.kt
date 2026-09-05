@@ -88,10 +88,11 @@ fun BoxScope.PlayerSettingsPanel(
     /**
      * Whether narration can be offered for what is playing.
      *
-     * False only for a broadcast that publishes no captions — there is nothing
-     * to read, and a switch that turns on and stays at nothing is the dead
-     * control §5 of the server charter refuses. The row is absent rather than
-     * disabled: a disabled switch invites a second press.
+     * A pass reads a caption track and speaks it, so the answer is no wherever
+     * there is no track to read: every broadcast, and any recorded video the
+     * library holds no captions for. A switch that turns on and stays at
+     * nothing is the dead control §5 of the server charter refuses. The row is
+     * absent rather than disabled: a disabled switch invites a second press.
      */
     canNarrate: Boolean,
     narrating: Boolean,

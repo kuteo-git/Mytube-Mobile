@@ -110,4 +110,52 @@ class LiveWindowTest {
         assertEquals(0.25f, state.progress)
         assertEquals(60.0, state.seekTarget(0.5))
     }
+    @Test
+    fun `a jump on a broadcast stays inside the window`() {
+        // The reported bug, and it is one line of arithmetic: a broadcast
+        // declares no duration, so clamping a jump to `duration - 1` clamps it
+        // to `max(-1, 0)` — zero. Every double tap, forward or back, landed an
+        // hour ago at the start of the rewind window.
+        val state = live(start = 0.0, end = 3600.0, position = 3000.0)
+
+        assertEquals(3010.0, state.skipTarget(10.0))
+        assertEquals(2990.0, state.skipTarget(-10.0))
+    }
+
+    @Test
+    fun `jumping forward past the edge lands at the edge, not at zero`() {
+        // What the viewer asked for in the same breath: skipping forward off
+        // the end of a broadcast should arrive at live, which is where the bar
+        // is full — the same target the LIVE pill uses, so the two agree.
+        val state = live(start = 0.0, end = 3600.0, position = 3598.0)
+
+        assertEquals(state.liveEdgeTarget, state.skipTarget(10.0))
+        // Not a progress of exactly 1: `liveEdgeTarget` sits half the edge
+        // tolerance inside the range on purpose, because AVPlayer ignores a
+        // seek to the very end of its own seekable range. What "the bar is
+        // full" means here is `atLiveEdge`, which is also what lights the LIVE
+        // pill — so arriving by a double tap and arriving by the pill leave the
+        // screen saying the same thing.
+        assertTrue(state.copy(positionSeconds = state.skipTarget(10.0)).atLiveEdge)
+    }
+
+    @Test
+    fun `jumping back past the start of the window stops at the start`() {
+        val state = live(start = 600.0, end = 1200.0, position = 605.0)
+
+        assertEquals(600.0, state.skipTarget(-10.0))
+    }
+
+    @Test
+    fun `a recorded video still clamps to its own length`() {
+        // Unchanged, and asserted so the live branch cannot quietly take it
+        // over: the clamp short of the end is what stops a player buffering
+        // toward a position that never arrives.
+        val state = PlaybackState(positionSeconds = 130.0, durationSeconds = 140.0)
+
+        assertEquals(139.0, state.skipTarget(10.0))
+        assertEquals(120.0, state.skipTarget(-10.0))
+        assertEquals(0.0, state.skipTarget(-500.0))
+    }
+
 }

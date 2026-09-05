@@ -249,6 +249,35 @@ data class PlaybackState(
 
     /** Where "go back to live" lands. @see seekTarget */
     val liveEdgeTarget: Double get() = liveEndSeconds - LIVE_EDGE_TOLERANCE / 2
+
+    /**
+     * Where a jump of `bySeconds` lands, in the player's own timebase.
+     *
+     * **A broadcast has no duration, and clamping to one sent every jump to
+     * zero.** The clamp used to be `coerceIn(0.0, max(durationSeconds - 1, 0))`
+     * — right for a file, and for a stream that reports `durationSeconds` 0 it
+     * is `coerceIn(0.0, 0.0)`, a constant. Measured on the iPhone 16e
+     * simulator: double-tapping either half of a live picture went to the start
+     * of the rewind window, an hour back, in both directions.
+     *
+     * So the bound is the window when there is one. Forward off the end lands
+     * on `liveEdgeTarget` rather than short of it, which is the same place the
+     * LIVE pill goes — one target for "as live as this player will accept",
+     * because two would eventually disagree.
+     *
+     * A recorded video keeps the clamp a second short of its end, and the
+     * reason is unchanged: seeking past the end on a media playlist leaves some
+     * players buffering toward a position that will never arrive, which looks
+     * exactly like a stream that has died.
+     */
+    fun skipTarget(bySeconds: Double): Double {
+        val target = positionSeconds + bySeconds
+        return if (hasLiveWindow) {
+            target.coerceIn(liveStartSeconds, liveEdgeTarget)
+        } else {
+            target.coerceIn(0.0, maxOf(durationSeconds - 1, 0.0))
+        }
+    }
 }
 
 /** @see PlaybackState.atLiveEdge */
