@@ -35,6 +35,7 @@ import com.mytube.app.ui.home.Space
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.unit.Dp
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.GlassSheet
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.mytube.app.ui.shell.glassControl
@@ -241,6 +242,8 @@ fun BoxScope.PlayerSettingsPanel(
  */
 @Composable
 private fun TrackChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    // A row of positions with one lit, exactly like the home chips.
+    val tick = rememberSelectionTick()
     Text(
         text = label,
         color = if (selected) Tokens.bg else Tokens.text,
@@ -250,7 +253,12 @@ private fun TrackChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .pressableGlassControl(
                 RoundedCornerShape(percent = 50),
                 selected = selected,
-                onClick = onClick,
+                onClick = {
+                    // The one already chosen changes nothing, so it says
+                    // nothing. Same rule as the chip row and the tab bar.
+                    if (!selected) tick()
+                    onClick()
+                },
             )
             .padding(horizontal = 14.dp, vertical = 7.dp),
     )
@@ -278,6 +286,9 @@ internal fun trackLabel(track: SubtitleTrack): String {
 
 @Composable
 private fun SwitchRow(label: String, checked: Boolean, onToggle: () -> Unit) {
+    // A switch always changes something — there is no "already on" press that
+    // means nothing — so unlike the chips this needs no guard.
+    val tick = rememberSelectionTick()
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -294,7 +305,7 @@ private fun SwitchRow(label: String, checked: Boolean, onToggle: () -> Unit) {
         // this one sits beside the two words a viewer reads most often.
         AdaptiveSwitch(
             checked = checked,
-            onCheckedChange = { onToggle() },
+            onCheckedChange = { tick(); onToggle() },
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = Tokens.brand,

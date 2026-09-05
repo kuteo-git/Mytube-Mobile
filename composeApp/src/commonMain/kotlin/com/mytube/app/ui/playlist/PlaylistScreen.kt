@@ -44,6 +44,7 @@ import com.mytube.app.ui.shell.GlassPill
 import com.mytube.app.ui.shell.GlassRadius
 import com.mytube.app.ui.shell.MenuAction
 import com.mytube.app.ui.shell.rememberMenuAnchor
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.GlassTextField
 import com.mytube.app.ui.shell.TabScaffold
 import com.mytube.app.ui.shell.detailContentPadding
@@ -295,6 +296,10 @@ private fun PlaylistMenu(onRename: () -> Unit, onDelete: () -> Unit) {
     // slice, and this anchor sits inside the recorded layer where sampling is a
     // segfault.
     val (anchor, show) = rememberMenuAnchor()
+    // The same tick a card's overflow gives. Two menus that open the same way
+    // must feel the same way, or the feedback becomes a fact about which screen
+    // you are on rather than about what you pressed.
+    val tick = rememberSelectionTick()
 
     Icon(
         imageVector = MoreVertical,
@@ -304,6 +309,7 @@ private fun PlaylistMenu(onRename: () -> Unit, onDelete: () -> Unit) {
             .size(Size.iconButton)
             .clip(CircleShape)
             .clickable {
+                tick()
                 show(
                     listOf(
                         MenuAction(strings.renamePlaylist, onRename),

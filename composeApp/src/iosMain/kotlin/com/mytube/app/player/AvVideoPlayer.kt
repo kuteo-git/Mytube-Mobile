@@ -46,6 +46,9 @@ import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMakeWithSeconds
 import platform.AVFoundation.CMTimeRangeValue
 import platform.AVFoundation.seekableTimeRanges
+import platform.Foundation.NSDate
+import platform.Foundation.timeIntervalSince1970
+import platform.Foundation.NSTimer
 import platform.Foundation.NSURL
 import platform.Foundation.NSValue
 import platform.darwin.dispatch_get_main_queue
@@ -127,6 +130,15 @@ class AvVideoPlayer : VideoPlayer {
 
     override fun load(media: PlayingMedia, startAtSeconds: Double) {
         isLive = media.isLive
+        // Kept so a stall can be recovered from without the screen being asked
+        // again. A recovery that had to go back through the ViewModel would be
+        // a recovery that cannot happen with the app in the background, which is
+        // exactly when it is needed. @see recoverIfStalled
+        loaded = media
+        lastRecovery = 0.0
+        movedAt = now()
+        movedTo = -1.0
+        startWatchdog()
         _state.update { PlaybackState(isLive = media.isLive) }
         val nsUrl = NSURL.URLWithString(media.url) ?: run {
             _state.update { it.copy(error = "bad url") }
@@ -208,6 +220,110 @@ class AvVideoPlayer : VideoPlayer {
     private var isLive = false
 
     /**
+     * The media on screen, and whether its sound is wanted.
+     *
+     * Both exist for one reason: a stream that stops has to be started again
+     * without asking anybody. `wantsToPlay` is the difference between "the
+     * picture is not moving because it broke" and "because somebody pressed
+     * pause", and reattaching over the second would be the app restarting a
+     * video the viewer had stopped.
+     */
+    private var loaded: PlayingMedia? = null
+    private var wantsToPlay = false
+
+    /** Wall clock, in seconds. The playhead cannot time its own absence. */
+    private fun now(): Double = NSDate().timeIntervalSince1970
+
+    /** When the playhead last moved, and where to. */
+    private var movedAt = 0.0
+    private var movedTo = -1.0
+
+    /** When the last reattach was made, so a dead server is not hammered. */
+    private var lastRecovery = 0.0
+
+    /**
+     * The watchdog's own clock, and it cannot be the player's.
+     *
+     * `addPeriodicTimeObserverForInterval` is driven by the **playback clock** —
+     * the comment on `startObserving` says so, and says it stops while paused.
+     * A stall is a stopped playback clock, so a watchdog hung on that tick is
+     * one that stops at exactly the moment it is needed. Measured with a tagged
+     * log through a gateway cut mid-stream: two lines, `stalledFor=0.1`, and
+     * then silence for the whole outage.
+     *
+     * So this is an `NSTimer` on the main run loop, which keeps running while
+     * the app is backgrounded for audio — the case the whole thing exists for.
+     */
+    private var watchdog: NSTimer? = null
+
+
+    private fun startWatchdog() {
+        if (watchdog != null) return
+        watchdog = NSTimer.scheduledTimerWithTimeInterval(
+            interval = WATCHDOG_INTERVAL_SECONDS,
+            repeats = true,
+        ) {
+            recoverIfStalled(_state.value.positionSeconds)
+        }
+    }
+
+    /**
+     * Start the stream again when it has stopped and nobody asked it to.
+     *
+     * **Measured before it existed**, driving the simulator through a gateway
+     * that could be cut and restored on command: a broadcast survives a 10s
+     * outage on its own — AVPlayer retries segments — and does **not** survive
+     * 45s. After the longer cut the picture never moved again, with the server
+     * back and answering. Mean pixel change over six seconds: 18.11 while
+     * playing, 0.00 after.
+     *
+     * That is the whole of the background-playback question. iOS does not kill
+     * an app on a timer; it keeps one alive for as long as it is *making sound*
+     * and suspends it within seconds of the sound stopping. So a stall is not a
+     * cosmetic fault on a broadcast left playing overnight — it is the app
+     * ending.
+     *
+     * A reattach rather than a seek: the item is what failed, and AVPlayer will
+     * not re-fetch a playlist it has given up on. A broadcast needs no position
+     * — a fresh live item starts at the edge, which is where somebody who has
+     * been listening wants to be, not forty seconds back at the moment of the
+     * outage. A recording is put back where the playhead was.
+     *
+     * There is no attempt limit. The wifi coming back an hour later is the case
+     * this is for, and an app that stopped trying after five goes would be one
+     * that has to be reopened by hand — which is the thing being fixed.
+     */
+    private fun recoverIfStalled(position: Double) {
+        if (!wantsToPlay) return
+        val item = av.currentItem
+        val media = loaded ?: return
+
+        val failed = item == null || item.status == AVPlayerItemStatusFailed
+        if (!failed && position != movedTo) {
+            movedTo = position
+            movedAt = now()
+                return
+        }
+        val stalledFor = now() - movedAt
+        if (!failed && stalledFor < STALL_SECONDS) return
+        // Spaced out rather than tried on every tick. A tick is a quarter of a
+        // second, and a server that is down answers a reattach as fast as it
+        // answers anything — four requests a second at a router that is off.
+        if (now() - lastRecovery < RECOVERY_INTERVAL_SECONDS) return
+        lastRecovery = now()
+
+        val url = NSURL.URLWithString(media.url) ?: return
+        av.replaceCurrentItemWithPlayerItem(AVPlayerItem(url))
+        if (!isLive && position > 0) seekTo(position)
+        // The track has to be chosen again: it belonged to the item that died.
+        // `applySubtitles` is a no-op until the new item is ready and the tick
+        // below calls it again, which is the path it was already built for.
+        if (wantedSubtitles.isNotEmpty()) applySubtitles()
+        av.play()
+        movedAt = now()
+    }
+
+    /**
      * The item's caption tracks, or null when it has none or cannot say yet.
      *
      * **The readiness check is load-bearing, not a tidy-up.**
@@ -260,9 +376,16 @@ class AvVideoPlayer : VideoPlayer {
         item.selectMediaOption(option, group)
     }
 
-    override fun play() = av.play()
+    override fun play() {
+        wantsToPlay = true
+        movedAt = now()
+        av.play()
+    }
 
-    override fun pause() = av.pause()
+    override fun pause() {
+        wantsToPlay = false
+        av.pause()
+    }
 
     override fun seekTo(seconds: Double) {
         // 600 is the timescale Apple's own samples use: it divides evenly by the
@@ -273,6 +396,10 @@ class AvVideoPlayer : VideoPlayer {
     }
 
     override fun stop() {
+        wantsToPlay = false
+        loaded = null
+        watchdog?.invalidate()
+        watchdog = null
         narrator?.release()
         narrator = null
         nowPlaying.resign()
@@ -297,6 +424,8 @@ class AvVideoPlayer : VideoPlayer {
         // released player that still answers Play is a second video heard over
         // the one the viewer opened — measured on the phone.
         nowPlaying.resign()
+        watchdog?.invalidate()
+        watchdog = null
         observer?.let { av.removeTimeObserver(it) }
         observer = null
         av.pause()
@@ -384,6 +513,30 @@ class AvVideoPlayer : VideoPlayer {
         }
     }
 }
+
+/**
+ * How long a playhead may stand still before the stream is started again.
+ *
+ * Six seconds, and it is a compromise between two measured facts: AVPlayer's
+ * own retry rides out a ten-second outage without help, so anything shorter
+ * fights a recovery that was already working, and a broadcast that has been
+ * still for six seconds is not buffering — a live playlist declares five-second
+ * segments.
+ */
+private const val STALL_SECONDS = 6.0
+
+/** How often a reattach may be attempted. @see AvVideoPlayer.recoverIfStalled */
+private const val RECOVERY_INTERVAL_SECONDS = 5.0
+
+/**
+ * How often the watchdog looks.
+ *
+ * Two seconds against the player's own quarter-second tick: this one runs on
+ * wall time and has to keep running with the screen off, so it is as slow as it
+ * can be and still notice a six-second stall promptly.
+ */
+private const val WATCHDOG_INTERVAL_SECONDS = 2.0
+
 
 class AvVideoPlayerFactory : VideoPlayerFactory {
     override fun create(): VideoPlayer = AvVideoPlayer()

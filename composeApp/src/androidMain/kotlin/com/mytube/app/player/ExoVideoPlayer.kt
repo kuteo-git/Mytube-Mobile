@@ -60,6 +60,16 @@ import kotlinx.coroutines.launch
  * ladder rather than one rendition.
  */
 @UnstableApi
+/**
+ * Media3's band for "the source could not be read".
+ *
+ * A range rather than a list of constants: the codes in it are documented as
+ * 2000..2999 and the set grows between versions, so naming five of them is a
+ * check that goes quietly out of date. @see PlaybackException
+ */
+private val IO_ERRORS =
+    PlaybackException.ERROR_CODE_IO_UNSPECIFIED..(PlaybackException.ERROR_CODE_IO_UNSPECIFIED + 999)
+
 class ExoVideoPlayer(private val context: Context) : VideoPlayer {
 
     private val _state = MutableStateFlow(PlaybackState())
@@ -129,6 +139,43 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
             // errorCodeName rather than the message: the message is often null,
             // and a blank error line reads as the app having lost interest.
             _state.update { it.copy(error = error.errorCodeName, isBuffering = false) }
+
+            // A network error is not the end of the video, and Media3 stops
+            // anyway: after an error the player is idle and stays idle until
+            // somebody prepares it again. On a broadcast left playing with the
+            // screen off, nobody is there to. iOS measures what that costs — a
+            // 45s outage killed playback for good, and iOS suspends an app
+            // within seconds of its sound stopping — so the same recovery
+            // belongs on both sides.
+            //
+            // `isRecoverable` is Media3's own judgement: a source that timed
+            // out is worth another go, a video this device cannot decode is
+            // not. Retrying the second forever would be a loop nothing breaks.
+            val code = error.errorCode
+            val controller = controller ?: return
+            when {
+                // The live case with a name of its own: the player fell so far
+                // behind that the position it holds is no longer inside the
+                // window the playlist still lists. Preparing alone would fail
+                // again at the same place; the default position *is* the live
+                // edge, which is where somebody who has been listening wants to
+                // be rather than back at the moment the wifi went.
+                code == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> {
+                    controller.seekToDefaultPosition()
+                    controller.prepare()
+                    controller.play()
+                }
+
+                // Everything Media3 numbers in the IO band — 2000..2999, which
+                // is the documented range for a source that could not be read:
+                // a connection refused, a timeout, an HTTP status. Worth
+                // another go, unlike a decoder that cannot play this file at
+                // all, which would be a loop nothing breaks.
+                code in IO_ERRORS || code == PlaybackException.ERROR_CODE_TIMEOUT -> {
+                    controller.prepare()
+                    controller.play()
+                }
+            }
         }
     }
 

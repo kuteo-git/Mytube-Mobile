@@ -167,8 +167,23 @@ fun GlassSlider(
         val width = maxWidth
         var widthPx by remember { mutableStateOf(1f) }
 
+        // A notch every twentieth of the travel.
+        //
+        // The seek bar ticks every hundredth, and that is right for a bar whose
+        // whole width is a film: a hundred notches there are seconds apart. A
+        // level slider carries a value somebody sets once and leaves, so the
+        // same density would be a continuous buzz under a thumb making one
+        // adjustment. Twenty is about a finger's width apart.
+        val tick = rememberSelectionTick()
+        var notch by remember { mutableStateOf(-1) }
+
         fun report(x: Float) {
             val f = (x / widthPx).coerceIn(0f, 1f)
+            val crossed = (f * SLIDER_NOTCHES).toInt()
+            if (crossed != notch) {
+                notch = crossed
+                tick()
+            }
             onValueChange(valueRange.start + f * span)
         }
 
@@ -396,6 +411,7 @@ fun GlassRefreshIndicator(
     }
 }
 
+private const val SLIDER_NOTCHES = 20
 private val SLIDER_TOUCH = 44.dp
 private val SLIDER_TRACK = 4.dp
 private val SLIDER_KNOB = 20.dp
