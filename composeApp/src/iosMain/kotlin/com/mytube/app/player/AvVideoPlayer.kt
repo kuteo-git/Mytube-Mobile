@@ -20,6 +20,7 @@ import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.AVFAudio.setActive
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVMediaCharacteristicLegible
+import platform.AVFoundation.AVMediaTypeSubtitle
 import platform.AVFoundation.AVMediaSelectionGroup
 import platform.AVFoundation.AVMediaSelectionOption
 import platform.AVFoundation.AVPlayerItem
@@ -346,7 +347,29 @@ class AvVideoPlayer : VideoPlayer {
         val group = item.asset
             .mediaSelectionGroupForMediaCharacteristic(AVMediaCharacteristicLegible)
             ?: return null
-        return if (group.options.isEmpty()) null else group
+        // Only real subtitle renditions count, and the filter is the whole of a
+        // bug rather than tidiness.
+        //
+        // A master playlist that does not say `CLOSED-CAPTIONS=NONE` leaves
+        // AVFoundation free to assume CEA-608 captions might be buried in the
+        // video, and it duly reports a legible group holding one option:
+        // `name=CC, type=clcp, tag=nil`. This server's recorded masters say no
+        // such thing, so **every** recorded video looked like a video whose
+        // captions the player draws — and the screen, believing that, never
+        // fetched the `.vtt` beside the file. Measured with the same probe
+        // against both masters: a broadcast answers `type=sbtl, tag=en`, a
+        // recording answers `type=clcp, tag=nil`.
+        //
+        // It hid behind the readiness check above. `legibleGroup` answers null
+        // until the item is ready, and on first open the CC button is pressed
+        // before that — so the fetch happened and the words appeared. Send the
+        // app to the background and bring it back, by which time the asset has
+        // certainly loaded, and the same press drew nothing. That is exactly
+        // the sequence this was reported as.
+        val real = group.options
+            .filterIsInstance<AVMediaSelectionOption>()
+            .any { it.mediaType == AVMediaTypeSubtitle }
+        return if (real) group else null
     }
 
     override fun showSubtitles(language: String) {
