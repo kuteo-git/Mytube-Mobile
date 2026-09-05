@@ -589,6 +589,15 @@ fun WatchContent(
                 subtitles = state.video.subtitles,
                 subtitleLanguage = state.subtitleLanguage,
                 onSelectSubtitles = onSelectSubtitles,
+                // Never for a broadcast, and for a recorded video only when it
+                // has a track to read. Both halves are measured rather than
+                // assumed: the gateway answers a pass over a video with no
+                // captions by finishing it immediately with nothing — `if
+                // len(cues) == 0 { finishNarration(narrationDone) }` — so the
+                // switch on such a video turns on, does nothing, and turns
+                // itself off, which is the dead control §5 of the server
+                // charter refuses.
+                canNarrate = !state.isLive && state.video.subtitles.isNotEmpty(),
                 narrating = state.narrating,
                 narration = state.narration,
                 autoplay = state.autoplay,

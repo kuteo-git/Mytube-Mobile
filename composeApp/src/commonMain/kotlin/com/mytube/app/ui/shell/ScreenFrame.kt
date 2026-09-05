@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
+import com.mytube.app.ui.home.Radius
 import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.theme.Tokens
@@ -261,6 +263,15 @@ fun TabScaffold(
     tryAgain: String,
     onOpenSettings: () -> Unit,
     onRetry: () -> Unit,
+    /**
+     * What this tab's list looks like before it has one.
+     *
+     * A parameter rather than a constant, because `FeedSkeleton` stood in for
+     * five tabs and only three of them are feeds: Subscriptions is a column of
+     * 48dp circles and Playlists is a column of collection rows, and a stack of
+     * 16:9 pictures promised a feed that never arrived on either.
+     */
+    skeleton: @Composable () -> Unit = { FeedSkeleton() },
     content: @Composable () -> Unit,
 ) {
     Surface(color = Tokens.bg, modifier = Modifier.fillMaxSize()) {
@@ -270,7 +281,7 @@ fun TabScaffold(
             // fills in rather than appearing.
             loading -> Column(
                 Modifier.fillMaxSize().padding(top = topChrome()),
-            ) { FeedSkeleton() }
+            ) { skeleton() }
 
             needsServer -> Centered {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -363,6 +374,27 @@ fun BoxScope.TabRefreshIndicator(
     // pane then kept the last fraction it had been handed and stayed on screen.
     // Reported as the loading not hiding.
     val distance = state.distanceFraction
+
+    // One knock the moment the pull is far enough to count, while the finger is
+    // still down — which is the only moment feedback can change what somebody
+    // does next. Firing it when `isRefreshing` turns true would be a buzz
+    // arriving after the decision, reporting rather than confirming.
+    //
+    // An impact rather than a selection tick: this is a threshold being met,
+    // not a value passing through a position.
+    val knock = rememberLandingKnock()
+    var armed by remember { mutableStateOf(false) }
+    LaunchedEffect(distance >= 1f) {
+        if (distance >= 1f && !armed) {
+            armed = true
+            knock()
+        } else if (distance < 1f) {
+            // Re-armed only on the way back down, so a finger resting either
+            // side of the line does not buzz on every frame.
+            armed = false
+        }
+    }
+
     SideEffect {
         PullGlass.fraction = distance
         PullGlass.refreshing = isRefreshing
@@ -433,57 +465,210 @@ fun WatchSkeleton(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * A stand-in for a feed of video cards.
+ *
+ * **Every measurement here is `VideoCard`'s, and that is the whole point.** It
+ * used to be its own idea of a card — inset by `Space.md` with a 12dp radius,
+ * one title bar, and `Space.xxl` between cards — which is the *web* card's
+ * shape. The app's card has run edge to edge with square corners since the feed
+ * took YouTube's shape, so the page visibly changed geometry the instant it
+ * loaded: the pictures grew sideways into both margins and lost their corners.
+ * A skeleton that does that is worse than none, because it says the wrong thing
+ * confidently.
+ *
+ * Keep the two in step. If `VideoCard`'s padding moves, this moves.
+ */
 @Composable
 fun FeedSkeleton(modifier: Modifier = Modifier, cards: Int = 3) {
-    val pulse = rememberInfiniteTransition(label = "skeleton")
-    val alpha by pulse.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "skeleton-alpha",
-    )
-    val shade = Tokens.surface.copy(alpha = alpha)
+    val shade = skeletonShade()
 
     Column(modifier.fillMaxWidth()) {
         repeat(cards) {
-            Column(Modifier.padding(bottom = Space.xxl)) {
-                Box(
-                    Modifier
-                        .padding(horizontal = Space.md)
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(shade),
-                )
-                Spacer(Modifier.height(Space.md))
-                Row(Modifier.padding(horizontal = Space.lg)) {
-                    Box(Modifier.size(36.dp).clip(CircleShape).background(shade))
-                    Spacer(Modifier.width(Space.md))
-                    Column(Modifier.weight(1f)) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(14.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(shade),
-                        )
-                        Spacer(Modifier.height(Space.sm))
-                        Box(
-                            Modifier
-                                // Short, like a channel name. Two full-width
-                                // bars read as a paragraph, and the eye notices
-                                // that the real card is not shaped like that.
-                                .fillMaxWidth(0.45f)
-                                .height(12.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(shade),
-                        )
-                    }
+            // Edge to edge and square, exactly as the card is.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(shade),
+            )
+            // `VideoCard`'s meta row: `start = lg, end = sm, top = md,
+            // bottom = md`, and the avatar is `Size.avatar`.
+            Row(
+                Modifier.padding(
+                    start = Space.lg,
+                    end = Space.sm,
+                    top = Space.md,
+                    bottom = Space.md,
+                ),
+            ) {
+                Box(Modifier.size(36.dp).clip(CircleShape).background(shade))
+                Spacer(Modifier.width(Space.md))
+                Column(Modifier.weight(1f)) {
+                    // Two bars, because the title takes two lines at 20sp and a
+                    // single bar leaves the row a third too short — the cards
+                    // below it then jump upward as the text arrives.
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shade),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        Modifier
+                            // Short, like the second line of a title that has
+                            // run out of words. Two full-width bars read as a
+                            // paragraph, which no card is.
+                            .fillMaxWidth(0.7f)
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shade),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        Modifier
+                            // One meta line: `channel · views · age`.
+                            .fillMaxWidth(0.55f)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shade),
+                    )
                 }
             }
+            Spacer(Modifier.height(Space.md))
+        }
+    }
+}
+
+/**
+ * A stand-in for a list of channels — Subscriptions.
+ *
+ * Its own shape rather than `FeedSkeleton`, because that row is a 48dp circle
+ * beside two short lines and nothing else. Standing a column of 16:9 pictures
+ * in for it promises a feed and delivers a list, which is the fault this file
+ * has just been corrected for one screen down.
+ */
+@Composable
+fun ChannelListSkeleton(modifier: Modifier = Modifier, rows: Int = 8) {
+    val shade = skeletonShade()
+
+    Column(modifier.fillMaxWidth()) {
+        repeat(rows) {
+            Row(
+                Modifier.padding(horizontal = Space.lg, vertical = Space.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(48.dp).clip(CircleShape).background(shade))
+                Spacer(Modifier.width(Space.md))
+                Column {
+                    Box(
+                        Modifier
+                            .width(160.dp)
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shade),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        Modifier
+                            .width(96.dp)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shade),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A stand-in for a list of collections — the Playlists tab.
+ *
+ * A playlist row is a 16:9 thumbnail beside its title, with a strip of the
+ * picture behind showing above it — the mark that says "a stack, not a video"
+ * before the title is read. The strip is in the skeleton for that reason: it is
+ * the one thing that distinguishes this list from a list of videos, and leaving
+ * it out is what would make the two look alike while loading and different
+ * afterwards.
+ */
+@Composable
+fun CollectionListSkeleton(modifier: Modifier = Modifier, rows: Int = 6) {
+    val shade = skeletonShade()
+
+    Column(modifier.fillMaxWidth()) {
+        repeat(rows) {
+            Row(
+                Modifier.padding(horizontal = Space.lg, vertical = Space.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.width(160.dp)) {
+                    Box(
+                        Modifier
+                            .padding(horizontal = 6.dp)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                            .background(shade),
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(Radius.thumbnail))
+                            .background(shade),
+                    )
+                }
+                Spacer(Modifier.width(Space.md))
+                Column(Modifier.weight(1f)) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(0.8f)
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shade),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth(0.4f)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shade),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The chip row, while the topics it is built from are still being fetched.
+ *
+ * Home pins this row above the feed, so a loading state without it is a screen
+ * whose whole content shifts down by a row the moment it arrives. Fixed widths
+ * rather than words: the real chips are as wide as the topics the server names,
+ * and inventing plausible ones here would be a translation nobody wrote.
+ */
+@Composable
+fun ChipRowSkeleton(modifier: Modifier = Modifier) {
+    val shade = skeletonShade()
+
+    Row(
+        modifier.padding(horizontal = Space.md),
+        horizontalArrangement = Arrangement.spacedBy(Space.sm),
+    ) {
+        listOf(56.dp, 88.dp, 72.dp, 96.dp, 80.dp).forEach { width ->
+            Box(
+                Modifier
+                    .width(width)
+                    .height(Size.chip)
+                    .clip(GlassRadius.control)
+                    .background(shade),
+            )
         }
     }
 }

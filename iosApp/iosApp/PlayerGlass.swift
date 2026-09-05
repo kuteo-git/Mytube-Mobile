@@ -44,6 +44,25 @@ struct PlayerGlass: View {
                 // opened at all, and a tap on the pause disc fell through to the
                 // picture and merely hid the controls.
                 ZStack(alignment: .topLeading) {
+                    // Sizes the stack, and takes no touches.
+                    //
+                    // It was removed outright once, because a bare `Color` in
+                    // SwiftUI is a shape that fills its space *and* swallows
+                    // every tap that lands on it. Removing it fixed that and
+                    // broke the buttons a different way: every item is placed
+                    // with `.position`, which reports the size it was offered
+                    // rather than contributing one, so with nothing else in the
+                    // stack it laid out at zero. The `.frame` below then drew
+                    // the pane at the right size over content whose hit-test
+                    // region had already been decided at 0x0 — glyphs visible,
+                    // presses landing nowhere. Measured on the simulator: CC,
+                    // the gear and all three transport discs were dead while
+                    // taps on the picture still worked.
+                    //
+                    // `allowsHitTesting(false)` is the whole difference: it
+                    // sizes the stack, as it always did, and refuses the touches
+                    // it was deleted for taking.
+                    Color.clear.allowsHitTesting(false)
                     ForEach(pane.items, id: \.id) { item in
                         Group {
                             if item.interactive {

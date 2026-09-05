@@ -43,6 +43,7 @@ import coil3.compose.AsyncImage
 import com.mohamedrejeb.calf.ui.gesture.adaptiveClickable
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.i18n.Strings
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.MenuAction
 import com.mytube.app.ui.shell.rememberMenuAnchor
 import com.mytube.app.ui.theme.Tokens
@@ -339,6 +340,11 @@ fun VideoCardMenu(
     // where sampling is a segfault. Both are facts about *where a popup draws*,
     // so the menu moved instead of settling for paint. See [MenuHost].
     val (anchor, show) = rememberMenuAnchor()
+    // Opening a menu is a selection about to be made, and this is the one
+    // control on a card that opens anything. One call site because both cards
+    // that draw a menu draw *this* one — the feed's and the Continue watching
+    // rail's — which is why the composable exists at all.
+    val tick = rememberSelectionTick()
 
     val items = buildList {
         if (onSave != null) {
@@ -370,7 +376,7 @@ fun VideoCardMenu(
         modifier = anchor
             .size(Size.iconButton)
             .clip(CircleShape)
-            .clickable { show(items) }
+            .clickable { tick(); show(items) }
             .padding(Space.sm),
     )
 }

@@ -50,6 +50,7 @@ import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.HomeState
 import com.mytube.app.ui.home.HomeViewModel
 import com.mytube.app.ui.home.Space
+import com.mytube.app.ui.shell.rememberLandingKnock
 import com.mytube.app.ui.shell.AppShell
 import com.mytube.app.ui.theme.Tokens
 import com.mytube.app.ui.shell.GlassMenu
@@ -1066,6 +1067,7 @@ fun App(
                 var dragProgress by remember(session.videoId, session.minimised) {
                     mutableFloatStateOf(0f)
                 }
+                val knock = rememberLandingKnock()
 
                 val playbackState by watch.state.collectAsStateWithLifecycle()
                 val playing = playbackState as? WatchState.Playing
@@ -1223,7 +1225,17 @@ fun App(
                             fadeOut(tween(ROUTE_MILLIS)),
                     ) {
                     WatchLayer(
-                        onMinimise = { watching = session.copy(minimised = true) },
+                        onMinimise = {
+                            // The one knock in the app, and it is an impact
+                            // rather than a selection tick: the picture has been
+                            // travelling under a finger for the whole gesture
+                            // and this is it arriving. Here rather than on every
+                            // route into `minimised = true` — the back gesture
+                            // and opening a channel also collapse the video, and
+                            // neither is a thing landing anywhere.
+                            knock()
+                            watching = session.copy(minimised = true)
+                        },
                         // Exactly where the miniplayer's own bar will be — the
                         // same three terms its padding and its translation are
                         // built from, so the picture arrives at the bar rather

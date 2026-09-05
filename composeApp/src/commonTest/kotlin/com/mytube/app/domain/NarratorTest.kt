@@ -238,4 +238,63 @@ class NarratorTest {
         assertEquals(listOf("b.wav"), host.prepared)
         narrator.release()
     }
+
+    // ---- a broadcast, whose lines are said in turn as they arrive ---------
+
+    private fun liveClip(atMillis: Long, seconds: Double, url: String) =
+        NarrationClip(
+            startSeconds = 0.0,
+            durationSeconds = seconds,
+            clipUrl = url,
+            text = url,
+            startsAtEpochMillis = atMillis,
+        )
+
+    @Test
+    fun `a broadcast's lines are said in turn, not matched to the playhead`() = runTest {
+        val host = FakeHost()
+        val narrator = Narrator(host, TestScope(testScheduler))
+
+        // The position says nothing about where these belong: a broadcast has
+        // no zero, and by the time a line has been translated its moment on the
+        // clock is half a minute gone. Matching either number would play
+        // nothing at all.
+        host.videoPositionSeconds = 0.0
+        narrator.setClips(
+            listOf(
+                liveClip(1_700_000_000_000, 2.0, "one.wav"),
+                liveClip(1_700_000_002_000, 2.0, "two.wav"),
+            ),
+        )
+
+        advanceTimeBy(150)
+        assertEquals(listOf("one.wav"), host.spoken)
+        // The next line is buffered while this one runs.
+        assertEquals(listOf("two.wav"), host.prepared)
+
+        // Two seconds is this line's own length, and the next follows it.
+        advanceTimeBy(2_100)
+        assertEquals(listOf("one.wav", "two.wav"), host.spoken)
+        narrator.release()
+    }
+
+    @Test
+    fun `a broadcast skips a backlog rather than falling further behind`() = runTest {
+        val host = FakeHost()
+        val narrator = Narrator(host, TestScope(testScheduler))
+
+        // A phone in a pocket comes back to a pile. Reading it out in order
+        // would put the voice further behind with every line, so everything
+        // older than the bound is passed over.
+        narrator.setClips(
+            listOf(
+                liveClip(1_700_000_000_000, 2.0, "ancient.wav"),
+                liveClip(1_700_000_100_000, 2.0, "recent.wav"),
+            ),
+        )
+        advanceTimeBy(150)
+
+        assertEquals(listOf("recent.wav"), host.spoken)
+        narrator.release()
+    }
 }

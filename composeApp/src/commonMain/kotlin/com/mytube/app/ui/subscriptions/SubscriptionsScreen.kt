@@ -39,6 +39,7 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatCount
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
+import com.mytube.app.ui.shell.ChannelListSkeleton
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.ScreenTitle
 import com.mytube.app.ui.shell.TabRefreshIndicator
@@ -101,6 +102,7 @@ fun SubscriptionsContent(
     Box(Modifier.fillMaxSize().glassSource()) {
     TabScaffold(
         loading = state is SubscriptionsState.Loading,
+        skeleton = { ChannelListSkeleton() },
         needsServer = state is SubscriptionsState.NeedsServer,
         failure = (state as? SubscriptionsState.Failed)?.message.orEmpty(),
         noServerTitle = strings.noServerTitle,

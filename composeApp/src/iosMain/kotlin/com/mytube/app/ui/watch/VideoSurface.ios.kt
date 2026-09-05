@@ -2,6 +2,7 @@ package com.mytube.app.ui.watch
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.interop.UIKitView
@@ -80,19 +81,36 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) 
     val playerLayer = remember(av) {
         AVPlayerLayer().apply {
             this.player = av
-            // Aspect, not aspect-fill: a 16:9 video in a 16:9 box is unaffected,
-            // and a vertical one is letterboxed rather than having its sides cut
-            // off. The server publishes both.
-            // Aspect *fill* crops to the layer's bounds; aspect fits inside it.
-            // The same choice Android makes with RESIZE_MODE_ZOOM, and it has to
-            // be the layer's own property rather than a transform on the view:
-            // an interop layer that is scaled is not a resized one.
-            videoGravity = if (fill) {
-                AVLayerVideoGravityResizeAspectFill
-            } else {
-                AVLayerVideoGravityResizeAspect
-            }
             backgroundColor = UIColor.blackColor.CGColor
+        }
+    }
+
+    // The gravity is set on every recomposition, not once when the layer is
+    // built, and that is the whole of a real bug.
+    //
+    // It used to live inside the `remember` above — which runs once per player,
+    // reads `fill` once, and never looks again. `fill` is `drag > 0f`, false at
+    // the moment the layer is created and true for the whole of the gesture, so
+    // the picture stayed letterboxed all the way down and only became a
+    // centre-cropped square when the *miniplayer* composed a `VideoSurface` of
+    // its own and got a fresh layer. Measured on the iPhone 16e simulator by
+    // holding the drag a third of the way and screenshotting mid-gesture: a
+    // full 16:9 frame inside a rounded box that was already 1.5:1.
+    //
+    // Android never had it. `VideoSurface.android.kt` assigns `resizeMode` in
+    // both `factory` and `update`, which is what this now mirrors — the two
+    // platforms were written to the same intent and only one of them kept it.
+    //
+    // Aspect *fill* crops to the layer's bounds; aspect fits inside it. It has
+    // to be the layer's own property rather than a transform on the view: an
+    // interop layer that is scaled is not a resized one.
+    SideEffect {
+        playerLayer.videoGravity = if (fill) {
+            AVLayerVideoGravityResizeAspectFill
+        } else {
+            // A vertical video is letterboxed rather than having its sides cut
+            // off. The server publishes both shapes.
+            AVLayerVideoGravityResizeAspect
         }
     }
 

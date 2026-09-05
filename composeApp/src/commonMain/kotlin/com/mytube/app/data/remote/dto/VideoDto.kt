@@ -240,6 +240,8 @@ data class NarrationClipDto(
     val durationSeconds: Double = 0.0,
     val clipUrl: String = "",
     val text: String = "",
+    /** Set only for a broadcast, whose lines are placed by the clock. */
+    val startsAtUnixMillis: Long = 0,
 )
 
 /**
@@ -265,6 +267,7 @@ fun NarrationDto.toDomain(baseUrl: String): Narration = Narration(
                 durationSeconds = it.durationSeconds,
                 clipUrl = baseUrl.trimEnd('/') + it.clipUrl,
                 text = it.text,
+                startsAtEpochMillis = it.startsAtUnixMillis,
             )
         },
 )

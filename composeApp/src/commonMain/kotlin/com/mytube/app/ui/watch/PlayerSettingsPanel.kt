@@ -35,6 +35,7 @@ import com.mytube.app.ui.home.Space
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.unit.Dp
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.GlassSheet
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.mytube.app.ui.shell.glassControl
@@ -85,6 +86,16 @@ fun BoxScope.PlayerSettingsPanel(
     bottomInset: Dp,
     subtitles: List<SubtitleTrack>,
     subtitleLanguage: String,
+    /**
+     * Whether narration can be offered for what is playing.
+     *
+     * A pass reads a caption track and speaks it, so the answer is no wherever
+     * there is no track to read: every broadcast, and any recorded video the
+     * library holds no captions for. A switch that turns on and stays at
+     * nothing is the dead control §5 of the server charter refuses. The row is
+     * absent rather than disabled: a disabled switch invites a second press.
+     */
+    canNarrate: Boolean,
     narrating: Boolean,
     narration: Narration,
     autoplay: Boolean,
@@ -149,13 +160,15 @@ fun BoxScope.PlayerSettingsPanel(
                 Spacer(Modifier.height(Space.lg))
             }
 
-            SwitchRow(
-                label = strings.narration,
-                checked = narrating,
-                onToggle = onToggleNarration,
-            )
+            if (canNarrate) {
+                SwitchRow(
+                    label = strings.narration,
+                    checked = narrating,
+                    onToggle = onToggleNarration,
+                )
 
-            Spacer(Modifier.height(Space.md))
+                Spacer(Modifier.height(Space.md))
+            }
             SwitchRow(
                 label = strings.autoplay,
                 checked = autoplay,
@@ -229,6 +242,8 @@ fun BoxScope.PlayerSettingsPanel(
  */
 @Composable
 private fun TrackChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    // A row of positions with one lit, exactly like the home chips.
+    val tick = rememberSelectionTick()
     Text(
         text = label,
         color = if (selected) Tokens.bg else Tokens.text,
@@ -238,7 +253,12 @@ private fun TrackChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .pressableGlassControl(
                 RoundedCornerShape(percent = 50),
                 selected = selected,
-                onClick = onClick,
+                onClick = {
+                    // The one already chosen changes nothing, so it says
+                    // nothing. Same rule as the chip row and the tab bar.
+                    if (!selected) tick()
+                    onClick()
+                },
             )
             .padding(horizontal = 14.dp, vertical = 7.dp),
     )
@@ -266,6 +286,9 @@ internal fun trackLabel(track: SubtitleTrack): String {
 
 @Composable
 private fun SwitchRow(label: String, checked: Boolean, onToggle: () -> Unit) {
+    // A switch always changes something — there is no "already on" press that
+    // means nothing — so unlike the chips this needs no guard.
+    val tick = rememberSelectionTick()
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -282,7 +305,7 @@ private fun SwitchRow(label: String, checked: Boolean, onToggle: () -> Unit) {
         // this one sits beside the two words a viewer reads most often.
         AdaptiveSwitch(
             checked = checked,
-            onCheckedChange = { onToggle() },
+            onCheckedChange = { tick(); onToggle() },
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = Tokens.brand,

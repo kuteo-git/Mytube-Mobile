@@ -143,6 +143,15 @@ interface Strings {
 
     /** Over a broadcast, in place of the two timestamps. */
     val live: String
+
+    /**
+     * The same pill once the viewer has rewound inside the broadcast's window.
+     *
+     * A label rather than a second control: the pill *is* the way back to the
+     * edge, and drawing a separate button beside it would be two things saying
+     * one thing.
+     */
+    val goToLive: String
     val fullscreen: String
     val exitFullscreen: String
     val notInterested: String
@@ -363,6 +372,7 @@ object EnglishStrings : Strings {
     // Kept in English in both dictionaries: it is what every player and every
     // television calls a broadcast, the same reasoning as the Live chip.
     override val live = "LIVE"
+    override val goToLive = "Go live"
     override val fullscreen = "Fullscreen"
     override val exitFullscreen = "Exit fullscreen"
     override val notInterested = "Not interested"
@@ -537,6 +547,7 @@ object VietnameseStrings : Strings {
     override val narrationFailed = "Không chuẩn bị được giọng đọc"
 
     override val live = "LIVE"
+    override val goToLive = "Xem trực tiếp"
     override val fullscreen = "Toàn màn hình"
     override val exitFullscreen = "Thoát toàn màn hình"
     override val notInterested = "Không quan tâm"

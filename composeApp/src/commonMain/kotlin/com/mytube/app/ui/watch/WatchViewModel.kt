@@ -7,6 +7,7 @@ import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.Narration
+import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Stream
@@ -20,6 +21,7 @@ import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
 import com.mytube.app.domain.repository.VideoRepository
+import com.mytube.app.ui.home.imageModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -120,6 +122,14 @@ sealed interface WatchState {
         val narration: Narration = Narration.Empty,
         /** A broadcast on air: no length, no end, and nothing to resume. */
         val isLive: Boolean = false,
+        /**
+         * Whether narration can be offered for this broadcast.
+         *
+         * Only a broadcast has an answer here, and it is the server's: some
+         * streams publish captions and some do not. Recorded videos are handled
+         * by [canNarrate] below, which is what every screen reads.
+         */
+        val hasLiveCaptions: Boolean = false,
         val comments: List<Comment> = emptyList(),
         /** An import is running because the catalogue held none. */
         val loadingComments: Boolean = false,
@@ -426,6 +436,9 @@ class WatchViewModel(
         val current = _state.value as? WatchState.Playing ?: return
         val track = current.video.subtitles.firstOrNull { it.language == language }
         if (language.isEmpty() || track == null) return
+        // A track with no file is one the player renders — a broadcast's, which
+        // lives in the manifest. There is nothing here to fetch.
+        if (track.url.isEmpty()) return
         viewModelScope.launch {
             val cues = runCatching {
                 videos.subtitleCues(mediaBaseUrl.trimEnd('/') + track.url)
@@ -570,16 +583,16 @@ class WatchViewModel(
     }
 
     /**
-     * Move by a number of seconds, clamped to the video.
+     * Move by a number of seconds, clamped to whatever this video has.
      *
-     * The clamp is not decoration: seeking past the end on a media playlist
-     * leaves some players buffering toward a position that will never arrive,
-     * which looks exactly like a stream that has died.
+     * The arithmetic is `PlaybackState`'s, beside the bar's own `seekTarget`:
+     * a jump and a drag are the same question about where a position may land,
+     * and answering it twice is how a broadcast ended up with a jump that went
+     * to zero while the bar worked. @see PlaybackState.skipTarget
      */
     fun skip(bySeconds: Double) {
         val playback = (_state.value as? WatchState.Playing)?.playback ?: return
-        val target = (playback.positionSeconds + bySeconds)
-            .coerceIn(0.0, maxOf(playback.durationSeconds - 1, 0.0))
+        val target = playback.skipTarget(bySeconds)
         player.seekTo(target)
         retargetNarration(target)
     }
@@ -777,8 +790,22 @@ class WatchViewModel(
                                 url = stream.url,
                                 title = video.title,
                                 channel = video.channel.name,
-                                artworkUrl = mediaBaseUrl.trimEnd('/') +
-                                    "/media/" + video.thumbnailPath,
+                                // `imageModel`, not `/media/` pasted in front
+                                // of the path. A broadcast's thumbnail is an
+                                // absolute address at YouTube — the catalogue
+                                // never scanned a file for a stream on air — and
+                                // prefixing one produced
+                                // `…/media/https://i.ytimg.com/…`, which the
+                                // gateway answers 404 for. Measured: the pasted
+                                // address 404, the thumbnail itself 200, and a
+                                // live video played with an empty square on the
+                                // lock screen.
+                                //
+                                // Every card in every list has asked this
+                                // question through `imageModel` since the
+                                // channel page needed it. This was the one
+                                // caller that answered it itself.
+                                artworkUrl = imageModel(mediaBaseUrl, video.thumbnailPath),
                                 // Every track, attached now. Both platforms bind
                                 // text to the media item, so adding one later
                                 // means a new item and a restarted video.
@@ -789,6 +816,7 @@ class WatchViewModel(
                                         label = it.label,
                                     )
                                 },
+                                isLive = stream.isLive,
                             ),
                             // `isInProgress` still gates it: a video watched to
                             // the end has its position saved near the end, so
@@ -803,9 +831,35 @@ class WatchViewModel(
                         // actually has: a remembered language that this video
                         // does not carry means no subtitles, not the nearest
                         // one.
+                        // A broadcast's captions are inside the HLS manifest
+                        // rather than beside the video on disk, so they never
+                        // reach `video.subtitles` — and both the CC control and
+                        // the remembered language are read from that list. The
+                        // track is added here, with no URL because there is no
+                        // file: the player renders it, and `loadCues` skips a
+                        // track with nothing to fetch.
+                        //
+                        // Composed *before* the language is decided, and that
+                        // order is the fix rather than a tidy-up: it used to be
+                        // added inside the state below, so a broadcast's list
+                        // was still empty at this point and a viewer who had
+                        // asked for English got no captions on a stream that
+                        // carried them.
+                        val playable =
+                            if (stream.hasLiveCaptions) {
+                                video.copy(subtitles = video.subtitles + SubtitleTrack(
+                                    language = stream.liveCaptionsLanguage,
+                                    label = stream.liveCaptionsLanguage.uppercase(),
+                                    url = "",
+                                    generated = true,
+                                ))
+                            } else {
+                                video
+                            }
+
                         val wantedLanguage = preferences.subtitleLanguage()
                         val language =
-                            if (video.subtitles.any { it.language == wantedLanguage }) {
+                            if (playable.subtitles.any { it.language == wantedLanguage }) {
                                 wantedLanguage
                             } else {
                                 ""
@@ -821,9 +875,10 @@ class WatchViewModel(
                         player.setNarrationLevels(voiceLevel, duckLevel)
 
                         WatchState.Playing(
-                            video = video,
+                            video = playable,
                             playback = PlaybackState(),
                             isLive = stream.isLive,
+                            hasLiveCaptions = stream.hasLiveCaptions,
                             subtitleLanguage = language,
                             autoplay = preferences.autoplay(),
                             voiceLevel = voiceLevel,
@@ -855,8 +910,15 @@ class WatchViewModel(
             // `loadCues` reads the current Playing state to find the track's
             // URL, and at that point there is not one yet.
             (_state.value as? WatchState.Playing)?.let { loadCues(it.subtitleLanguage) }
-            // A broadcast is never narrated: the pass reads a caption file, and
-            // one that is still being spoken has none.
+            // A remembered preference does not start a broadcast narrating,
+            // even one that could be.
+            //
+            // A recorded pass ends; a broadcast's does not, so leaving the
+            // switch on from yesterday would translate and speak for as long as
+            // the stream stayed open. That is a real cost to spend on somebody
+            // who has not asked for it *here* — so a broadcast is narrated only
+            // by pressing the switch, which is one press and says what it costs
+            // by being deliberate.
             if (preferences.narration() && _state.value.let {
                     it is WatchState.Playing && !it.isLive
                 }

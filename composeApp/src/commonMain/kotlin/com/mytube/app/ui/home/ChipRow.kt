@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.GlassRadius
 import com.mytube.app.ui.shell.pressableLiquidGlass
 import com.mytube.app.ui.theme.Tokens
@@ -43,6 +44,10 @@ fun ChipRow(
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
+    // The chips are a row of positions with one lit, which is what a selection
+    // tick is for — the same feedback the seek bar gives crossing a notch, and
+    // the same generator the system's own pickers use.
+    val tick = rememberSelectionTick()
 
     LazyRow(
         modifier = modifier,
@@ -55,6 +60,11 @@ fun ChipRow(
                 modifier = Modifier
                     .height(Size.chip)
                     .pressableLiquidGlass(GlassRadius.control, selected = isSelected) {
+                        // Only when the selection actually moves. Pressing the
+                        // chip that is already lit scrolls the feed to the top
+                        // and changes nothing about what is selected, and a
+                        // tick there would say something happened that did not.
+                        if (!isSelected) tick()
                         onSelect(chip)
                     }
                     .padding(horizontal = Space.md),
