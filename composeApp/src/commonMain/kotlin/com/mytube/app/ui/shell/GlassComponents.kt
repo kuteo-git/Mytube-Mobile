@@ -355,12 +355,21 @@ fun GlassRefreshIndicator(
     refreshing: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val scale = if (refreshing) 1f else fraction.coerceIn(0f, 1f)
-    if (scale <= 0.01f) return
+    val progress = if (refreshing) 1f else fraction.coerceIn(0f, 1f)
+    if (progress <= 0.01f) return
 
     Box(
         modifier
-            .size(REFRESH_SIZE * scale)
+            // Full size from the first pixel of the pull, not grown into.
+            //
+            // It used to be `REFRESH_SIZE * progress`, on the reasoning that a
+            // pane growing under the finger says how far the pull has got. What
+            // it produced is a pane that is a smear for most of the gesture and
+            // only readable at the end — the ring inside it was three
+            // millimetres across at the point somebody is deciding whether to
+            // keep pulling. The ring still says how far, and it can only say it
+            // at a size that can be seen.
+            .size(REFRESH_SIZE)
             // The sampled material. Legal here and nowhere near the list,
             // because `AppShell` draws this — see [PullGlass].
             .liquidGlass(GlassRadius.control),
@@ -374,14 +383,14 @@ fun GlassRefreshIndicator(
             CircularProgressIndicator(
                 color = Tokens.text,
                 strokeWidth = 2.dp,
-                modifier = Modifier.size(REFRESH_RING * scale),
+                modifier = Modifier.size(REFRESH_RING),
             )
         } else {
             CircularProgressIndicator(
-                progress = { scale },
+                progress = { progress },
                 color = Tokens.text,
                 strokeWidth = 2.dp,
-                modifier = Modifier.size(REFRESH_RING * scale),
+                modifier = Modifier.size(REFRESH_RING),
             )
         }
     }

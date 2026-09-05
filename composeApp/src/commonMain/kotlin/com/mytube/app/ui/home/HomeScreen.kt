@@ -33,6 +33,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import kotlin.math.roundToInt
 import com.mytube.app.ui.shell.BarBackdrop
 import com.mytube.app.ui.shell.LocalBarsHidden
+import com.mytube.app.ui.shell.ChipRowSkeleton
 import com.mytube.app.ui.shell.FeedSkeleton
 import com.mytube.app.ui.shell.TabRefreshIndicator
 import com.mytube.app.ui.shell.tabContentPadding
@@ -153,7 +154,14 @@ fun HomeContent(
                 Modifier
                     .fillMaxSize()
                     .padding(top = tabContentPadding().calculateTopPadding()),
-            ) { FeedSkeleton() }
+            ) {
+                // The chip row is pinned above the feed, so a loading state
+                // without it is a screen whose whole content steps down by a
+                // row the moment the topics arrive.
+                ChipRowSkeleton()
+                Spacer(Modifier.height(Space.md))
+                FeedSkeleton()
+            }
 
             is HomeState.NeedsServer -> Centered {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

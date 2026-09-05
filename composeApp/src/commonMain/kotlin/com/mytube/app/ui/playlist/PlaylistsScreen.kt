@@ -41,6 +41,7 @@ import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.CollectionListSkeleton
 import com.mytube.app.ui.shell.DetailBack
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.GlassButton
@@ -134,6 +135,7 @@ fun PlaylistsContent(
     Box(Modifier.fillMaxSize().glassSource()) {
         TabScaffold(
             loading = state is PlaylistsState.Loading,
+            skeleton = { CollectionListSkeleton() },
             needsServer = state is PlaylistsState.NeedsServer,
             failure = (state as? PlaylistsState.Failed)?.message.orEmpty(),
             noServerTitle = strings.noServerTitle,
