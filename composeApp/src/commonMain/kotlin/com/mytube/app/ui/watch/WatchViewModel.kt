@@ -21,6 +21,7 @@ import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
 import com.mytube.app.domain.repository.VideoRepository
+import com.mytube.app.ui.home.imageModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -789,8 +790,22 @@ class WatchViewModel(
                                 url = stream.url,
                                 title = video.title,
                                 channel = video.channel.name,
-                                artworkUrl = mediaBaseUrl.trimEnd('/') +
-                                    "/media/" + video.thumbnailPath,
+                                // `imageModel`, not `/media/` pasted in front
+                                // of the path. A broadcast's thumbnail is an
+                                // absolute address at YouTube — the catalogue
+                                // never scanned a file for a stream on air — and
+                                // prefixing one produced
+                                // `…/media/https://i.ytimg.com/…`, which the
+                                // gateway answers 404 for. Measured: the pasted
+                                // address 404, the thumbnail itself 200, and a
+                                // live video played with an empty square on the
+                                // lock screen.
+                                //
+                                // Every card in every list has asked this
+                                // question through `imageModel` since the
+                                // channel page needed it. This was the one
+                                // caller that answered it itself.
+                                artworkUrl = imageModel(mediaBaseUrl, video.thumbnailPath),
                                 // Every track, attached now. Both platforms bind
                                 // text to the media item, so adding one later
                                 // means a new item and a restarted video.
