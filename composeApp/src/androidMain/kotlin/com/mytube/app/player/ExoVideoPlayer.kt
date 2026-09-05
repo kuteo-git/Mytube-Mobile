@@ -9,6 +9,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -156,7 +157,7 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
     }
 
     override fun load(media: PlayingMedia, startAtSeconds: Double) {
-        _state.update { PlaybackState() }
+        _state.update { PlaybackState(isLive = media.isLive) }
         if (controller == null) {
             pending = media to startAtSeconds
             return
@@ -301,15 +302,44 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
     private fun durationOrZero(): Double =
         controller?.duration?.takeIf { it > 0 }?.div(1000.0) ?: 0.0
 
+    /**
+     * The rewindable window of a broadcast, or `0.0 to 0.0` when there is none.
+     *
+     * Media3 counts a position from the start of the current window, so this
+     * one begins at zero — the counterpart of iOS's `seekableTimeRanges`, whose
+     * numbers are the item's own and can begin anywhere. The two platforms
+     * therefore report different starts for the same broadcast, and that is
+     * correct: each is the timebase its own `seekTo` takes.
+     *
+     * `Window.isLive()` rather than the caller's flag: this is the timeline's
+     * own answer, and it is what decides whether `durationMs` is a window or a
+     * length. A window whose duration is unset is a stream with no rewind at
+     * all, which is `0.0 to 0.0` and draws no bar.
+     */
+    private fun liveWindowSeconds(): Pair<Double, Double> {
+        val player = controller ?: return 0.0 to 0.0
+        val timeline = player.currentTimeline
+        if (timeline.isEmpty) return 0.0 to 0.0
+        val window = timeline.getWindow(player.currentMediaItemIndex, Timeline.Window())
+        if (!window.isLive() || window.durationMs <= 0) return 0.0 to 0.0
+        return 0.0 to window.durationMs / 1000.0
+    }
+
     private fun startTicking() {
         stopTicking()
         ticker = scope.launch {
             while (true) {
                 _state.update {
+                    val (liveStart, liveEnd) = liveWindowSeconds()
                     it.copy(
                         positionSeconds = (controller?.currentPosition ?: 0L) / 1000.0,
                         durationSeconds = durationOrZero().takeIf { d -> d > 0 }
                             ?: it.durationSeconds,
+                        // Read every tick, not once: the window slides forward
+                        // with the picture, so one read at open is wrong a
+                        // minute later.
+                        liveStartSeconds = liveStart,
+                        liveEndSeconds = liveEnd,
                     )
                 }
                 // Four times a second. A progress bar moving in quarter-second

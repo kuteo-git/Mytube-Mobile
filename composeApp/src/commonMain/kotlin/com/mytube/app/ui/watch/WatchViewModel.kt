@@ -801,6 +801,7 @@ class WatchViewModel(
                                         label = it.label,
                                     )
                                 },
+                                isLive = stream.isLive,
                             ),
                             // `isInProgress` still gates it: a video watched to
                             // the end has its position saved near the end, so
@@ -815,9 +816,35 @@ class WatchViewModel(
                         // actually has: a remembered language that this video
                         // does not carry means no subtitles, not the nearest
                         // one.
+                        // A broadcast's captions are inside the HLS manifest
+                        // rather than beside the video on disk, so they never
+                        // reach `video.subtitles` — and both the CC control and
+                        // the remembered language are read from that list. The
+                        // track is added here, with no URL because there is no
+                        // file: the player renders it, and `loadCues` skips a
+                        // track with nothing to fetch.
+                        //
+                        // Composed *before* the language is decided, and that
+                        // order is the fix rather than a tidy-up: it used to be
+                        // added inside the state below, so a broadcast's list
+                        // was still empty at this point and a viewer who had
+                        // asked for English got no captions on a stream that
+                        // carried them.
+                        val playable =
+                            if (stream.hasLiveCaptions) {
+                                video.copy(subtitles = video.subtitles + SubtitleTrack(
+                                    language = stream.liveCaptionsLanguage,
+                                    label = stream.liveCaptionsLanguage.uppercase(),
+                                    url = "",
+                                    generated = true,
+                                ))
+                            } else {
+                                video
+                            }
+
                         val wantedLanguage = preferences.subtitleLanguage()
                         val language =
-                            if (video.subtitles.any { it.language == wantedLanguage }) {
+                            if (playable.subtitles.any { it.language == wantedLanguage }) {
                                 wantedLanguage
                             } else {
                                 ""
@@ -833,23 +860,7 @@ class WatchViewModel(
                         player.setNarrationLevels(voiceLevel, duckLevel)
 
                         WatchState.Playing(
-                            // A broadcast's captions are inside the HLS
-                            // manifest rather than beside the video on disk, so
-                            // they never reach `video.subtitles` — and the CC
-                            // control is drawn from that list. The track is
-                            // added here, with no URL, because there is no file:
-                            // the player renders it, and `loadCues` skips a
-                            // track with nothing to fetch.
-                            video = if (stream is Stream.Playable && stream.hasLiveCaptions) {
-                                video.copy(subtitles = video.subtitles + SubtitleTrack(
-                                    language = stream.liveCaptionsLanguage,
-                                    label = stream.liveCaptionsLanguage.uppercase(),
-                                    url = "",
-                                    generated = true,
-                                ))
-                            } else {
-                                video
-                            },
+                            video = playable,
                             playback = PlaybackState(),
                             isLive = stream.isLive,
                             hasLiveCaptions = stream.hasLiveCaptions,

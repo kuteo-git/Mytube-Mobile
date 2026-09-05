@@ -526,30 +526,64 @@ fun PlayerControls(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (isLive) {
+                            // Rewound inside the window, the pill stops being a
+                            // readout and becomes the way back: the dot goes
+                            // grey, the label carries how far behind the picture
+                            // is, and pressing it returns to the edge. At the
+                            // edge there is nowhere to go, so it is a readout
+                            // again — the web app's own arrangement, and the
+                            // reason there is no separate button beside it.
+                            val behind = playback.liveEndSeconds - playback.positionSeconds
+                            val atEdge = playback.atLiveEdge || !playback.hasLiveWindow
+                            val label = if (atEdge) {
+                                strings.live
+                            } else {
+                                strings.live + " · −" + formatDuration(behind.toInt())
+                            }
+                            val goLive: () -> Unit = {
+                                onSeek(playback.liveEdgeTarget)
+                                lastTouch++
+                            }
+                            // The colour travels rather than being named on
+                            // the far side: one definition, in `Tokens`. And it
+                            // has to travel, because on iOS 26 this dot is drawn
+                            // by SwiftUI — a Compose background here is what
+                            // Android sees and the platform pane ignores, so
+                            // setting only that left the dot red while the label
+                            // beside it read "−50:34". Measured.
+                            val dotColour = if (atEdge) {
+                                Tokens.brand
+                            } else {
+                                Color.White.copy(alpha = 0.4f)
+                            }
                             GlassItem(
                                 id = "live-dot",
                                 dot = true,
-                                // The brand red travels rather than being named
-                                // on the far side: one definition, in `Tokens`.
-                                tintArgb = Tokens.brand.value.toLong() ushr 32,
+                                tintArgb = dotColour.value.toLong() ushr 32,
                             ) {
                             Box(
                                 Modifier.size(8.dp).clip(CircleShape)
-                                    .background(Tokens.brand),
+                                    .background(dotColour),
                             )
                             }
                             Spacer(Modifier.width(Space.sm))
                             GlassItem(
                                 id = "live-label",
-                                text = strings.live,
+                                text = label,
                                 pointSize = 13.0,
                                 bold = true,
+                                onPress = if (atEdge) null else goLive,
                             ) {
                             Text(
-                                text = strings.live,
+                                text = label,
                                 color = Color.White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
+                                modifier = if (atEdge) {
+                                    Modifier
+                                } else {
+                                    Modifier.clickable(onClick = goLive)
+                                },
                             )
                             }
                         } else {
@@ -605,16 +639,32 @@ fun PlayerControls(
         // down with everything else, and it moves in from the edges: at the very
         // bottom of an iPhone it shares its 32dp target with the home
         // indicator's swipe, and a finger seeking would leave the app.
-        if (!isLive) {
+        // Drawn for a broadcast too, once the player has reported a window.
+        //
+        // It used to be refused outright, and the reasoning was sound about the
+        // arithmetic and wrong about the conclusion: a broadcast declares no
+        // duration, so `position / duration` came to 155,700% on the web — a bar
+        // solid red from the first second. What a live playlist *does* declare
+        // is its rewindable window, which this server measured at 0..3605 on one
+        // broadcast and 0..1285 on another. `progress` is measured against that
+        // window, and until one has arrived `hasLiveWindow` is false and nothing
+        // is drawn — which is what this screen did for every broadcast before.
+        if (!isLive || playback.hasLiveWindow) {
             val seekBar: @Composable () -> Unit = {
                 SeekBar(
                     progress = playback.progress,
-                    enabled = playback.durationSeconds > 0,
+                    enabled = playback.hasLiveWindow || playback.durationSeconds > 0,
                     expanded = visible,
                     scrub = scrub,
                     onScrub = { scrub = it },
                     onSeekFraction = {
-                        onSeek(it * playback.durationSeconds)
+                        // A fraction of the window for a broadcast, of the
+                        // length for a file — and clamped short of the window's
+                        // very end, which a seek cannot land on. The arithmetic
+                        // is on `PlaybackState` rather than here so it can be
+                        // tested without a player, and so the bar and the LIVE
+                        // pill cannot disagree about where the edge is.
+                        onSeek(playback.seekTarget(it))
                         lastTouch++
                     },
                     onInteract = { lastTouch++ },

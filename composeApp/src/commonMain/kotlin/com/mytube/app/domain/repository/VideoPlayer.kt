@@ -170,14 +170,89 @@ data class PlaybackState(
      * Only the player knows, and both platforms are told by their own APIs.
      */
     val hasEnded: Boolean = false,
+    /**
+     * A broadcast, which is measured by a window rather than by a length.
+     *
+     * On the port rather than derived from the two fields below, because it is
+     * true from the moment the item is handed over and the window arrives a
+     * moment later — deriving it would call a broadcast recorded for as long as
+     * that takes, which is exactly when the bar is first drawn.
+     */
+    val isLive: Boolean = false,
+    /**
+     * The rewindable window, in the player's own timebase. Both zero until it
+     * is known, and `hasLiveWindow` names that absence rather than implying it.
+     *
+     * A broadcast declares no duration — `AVPlayerItem.duration` is NaN and
+     * ExoPlayer answers `TIME_UNSET` — so this is the only honest statement of
+     * length available for one. Measured through this server on two real
+     * broadcasts: 0..3605 and 0..1285.
+     */
+    val liveStartSeconds: Double = 0.0,
+    val liveEndSeconds: Double = 0.0,
 ) {
     val hasError: Boolean get() = error.isNotEmpty()
 
-    /** How far through, 0..1, or 0 while the duration is unknown. */
+    /** Set once the player has reported a window with something in it. */
+    val hasLiveWindow: Boolean get() = isLive && liveEndSeconds > liveStartSeconds
+
+    /**
+     * How far through, 0..1, or 0 while there is nothing to measure against.
+     *
+     * A broadcast is measured **from the window's start, not from zero**: the
+     * window slides forward, and drawing from zero gives a bar whose filled
+     * part shrinks while the picture advances.
+     */
     val progress: Float
-        get() = if (durationSeconds <= 0) 0f
-        else (positionSeconds / durationSeconds).coerceIn(0.0, 1.0).toFloat()
+        get() = when {
+            hasLiveWindow -> {
+                val span = liveEndSeconds - liveStartSeconds
+                ((positionSeconds - liveStartSeconds) / span).coerceIn(0.0, 1.0).toFloat()
+            }
+            durationSeconds <= 0 -> 0f
+            else -> (positionSeconds / durationSeconds).coerceIn(0.0, 1.0).toFloat()
+        }
+
+    /**
+     * Watching what is happening, rather than a rewind.
+     *
+     * Not exact equality: the edge moves while the picture plays, so a viewer
+     * who has touched nothing sits a segment or two behind it permanently. Ten
+     * seconds is about two segments at the 5s target duration these playlists
+     * declare — the web app's own number, measured there.
+     */
+    val atLiveEdge: Boolean
+        get() = hasLiveWindow && liveEndSeconds - positionSeconds < LIVE_EDGE_TOLERANCE
+
+    /**
+     * Where a fraction of the bar lands, in the player's own timebase.
+     *
+     * The clamp at the far end is not tidiness. Measured on the iPhone 16e
+     * simulator against a broadcast with an hour of rewind: a seek to 99% of
+     * the window arrived (−2:23), and a seek to **exactly** `liveEndSeconds`
+     * did nothing at all — AVPlayer ignores a target sitting on the end of its
+     * own seekable range. So dragging the bar fully right, and pressing the
+     * LIVE pill, both silently did nothing while every other position worked.
+     *
+     * Half the edge tolerance back: far enough inside the range for the seek to
+     * be taken, and near enough that `atLiveEdge` still calls it live — the two
+     * numbers have to be related or the pill would seek somewhere it then
+     * refuses to call the edge.
+     */
+    fun seekTarget(fraction: Double): Double = when {
+        hasLiveWindow -> {
+            val span = liveEndSeconds - liveStartSeconds
+            (liveStartSeconds + fraction * span).coerceAtMost(liveEdgeTarget)
+        }
+        else -> fraction * durationSeconds
+    }
+
+    /** Where "go back to live" lands. @see seekTarget */
+    val liveEdgeTarget: Double get() = liveEndSeconds - LIVE_EDGE_TOLERANCE / 2
 }
+
+/** @see PlaybackState.atLiveEdge */
+const val LIVE_EDGE_TOLERANCE = 10.0
 
 /**
  * What a stream is, as far as the system outside this app is concerned.
@@ -201,6 +276,15 @@ data class PlayingMedia(
      * a new item and re-preparing, which restarts the video.
      */
     val subtitles: List<PlayingSubtitle> = emptyList(),
+    /**
+     * A broadcast.
+     *
+     * Passed in rather than inferred from the URL or from a NaN duration: the
+     * caller has already been told by the server, and inferring it would mean
+     * the player calls every video live for the moment before its metadata
+     * arrives — which is precisely when the bar is first drawn.
+     */
+    val isLive: Boolean = false,
 )
 
 data class PlayingSubtitle(val url: String, val language: String, val label: String)

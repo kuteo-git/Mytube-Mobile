@@ -8,6 +8,8 @@ import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.readValue
+import kotlinx.cinterop.useContents
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +28,7 @@ import platform.AVFoundation.extendedLanguageTag
 import platform.AVFoundation.mediaSelectionGroupForMediaCharacteristic
 import platform.AVFoundation.selectMediaOption
 import platform.AVFoundation.AVPlayerItemStatusFailed
+import platform.AVFoundation.AVPlayerItemStatusReadyToPlay
 import platform.AVFoundation.status
 import platform.AVFoundation.error
 import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
@@ -38,9 +41,13 @@ import platform.AVFoundation.play
 import platform.AVFoundation.replaceCurrentItemWithPlayerItem
 import platform.AVFoundation.seekToTime
 import platform.AVFoundation.timeControlStatus
+import platform.CoreMedia.CMTimeRangeGetEnd
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMakeWithSeconds
+import platform.AVFoundation.CMTimeRangeValue
+import platform.AVFoundation.seekableTimeRanges
 import platform.Foundation.NSURL
+import platform.Foundation.NSValue
 import platform.darwin.dispatch_get_main_queue
 
 /**
@@ -119,7 +126,8 @@ class AvVideoPlayer : VideoPlayer {
     }
 
     override fun load(media: PlayingMedia, startAtSeconds: Double) {
-        _state.update { PlaybackState() }
+        isLive = media.isLive
+        _state.update { PlaybackState(isLive = media.isLive) }
         val nsUrl = NSURL.URLWithString(media.url) ?: run {
             _state.update { it.copy(error = "bad url") }
             return
@@ -181,7 +189,35 @@ class AvVideoPlayer : VideoPlayer {
         get() = legibleGroup() != null
 
     /**
-     * The item's caption tracks, or null when it has none.
+     * The language the viewer has asked for, applied again once the item is
+     * ready.
+     *
+     * The screen asks for subtitles the moment the media is handed over, which
+     * is before the asset knows what tracks it has — and asking then is what
+     * broke playback outright, see [legibleGroup].
+     */
+    private var wantedSubtitles = ""
+
+    /**
+     * Whether the item being played is a broadcast, remembered from `load`.
+     *
+     * The window is only read for one, because `seekableTimeRanges` on a
+     * recorded video is the whole file and would say the same thing its
+     * duration already does — two answers that can disagree while one loads.
+     */
+    private var isLive = false
+
+    /**
+     * The item's caption tracks, or null when it has none or cannot say yet.
+     *
+     * **The readiness check is load-bearing, not a tidy-up.**
+     * `mediaSelectionGroupForMediaCharacteristic` is a *synchronous* accessor:
+     * on an asset that has not loaded that property it blocks the calling
+     * thread until it can answer, and for a live HLS asset that is a long
+     * time — on the main thread it is the whole app. Measured on a real phone:
+     * a broadcast that had played a minute earlier would not start at all,
+     * while the same stream played in the browser, because the browser has no
+     * such call.
      *
      * `AVMediaCharacteristicLegible` is the characteristic HLS subtitle
      * renditions are grouped under. A recorded video from this server has no
@@ -189,13 +225,21 @@ class AvVideoPlayer : VideoPlayer {
      * correctly without being told what kind of video is playing.
      */
     private fun legibleGroup(): AVMediaSelectionGroup? {
-        val group = av.currentItem?.asset
-            ?.mediaSelectionGroupForMediaCharacteristic(AVMediaCharacteristicLegible)
+        val item = av.currentItem ?: return null
+        if (item.status != AVPlayerItemStatusReadyToPlay) return null
+        val group = item.asset
+            .mediaSelectionGroupForMediaCharacteristic(AVMediaCharacteristicLegible)
             ?: return null
         return if (group.options.isEmpty()) null else group
     }
 
     override fun showSubtitles(language: String) {
+        wantedSubtitles = language
+        applySubtitles()
+    }
+
+    private fun applySubtitles() {
+        val language = wantedSubtitles
         val item = av.currentItem ?: return
         val group = legibleGroup() ?: return
 
@@ -292,9 +336,33 @@ class AvVideoPlayer : VideoPlayer {
             } else {
                 null
             }
+            // The rewindable window, which is the only length a broadcast
+            // declares. Read every tick rather than once: it slides forward
+            // with the picture, and a window read at open is wrong a minute
+            // later. Several ranges is legal after a seek across a gap, so the
+            // first start and the last end are what bound the whole of it.
+            var windowStart = 0.0
+            var windowEnd = 0.0
+            if (isLive) {
+                val ranges = item?.seekableTimeRanges.orEmpty()
+                if (ranges.isNotEmpty()) {
+                    (ranges.first() as? NSValue)?.CMTimeRangeValue?.useContents {
+                        windowStart = CMTimeGetSeconds(start.readValue())
+                    }
+                    (ranges.last() as? NSValue)?.CMTimeRangeValue?.let {
+                        windowEnd = CMTimeGetSeconds(CMTimeRangeGetEnd(it))
+                    }
+                }
+                if (windowStart.isNaN() || windowEnd.isNaN()) {
+                    windowStart = 0.0
+                    windowEnd = 0.0
+                }
+            }
             _state.update {
                 it.copy(
                     hasEnded = ended,
+                    liveStartSeconds = windowStart,
+                    liveEndSeconds = windowEnd,
                     error = failure ?: it.error,
                     positionSeconds = CMTimeGetSeconds(time),
                     // NaN is what AVPlayer reports before it knows, and it must
@@ -309,6 +377,10 @@ class AvVideoPlayer : VideoPlayer {
             // the lock screen's clock counts on through a pause.
             val now = _state.value
             nowPlaying.progress(now.positionSeconds, now.isPlaying, now.durationSeconds)
+            // The track the viewer asked for, applied once the item can say
+            // what tracks it has. Asking at load is what this observer exists
+            // to replace — see `legibleGroup`.
+            if (wantedSubtitles.isNotEmpty()) applySubtitles()
         }
     }
 }
