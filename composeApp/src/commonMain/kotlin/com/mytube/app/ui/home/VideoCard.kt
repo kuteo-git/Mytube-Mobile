@@ -413,13 +413,27 @@ object Size {
     val topBar = 56.dp
 
     /**
+     * The air between the miniplayer's capsule and the bar under it.
+     *
+     * Two floating panes that touch are one pane with a line drawn on it.
+     *
+     * Here rather than beside the composable, because [miniPlayer] below is
+     * built from it and the miniplayer draws it — and the moment those two
+     * numbers live apart they can disagree about where the bar ends.
+     */
+    val miniGap = 6.dp
+
+    /**
      * The miniplayer bar's height, which lists must leave room for.
      *
      * Here rather than beside the composable that draws it, because the thing
      * that has to know is every scrolling screen — and a constant defined next
      * to its only *reader* is one nobody finds when they add the next screen.
+     *
+     * The capsule itself is [topBar] tall — the same as the tab bar it rests on
+     * — and this is that plus the air above it.
      */
-    val miniPlayer = 70.dp
+    val miniPlayer = topBar + miniGap
     val chip = 32.dp
 
     /**

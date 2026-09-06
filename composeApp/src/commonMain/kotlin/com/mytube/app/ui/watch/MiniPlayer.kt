@@ -1,6 +1,7 @@
 package com.mytube.app.ui.watch
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,46 +31,65 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.domain.repository.VideoPlayer
+import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.BarBackdrop
 import com.mytube.app.ui.shell.GLASS_MARGIN
 import com.mytube.app.ui.shell.GLASS_SHAPE
+import com.mytube.app.ui.shell.pressSquish
+import com.mytube.app.ui.shell.rememberLandingKnock
+import com.mytube.app.ui.shell.rememberGlassPress
 import com.mytube.app.ui.theme.Tokens
 
-/** The bar's height, which is what the picture inside it is sized from. */
-private val MINI_HEIGHT = 64.dp
+/**
+ * The bar's height, which is what the picture inside it is sized from.
+ *
+ * `Size.topBar` rather than a number of its own, because this capsule rests
+ * directly on the tab bar's capsule and the two are read as one set. It was
+ * 64dp against that bar's 56, and eight units of difference between two panes
+ * sharing an edge is the seam the charter has already recorded twice — once
+ * between these same two bars, in tint rather than in height.
+ *
+ * Taking the constant rather than writing 56 is the same rule: the charter
+ * records the web app learning four separate times that a bar's height belongs
+ * in exactly one place.
+ */
+private val MINI_HEIGHT = Size.topBar
 
 /** The shell's margin, so this pane lines up with the two bars. */
 val MINI_SIDE_MARGIN = GLASS_MARGIN
 
-/** The picture's inset from the capsule's top and bottom. */
 /**
- * How far the round window is inset from the capsule's top and bottom.
+ * How far the round window is inset from the capsule, on every side.
  *
  * Public because the drag reads it: the travelling picture has to land on the
  * *window*, not on the bar's top edge, and it was landing this much above it.
+ *
+ * **One number for all four sides, and the left used to be 14.** The argument
+ * for the larger left inset was that a true capsule's left edge curves away
+ * from the corners of anything reaching its top and bottom, so a picture
+ * starting where the top one does would have its corners clipped. That is
+ * correct for a *square*, and this window is a circle. A circle of radius
+ * `H / 2 - p` centred on the capsule's own left arc centre is concentric with
+ * that arc: the gap between the two curves is exactly `p` the whole way round,
+ * and nothing is clipped. Its bounding box then starts `p` from the left, which
+ * is the same `p` as above and below.
+ *
+ * So the extra six units were not clearance, they were an off-centre picture —
+ * reported as the padding at the top and bottom looking smaller than the one at
+ * the left, which is precisely what it was.
  */
 val MINI_THUMB_PAD = 8.dp
 
 /**
- * And from its left, which has to be further in.
- *
- * The capsule is a true capsule, so its left edge curves away from the corners
- * of anything that reaches its top and bottom. At 8dp down from the top of a
- * 64dp pane the edge is already 11dp in; a picture starting at 8dp has its
- * corners clipped. 14 clears it with a little to spare.
- */
-private val MINI_THUMB_START = 14.dp
-
-/**
  * The air between this capsule and the bar under it.
  *
- * Two floating panes that touch are one pane with a line drawn on it. It is part
- * of `Size.miniPlayer`, so the space every list reserves and the place the drag
- * aims at both already include it.
+ * `Size.miniPlayer` is built from it, so the space every list reserves and the
+ * place the drag aims at both already include it — which is why the number
+ * lives there rather than here.
  */
-private val MINI_GAP = 6.dp
+private val MINI_GAP = Size.miniGap
 
 /**
  * How wide the round window is, and how far in from the screen's edge its left
@@ -81,7 +103,7 @@ private val MINI_GAP = 6.dp
  * from the layer's measured width instead of guessed.
  */
 val MINI_THUMB_HEIGHT = MINI_HEIGHT - MINI_THUMB_PAD * 2
-val MINI_THUMB_LEFT = MINI_SIDE_MARGIN + MINI_THUMB_START
+val MINI_THUMB_LEFT = MINI_SIDE_MARGIN + MINI_THUMB_PAD
 
 
 /**
@@ -168,6 +190,21 @@ fun MiniPlayer(
     // *inside* it, so the pane stretched to the bottom of the screen when the
     // tab bar was gone; a floating capsule must not stretch — it keeps its shape
     // and moves.
+    // The whole pane gives under a finger, as every other pane in this app
+    // does. The squash is on the capsule and not on the row inside it, because
+    // what is being pressed is the sheet of glass — the picture and the two
+    // lines of text travel with it because they are on it.
+    val source = remember { MutableInteractionSource() }
+    val press = rememberGlassPress(source)
+    // A knock, not a tick.
+    //
+    // `Haptics.kt` draws the line: a *selection* is a value moving through
+    // discrete positions, an *impact* is something arriving and stopping.
+    // Pressing this bar is the video coming back to full screen, which is the
+    // same arrival the drag's landing already knocks for — and the tick is what
+    // the tab bar and the chips use, where the press changes which of several
+    // things is chosen. There is nothing being chosen here.
+    val knock = rememberLandingKnock()
     Box(
         modifier
             .fillMaxWidth()
@@ -176,10 +213,15 @@ fun MiniPlayer(
                 end = MINI_SIDE_MARGIN,
                 bottom = bottomInset + MINI_GAP,
             )
+            .pressSquish(press)
             .clip(MINI_SHAPE)
             // The whole bar reopens the video. A target this size wants one
             // meaning, and the two buttons on it carve out their own.
-            .clickable(onClick = onExpand),
+            .clickable(
+                interactionSource = source,
+                indication = null,
+                onClick = { knock(); onExpand() },
+            ),
     ) {
     // The same material as the bars, rather than a solid fill. It sits above the
     // tab bar and inherits that bar's job of letting the feed show through — a
@@ -194,7 +236,7 @@ fun MiniPlayer(
     Column(Modifier.fillMaxWidth()) {
 
         Row(
-            Modifier.fillMaxWidth().height(MINI_HEIGHT),
+            Modifier.fillMaxWidth().height(MINI_HEIGHT).padding(end = BAR_ROW_END),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // A round window, not a 16:9 slot.
@@ -202,13 +244,13 @@ fun MiniPlayer(
             // A circle needs the picture to *fill* it — see `VideoSurface`'s
             // `fill`. Fitted inside, a 16:9 frame in a circle is a stripe with
             // two black caps, which reads as a broken image rather than as a
-            // window. Nothing is lost by cropping here: at 48dp nobody is
+            // window. Nothing is lost by cropping here: at 40dp nobody is
             // watching the edges of the shot, and the whole frame is one tap
             // away.
             Box(
                 Modifier
                     .padding(
-                        start = MINI_THUMB_START,
+                        start = MINI_THUMB_PAD,
                         top = MINI_THUMB_PAD,
                         bottom = MINI_THUMB_PAD,
                     )
@@ -241,7 +283,18 @@ fun MiniPlayer(
                     // block of text over a picture the size of a stamp; what is
                     // wanted here is enough to recognise, not enough to read.
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    // It scrolls rather than ending in an ellipsis, and only
+                    // when it has to: `basicMarquee` measures the text against
+                    // the space it was given and animates nothing when it fits.
+                    // So a short title is as still as it ever was, and the
+                    // condition is the layout's rather than a boolean this
+                    // composable would have to keep in step with the width.
+                    //
+                    // **The title only.** The channel keeps its ellipsis: two
+                    // lines travelling in the same direction inside a 40dp-tall
+                    // bar is two things asking to be followed, and the one
+                    // worth following is the one that names the video.
+                    modifier = Modifier.basicMarquee(),
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
@@ -331,19 +384,77 @@ private val MINI_PROGRESS_HEIGHT = 1.5.dp
 private val MINI_SHAPE = GLASS_SHAPE
 
 /**
- * A 48dp target around a 22dp glyph.
+ * The width of one of the two buttons, and the reason it is not 48.
+ *
+ * The glyph is 22dp, so a 48dp box leaves 13dp of air on each side of it — and
+ * that is what put the X's glyph 13dp from the capsule's right edge while the
+ * round window sits 8dp from its left, and left 26dp of nothing between the two
+ * glyphs. Reported as the two buttons being too far apart and not matching the
+ * padding on the right, which is exactly the arithmetic above.
+ *
+ * **The right end is a capsule arc, so the thing to mirror is the *centre*, not
+ * the edge.** The window's centre is `MINI_THUMB_PAD + MINI_THUMB_HEIGHT / 2`
+ * from the left — the capsule's own arc centre, which is where a circle has to
+ * sit to be concentric with it. The last glyph's centre is placed the same
+ * distance from the right, which is what [BAR_BUTTON_WIDTH] and [BAR_ROW_END]
+ * together arrange.
+ *
+ * Narrower, not shorter: the row has width to spare and 48dp of *height* is
+ * what makes a near miss unlikely in the direction a thumb actually strays.
+ * 44dp is the platform's own floor, and it is still wider than the 40dp window
+ * opposite it.
+ */
+private val BAR_BUTTON_WIDTH = 44.dp
+
+/** And the height, which stays what it was. */
+private val BAR_BUTTON_HEIGHT = 48.dp
+
+/**
+ * What is left over at the end of the row.
+ *
+ * The last glyph's centre lands at `BAR_ROW_END + BAR_BUTTON_WIDTH / 2` from
+ * the capsule's right edge, and that has to equal the window's own centre on
+ * the other side. Written as the subtraction rather than as a number, so the
+ * two sides cannot drift apart the next time either is changed.
+ */
+private val BAR_ROW_END =
+    MINI_THUMB_PAD + MINI_THUMB_HEIGHT / 2 - BAR_BUTTON_WIDTH / 2
+
+/**
+ * A 44×48dp target around a 22dp glyph.
  *
  * Both of these sit inside a row that is itself clickable, so they have to be
  * comfortably hittable or a near miss reopens the video instead of pausing it —
  * which is the worst possible outcome of aiming at pause.
+ *
+ * ## Why it squashes and has no pane of its own
+ *
+ * The squash for the reason every control in this app has one: without it a
+ * button is one people press twice. And it is the *reason the 48dp target above
+ * is worth having* — a target nobody can see is only as good as the
+ * acknowledgement it gives, and this one gave none.
+ *
+ * No material, exactly as `TabItem` has none. These glyphs sit **on** the bar's
+ * pane; a second pane laid on the first is two sheets of glass at one place,
+ * which is the seam this bar and the tab bar were unified to remove. What is
+ * left is the movement, which is the half that answers the finger.
+ *
+ * The press is its own `MutableInteractionSource`, so the bar behind it does not
+ * squash too: `clickable` on this Box consumes the down event, and the outer
+ * one never starts an interaction. Pressing pause has to look like pressing
+ * pause and not like pressing the bar.
  */
 @Composable
 private fun BarButton(onClick: () -> Unit, icon: @Composable () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val press = rememberGlassPress(source)
     Box(
         Modifier
-            .size(48.dp)
+            .width(BAR_BUTTON_WIDTH)
+            .height(BAR_BUTTON_HEIGHT)
+            .pressSquish(press)
             .clip(CircleShape)
-            .clickable(onClick = onClick),
+            .clickable(interactionSource = source, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         icon()

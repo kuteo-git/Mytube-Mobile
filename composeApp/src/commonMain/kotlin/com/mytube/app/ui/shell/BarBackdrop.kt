@@ -310,9 +310,11 @@ val GLASS_BLUR = 8.dp
  * first on the worry that a 28dp curve would eat the first and last thing in the
  * row; it does not, because a capsule's left edge is at x=0 across the whole
  * middle of its height and everything in these rows is vertically centred. What
- * it does eat is a corner of something that reaches the pane's own top or bottom
- * edge — the miniplayer's picture, which is why that one is inset further from
- * the left than from the top.
+ * it does eat is a *corner* of something that reaches the pane's own top or
+ * bottom edge — a square one. The miniplayer's picture used to be inset further
+ * from the left than from the top for that reason, and that was wrong: it is a
+ * circle, and a circle concentric with the capsule's own arc keeps an even gap
+ * the whole way round at the same inset as the top and bottom.
  */
 val GLASS_MARGIN = 16.dp
 val GLASS_SHAPE = RoundedCornerShape(percent = 50)

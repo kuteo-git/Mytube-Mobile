@@ -18,6 +18,7 @@ import platform.AVFoundation.AVPlayerLayer
 import platform.CoreGraphics.CGRect
 import platform.CoreGraphics.CGRectMake
 import platform.CoreGraphics.CGRectZero
+import platform.QuartzCore.CATransaction
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 import platform.UIKit.UIApplicationDidEnterBackgroundNotification
@@ -65,7 +66,9 @@ private class VideoContainer(private val playerLayer: AVPlayerLayer) :
         super.layoutSubviews()
         // Bounds, not frame: a sublayer is positioned in its parent's own
         // coordinate space, where the origin is always zero.
-        playerLayer.setFrame(bounds)
+        //
+        // And inside a transaction with actions off, which is not a detail.
+        withoutImplicitAnimation { playerLayer.setFrame(bounds) }
     }
 }
 
@@ -105,12 +108,14 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) 
     // to be the layer's own property rather than a transform on the view: an
     // interop layer that is scaled is not a resized one.
     SideEffect {
+        withoutImplicitAnimation {
         playerLayer.videoGravity = if (fill) {
             AVLayerVideoGravityResizeAspectFill
         } else {
             // A vertical video is letterboxed rather than having its sides cut
             // off. The server publishes both shapes.
             AVLayerVideoGravityResizeAspect
+        }
         }
     }
 
@@ -156,10 +161,47 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) 
             }
         },
         onResize = { view: UIView, rect: CValue<CGRect> ->
-            view.layer.setFrame(rect)
-            rect.useContents {
-                playerLayer.setFrame(CGRectMake(0.0, 0.0, size.width, size.height))
+            withoutImplicitAnimation {
+                view.layer.setFrame(rect)
+                rect.useContents {
+                    playerLayer.setFrame(CGRectMake(0.0, 0.0, size.width, size.height))
+                }
             }
         },
     )
+}
+
+/**
+ * Runs a layer change with CoreAnimation's implicit animation switched off.
+ *
+ * # Why every geometry change here has to go through this
+ *
+ * A `CALayer` that is not a view's own backing layer has **implicit animations
+ * on by default**: setting `frame`, `bounds` or `videoGravity` outside an
+ * explicit transaction starts an animation to the new value, and the default
+ * duration is a quarter of a second. UIKit turns those off for a `UIView`'s own
+ * layer during layout; `playerLayer` is a sublayer this file adds by hand, so
+ * nothing was turning them off for it.
+ *
+ * What that costs is not a nicety. The drag to the miniplayer resizes this
+ * view on **every frame**, so every frame started a fresh quarter-second
+ * animation toward a target that had already moved — the picture eased toward
+ * the finger instead of following it, and carried on easing for a quarter of a
+ * second *after the finger stopped*. Reported from the phone as the video
+ * cropping "like an animation", and as it cropping on after the drag ended.
+ * Compose had the geometry right the whole time; CoreAnimation was
+ * interpolating it.
+ *
+ * The animation Compose does want — the picture travelling and shrinking — is
+ * Compose's own, driven by the drag's offset. There is no second one to keep.
+ */
+@OptIn(ExperimentalForeignApi::class)
+private inline fun withoutImplicitAnimation(block: () -> Unit) {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    try {
+        block()
+    } finally {
+        CATransaction.commit()
+    }
 }

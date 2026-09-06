@@ -3142,3 +3142,93 @@ list** — which is what a `LazyColumn` does when a key arrives twice.
 - The regression test is at the ViewModel, not the list: the invariant is
   *state has unique ids*, and it is checkable in milliseconds without a
   measure pass. It was red before the fix — `[one, two, two, three]`.
+
+## The miniplayer answers a finger, and CoreAnimation was in the way (2026-09-06)
+
+Reported in one sitting: the bar acknowledges nothing when it is pressed, its
+round window sits off-centre, it is a different height from the tab bar it rests
+on, the two buttons are too far apart, and the video crops "like an animation"
+during the drag — carrying on after the finger has stopped.
+
+### The window was never off-centre by clearance, it was just off-centre
+
+`MINI_THUMB_START` was 14dp against `MINI_THUMB_PAD`'s 8, and the comment
+justifying it was sound about the wrong shape: a true capsule's left edge curves
+away from the corners of anything reaching its top and bottom, **so a square
+would be clipped**. This is a circle. A circle of radius `H / 2 − p` centred on
+the capsule's own left arc centre is *concentric* with that arc — the gap is
+exactly `p` the whole way round and nothing is clipped — and its bounding box
+therefore starts `p` from the left. So the six extra units were not clearance.
+One `MINI_THUMB_PAD` for all four sides now.
+
+- **The right end is an arc too, so what mirrors the window is its *centre*.**
+  The two buttons were 48dp boxes around 22dp glyphs, which left the X's glyph
+  13dp from the capsule's edge against the window's 8, and 26dp of nothing
+  between the two glyphs. `BAR_ROW_END` is written as the subtraction that puts
+  the last glyph's centre the same distance from the right as the window's is
+  from the left, so the two sides cannot drift apart.
+- **44dp wide and still 48 tall.** The row has width to spare, and 48dp of
+  *height* is what makes a near miss unlikely in the direction a thumb strays —
+  the gear on the player learned the same thing from the other side.
+- **`MINI_HEIGHT` is `Size.topBar`.** It was 64 against the tab bar's 56, and
+  eight units between two panes sharing an edge is the seam these same two bars
+  were unified to remove once already, in tint rather than in height. `MINI_GAP`
+  moved to `Size.miniGap` so `Size.miniPlayer` is built from both — the charter
+  records the web app learning four times that a bar's height belongs in one
+  place, and this is that rule applied to the space *around* one.
+
+### The title scrolls, and only when it has to
+
+`basicMarquee` measures the text against the space it was given and animates
+nothing when it fits, so the condition is the layout's rather than a boolean
+this composable would have to keep in step with the width. The channel keeps its
+ellipsis: two lines travelling the same way inside a 56dp bar is two things
+asking to be followed.
+
+### The press, and a knock rather than a tick
+
+`pressSquish` on the capsule and on each button, each with its own
+`MutableInteractionSource` so a press on pause does not squash the bar behind it
+— pressing pause has to look like pressing pause. The haptic is
+`rememberLandingKnock()`, not the tick: `Haptics.kt` draws that line as
+*arrival* against *a value moving through positions*, and nothing here is being
+chosen from several.
+
+**The squash on the bar is unverified.** `idb ui tap --duration` does not hold a
+touch — proved by raising `PRESS_SQUASH` to 20% and measuring: neither the bar
+nor a chip moved by a single pixel while held, and a chip certainly squashes. So
+whether the native video surface follows a `graphicsLayer` scale is still open,
+and `WatchScreen`'s own comment is the reason to doubt it: *"a scaled interop
+layer is not a resized one"*.
+
+### A quarter-second animation nobody wrote
+
+`playerLayer` is a sublayer this file adds with `addSublayer` — **not** a
+`UIView`'s backing layer. UIKit switches CoreAnimation's implicit animations off
+for the second kind and not the first, so every `setFrame` here started a
+default **0.25s** animation to the new value. The drag resizes the view on every
+frame, so every frame began a fresh quarter-second animation toward a target
+that had already moved: the picture *eased toward* the finger instead of
+following it, and carried on easing for a quarter of a second after the finger
+stopped. Reported exactly that way, and confirmed by the fix.
+
+`withoutImplicitAnimation` wraps the two `setFrame` sites and `videoGravity`,
+which animates for the same reason.
+
+- **Compose had the geometry right the whole time.** `dragOffset` is one to one,
+  `travelProgress` is linear and `lerp` is linear, each with a comment saying
+  why. Nothing in Kotlin was interpolating anything; a layer below it was.
+- **The lesson generalises past this file**: any `CALayer` added by hand carries
+  implicit animations, and a layer driven by a gesture must have them off. The
+  symptom is not a wrong value, it is the right value arriving late — which
+  reads as jank rather than as a bug.
+
+### The measurement that could not be made, recorded as such
+
+No automated loop caught this. `idb` cannot hold a touch mid-drag; a recording
+of the expand gesture was contaminated because autoplay had moved to a video
+still loading, so the black frames in it were a load rather than a lag. What
+identified the cause was reading for a mechanism that explains **both**
+symptoms — the lag *and* the tail after the finger lifts — and only the implicit
+animation does. A recomposition-per-frame theory explains the first and not the
+second, and stays on the shelf.
