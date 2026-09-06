@@ -163,6 +163,10 @@ interface Strings {
     val autoplay: String
     val comments: String
     val noComments: String
+    /** "1 reply" / "5 replies" — the button that unfolds a comment's replies. */
+    fun replyCount(count: Int): String
+    /** The same button once they are showing. */
+    val hideReplies: String
     val subscribersShort: String
     val share: String
     val showMore: String
@@ -383,6 +387,9 @@ object EnglishStrings : Strings {
     override val autoplay = "Autoplay"
     override val comments = "Comments"
     override val noComments = "No comments yet"
+    override fun replyCount(count: Int) =
+        if (count == 1) "1 reply" else "$count replies"
+    override val hideReplies = "Hide replies"
     override val subscribersShort = "subscribers"
     override val share = "Share"
     override val showMore = "...more"
@@ -558,6 +565,10 @@ object VietnameseStrings : Strings {
     override val autoplay = "Tự động phát"
     override val comments = "Bình luận"
     override val noComments = "Chưa có bình luận"
+    // No plural: Vietnamese does not inflect a noun for number, and the web
+    // app's own version once printed "3 ngàys trước" by assuming it did.
+    override fun replyCount(count: Int) = "$count phản hồi"
+    override val hideReplies = "Ẩn phản hồi"
     override val subscribersShort = "người đăng ký"
     override val share = "Chia sẻ"
     override val showMore = "...thêm"

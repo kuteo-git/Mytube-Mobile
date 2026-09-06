@@ -1,5 +1,12 @@
 package com.mytube.app.ui.watch
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -19,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +47,7 @@ import com.mytube.app.ui.home.formatViews
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.glassControl
+import com.mytube.app.ui.shell.skeletonShade
 import com.mytube.app.ui.theme.Tokens
 import com.mytube.app.ui.shell.pressableGlassControl
 
@@ -64,6 +73,8 @@ fun UpNextRail(
     videos: List<Video>,
     collapsed: Boolean,
     channelOnly: Boolean,
+    /** The rail's own request is still out. It is fetched after the picture. */
+    loading: Boolean,
     mediaBaseUrl: String,
     onToggleCollapsed: () -> Unit,
     onSelectFilter: (Boolean) -> Unit,
@@ -74,30 +85,61 @@ fun UpNextRail(
 ) {
     val strings = LocalStrings.current
 
+    val shade = skeletonShade()
+    val turn by animateFloatAsState(if (collapsed) 0f else 180f, label = "up-next-chevron")
+
     Column(modifier.fillMaxWidth().padding(horizontal = Space.lg)) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .pressableGlassControl(RoundedCornerShape(12.dp), onClick = onToggleCollapsed)
-                .padding(horizontal = Space.md, vertical = Space.sm),
+                .padding(horizontal = Space.md, vertical = Space.sm)
+                // The header is two lines with an answer and one without, and
+                // switching filters puts it through both — so pressing a chip
+                // made the pane jump shorter and then taller again under the
+                // thumb that pressed it. It keeps both lines throughout now, and
+                // this is what carries it between the two heights when a title
+                // is short enough to need only one.
+                .animateContentSize(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = strings.nextUp(videos.firstOrNull()?.title ?: strings.nothingQueued),
+                    // "Next: nothing queued" while the request is still out is
+                    // an answer nobody has been given yet. The plain heading
+                    // says only what is true, and the title arrives with the
+                    // rows below it.
+                    text = if (loading) {
+                        strings.upNext
+                    } else {
+                        strings.nextUp(videos.firstOrNull()?.title ?: strings.nothingQueued)
+                    },
                     color = Tokens.text,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                videos.firstOrNull()?.let {
-                    Text(
-                        text = it.channel.name,
+                val next = videos.firstOrNull()
+                when {
+                    next != null -> Text(
+                        text = next.channel.name,
                         color = Tokens.text2,
                         fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                    // The second line is held open while the answer is on its
+                    // way, as a bar rather than as empty space: the row is a
+                    // pane, and a pane that grows a line when a request lands
+                    // moves everything under a thumb already reaching for it.
+                    loading -> Box(
+                        Modifier
+                            .padding(top = 3.dp)
+                            .fillMaxWidth(0.4f)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shade),
                     )
                 }
             }
@@ -105,31 +147,88 @@ fun UpNextRail(
                 imageVector = ChevronIcon,
                 contentDescription = strings.upNext,
                 tint = Tokens.text,
-                // Pointing right when the list is folded away, which is the
-                // direction it would come back from.
-                modifier = Modifier.size(20.dp).rotate(if (collapsed) -90f else 0f),
+                // Down when folded and up when open, turning between the two —
+                // the same two positions and the same turn as the comments
+                // heading above it. It pointed right and snapped, which made two
+                // sections a thumb's width apart read as two different controls.
+                modifier = Modifier.size(20.dp).rotate(turn),
             )
         }
 
-        if (collapsed) return@Column
-
-        Spacer(Modifier.height(Space.md))
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        AnimatedVisibility(
+            visible = !collapsed,
+            enter = expandVertically(SECTION_SPRING) + fadeIn(),
+            exit = shrinkVertically(SECTION_SPRING) + fadeOut(),
         ) {
-            FilterChip(strings.allSources, !channelOnly) { onSelectFilter(false) }
-            FilterChip(strings.fromChannel(current.channel.name), channelOnly) {
-                onSelectFilter(true)
+            Column {
+                Spacer(Modifier.height(Space.md))
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(Space.sm),
+                ) {
+                    FilterChip(strings.allSources, !channelOnly) { onSelectFilter(false) }
+                    FilterChip(strings.fromChannel(current.channel.name), channelOnly) {
+                        onSelectFilter(true)
+                    }
+                }
+
+                Spacer(Modifier.height(Space.md))
+                if (loading && videos.isEmpty()) {
+                    UpNextSkeleton()
+                } else {
+                    videos.forEach { video ->
+                        SuggestionRow(video, mediaBaseUrl, today) { onOpenVideo(video.id) }
+                        Spacer(Modifier.height(Space.sm))
+                    }
+                }
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(Space.md))
-        videos.forEach { video ->
-            SuggestionRow(video, mediaBaseUrl, today) { onOpenVideo(video.id) }
+/**
+ * The rail, before it arrives.
+ *
+ * The same 168dp box and the same three lines beside it as [SuggestionRow], so
+ * nothing moves when the answer lands — which is the whole promise a skeleton
+ * makes, and the reason this one is not three plain grey bands.
+ */
+@Composable
+private fun UpNextSkeleton() {
+    val shade = skeletonShade()
+    Column(Modifier.fillMaxWidth()) {
+        repeat(3) {
+            Row(Modifier.fillMaxWidth().padding(Space.xs)) {
+                Box(
+                    Modifier
+                        .width(168.dp)
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(shade),
+                )
+                Spacer(Modifier.width(Space.sm))
+                Column(Modifier.weight(1f)) {
+                    SkeletonBar(shade, 1f)
+                    Spacer(Modifier.height(Space.xs))
+                    SkeletonBar(shade, 0.7f)
+                    Spacer(Modifier.height(Space.xs))
+                    SkeletonBar(shade, 0.45f)
+                }
+            }
             Spacer(Modifier.height(Space.sm))
         }
     }
+}
+
+@Composable
+private fun SkeletonBar(shade: Color, width: Float) {
+    Box(
+        Modifier
+            .fillMaxWidth(width)
+            .height(12.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(shade),
+    )
 }
 
 @Composable

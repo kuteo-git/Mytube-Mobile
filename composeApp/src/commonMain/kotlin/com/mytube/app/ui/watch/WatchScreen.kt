@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,8 +33,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -157,6 +163,7 @@ fun WatchScreen(
         hasPrevious = hasPrevious,
         onToggleRail = viewModel::toggleRail,
         onFilterRail = viewModel::filterRail,
+        onLoadComments = viewModel::loadComments,
         onOpenVideo = onOpenVideo,
         onOpenChannel = onOpenChannel,
     )
@@ -184,6 +191,8 @@ fun WatchContent(
     hasPrevious: Boolean,
     onToggleRail: () -> Unit,
     onFilterRail: (Boolean) -> Unit,
+    /** Asked once, when the comments section is opened for the first time. */
+    onLoadComments: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
 ) {
@@ -193,6 +202,55 @@ fun WatchContent(
     val today = remember { todayISO() }
     var fullscreen by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
+    val videoId = (state as? WatchState.Playing)?.video?.id.orEmpty()
+
+    // Which comments have their replies showing.
+    //
+    // Here rather than inside the row, because the comments are one item each
+    // and an item scrolled off the screen is disposed — unfolding a thread, then
+    // scrolling past it and back, would find it folded again. Keyed on the
+    // video, so the answers belong to the video they were opened on; and
+    // `rememberSaveable`, so a turn of the phone does not fold them either.
+    var expandedReplies by rememberSaveable(
+        videoId,
+        saver = listSaver<MutableState<Set<String>>, String>(
+            save = { it.value.toList() },
+            restore = { mutableStateOf(it.toSet()) },
+        ),
+    ) { mutableStateOf(emptySet()) }
+
+    // Folded when the video opens, and nothing is fetched until it is not: the
+    // gateway sends no comment count with a video, so there is no number to show
+    // in the heading and no reason to ask for two thousand rows nobody has
+    // scrolled to.
+    var commentsOpen by rememberSaveable(videoId) { mutableStateOf(false) }
+
+    // Hoisted, and keyed on the video: without a key this state outlives the
+    // video it belongs to, and opening another one from the rail drops the
+    // viewer into the middle of the previous video's comments. It is hoisted
+    // rather than left inside the list because [holdPosition] has to read it.
+    val listState = rememberSaveable(videoId, saver = LazyListState.Saver) { LazyListState() }
+
+    // Where the list is to come back to after the content under it shrinks.
+    //
+    // Switching the rail's channel replaces its rows with a skeleton in a single
+    // frame, and a `LazyColumn` answers a page that suddenly got shorter by
+    // clamping its scroll — so the chip that was just pressed jumps up the
+    // screen. Recording a position and restoring it is the whole fix.
+    //
+    // Only that one press needs it. Everything else that shrinks this page now
+    // shrinks over several frames, which the list follows on its own.
+    var anchor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    LaunchedEffect(anchor) {
+        val (index, offset) = anchor ?: return@LaunchedEffect
+        // Two frames: the first is the recomposition that removes the rows, the
+        // second is the layout pass that clamps the scroll. Restoring before
+        // that pass is restoring something it is about to undo.
+        withFrameNanos {}
+        withFrameNanos {}
+        listState.scrollToItem(index, offset)
+        anchor = null
+    }
     // How far through the drag-to-miniplayer gesture this screen is, and how
     // many pixels the picture has to cross to reach the bar.
     val drag = LocalDragProgress.current
@@ -501,6 +559,7 @@ fun WatchContent(
             // thumbnail and every comment before the viewer had scrolled to any.
             is WatchState.Playing -> LazyColumn(
                 Modifier.fillMaxSize(),
+                state = listState,
                 contentPadding = PaddingValues(
                     bottom = WindowInsets.navigationBars.asPaddingValues()
                         .calculateBottomPadding() + Space.lg,
@@ -547,21 +606,46 @@ fun WatchContent(
                     DescriptionBox(state.video, Modifier.padding(horizontal = Space.lg))
                 }
 
-                item(key = "comments") {
-                    Spacer(Modifier.height(Space.xl))
-                    CommentSection(state.comments.size, state.comments, state.loadingComments)
-                }
+                item(key = "comments-gap") { Spacer(Modifier.height(Space.xl)) }
 
-                item(key = "up-next") {
+                commentSection(
+                    comments = state.comments,
+                    loading = state.loadingComments,
+                    loaded = state.commentsLoaded,
+                    open = commentsOpen,
+                    onToggleOpen = {
+                        // No anchor here, deliberately. The section shrinks over
+                        // several frames now, so the list's own clamping follows
+                        // it down smoothly; a scroll restored two frames in
+                        // would land in the middle of that and be clamped again
+                        // on every frame after it.
+                        if (!commentsOpen) onLoadComments()
+                        commentsOpen = !commentsOpen
+                    },
+                    expanded = expandedReplies,
+                    onToggleReplies = { id ->
+                        expandedReplies = if (id in expandedReplies) {
+                            expandedReplies - id
+                        } else {
+                            expandedReplies + id
+                        }
+                    },
+                )
+
+                item(key = UP_NEXT) {
                     Spacer(Modifier.height(Space.lg))
                     UpNextRail(
                         current = state.video,
                         videos = state.upNext,
                         collapsed = state.railCollapsed,
+                        loading = state.loadingUpNext,
                         channelOnly = state.railChannelOnly,
                         mediaBaseUrl = mediaBaseUrl,
                         onToggleCollapsed = onToggleRail,
-                        onSelectFilter = onFilterRail,
+                        onSelectFilter = {
+                            anchor = listState.holdPosition(UP_NEXT)
+                            onFilterRail(it)
+                        },
                         onOpenVideo = onOpenVideo,
                         today = today,
                     )
@@ -731,6 +815,33 @@ private fun Message(title: String, detail: String, actionLabel: String, onAction
     }
 }
 
+/**
+ * The scroll position to restore once the rows below [key] have gone.
+ *
+ * `scrollToItem` places an item's start at the top of the viewport and then
+ * scrolls `offset` pixels further into it, so both numbers it takes are
+ * distances forward — neither may be negative. That is what decides which item
+ * is anchored on: when the row named by [key] is at or above the top of the
+ * screen, the distance back to it is positive and it can be the anchor itself;
+ * when it is further down, the rows above it are on screen and unchanged, so the
+ * first visible one is both a valid anchor and a non-negative one.
+ *
+ * Null when the row is not on screen at all — which cannot happen for a row that
+ * was just pressed, and is the honest answer if it ever does.
+ */
+private fun LazyListState.holdPosition(key: Any): Pair<Int, Int>? {
+    val row = layoutInfo.visibleItemsInfo.firstOrNull { it.key == key } ?: return null
+    val fromTop = row.offset - layoutInfo.viewportStartOffset
+    return if (fromTop <= 0) {
+        row.index to -fromTop
+    } else {
+        firstVisibleItemIndex to firstVisibleItemScrollOffset
+    }
+}
+
+/** The key of the up-next row, so the list can be held still against it. */
+private const val UP_NEXT = "up-next"
+
 // --- previews ---------------------------------------------------------------
 //
 // `player = null` throughout: a Preview has no decoder, and the surface is the
@@ -754,10 +865,17 @@ private fun sample(id: String, title: String, subscribed: Boolean = false) = Vid
     thumbnailPath = "thumbnails/$id.jpg",
 )
 
-private fun playing(video: Video, upNext: List<Video> = emptyList()) = WatchState.Playing(
+private fun playing(
+    video: Video,
+    upNext: List<Video> = emptyList(),
+    loadingComments: Boolean = false,
+    loadingUpNext: Boolean = false,
+) = WatchState.Playing(
     video = video,
     playback = PlaybackState(isPlaying = true, positionSeconds = 312.0, durationSeconds = 1397.0),
     upNext = upNext,
+    loadingComments = loadingComments,
+    loadingUpNext = loadingUpNext,
 )
 
 @Composable
@@ -783,6 +901,7 @@ private fun preview(state: WatchState) {
             hasPrevious = false,
             onToggleRail = {},
             onFilterRail = {},
+            onLoadComments = {},
             onOpenVideo = {},
             onOpenChannel = {},
         )
@@ -825,3 +944,17 @@ private fun WatchVietnamesePreview() {
         preview(playing(sample("a", "Đánh giá Nothing Phone (4a) Pro")))
     }
 }
+
+/** Comments and the rail, both still on their way: two skeletons at once. */
+@Preview
+@Composable
+private fun WatchLoadingBelowPreview() {
+    preview(
+        playing(
+            sample("a", "Has the Carney government lost trust in the Trump administration?"),
+            loadingComments = true,
+            loadingUpNext = true,
+        ),
+    )
+}
+

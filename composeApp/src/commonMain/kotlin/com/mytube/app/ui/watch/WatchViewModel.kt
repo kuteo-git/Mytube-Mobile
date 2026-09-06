@@ -131,8 +131,27 @@ sealed interface WatchState {
          */
         val hasLiveCaptions: Boolean = false,
         val comments: List<Comment> = emptyList(),
-        /** An import is running because the catalogue held none. */
+        /**
+         * The comments are still on their way.
+         *
+         * True from the first request rather than only while an import runs, so
+         * the section can draw the shape of what is coming for the whole wait.
+         * It used to cover the import alone, which meant the *usual* case — a
+         * video whose comments the catalogue already holds — showed an empty
+         * heading reading "0 comments" until they landed.
+         */
         val loadingComments: Boolean = false,
+        /**
+         * The comments have been asked for and answered.
+         *
+         * Separate from `comments.isEmpty()` because those are two different
+         * answers: a video nobody has commented on and a video nobody has asked
+         * about. It is also what stops a second fetch when the section is folded
+         * away and opened again.
+         */
+        val commentsLoaded: Boolean = false,
+        /** The rail's request is still out. It is fetched after the picture. */
+        val loadingUpNext: Boolean = false,
         /** The rail is folded away, which is a per-video preference nobody stores. */
         val railCollapsed: Boolean = false,
         /** The rail is filtered to this video's own channel. */
@@ -516,6 +535,7 @@ class WatchViewModel(
             railChannelOnly = channelOnly,
             upNext = emptyList(),
             nextId = nextId(emptyList()),
+            loadingUpNext = true,
         )
         loadUpNext(if (channelOnly) current.video.channel.id else "")
     }
@@ -901,7 +921,6 @@ class WatchViewModel(
             }.getOrElse(::asState)
 
             loadUpNext("")
-            loadComments()
             // Before the narration decision below, and deliberately: on a video
             // nobody has opened before there are no caption tracks yet, and the
             // pass this app is about to ask for reads one.
@@ -929,15 +948,25 @@ class WatchViewModel(
     }
 
     /**
-     * The comments, fetched after the picture like the rail.
+     * The comments, fetched when the section is opened.
+     *
+     * Not on arrival any more. The section is folded away when a video opens, so
+     * fetching then — and running an import for a video nobody has opened — was
+     * a request, and sometimes a scrape, for something nothing on screen shows.
      *
      * A failure leaves the list empty rather than raising: comments are the one
      * thing on this screen nothing depends on, and the server charter records
      * the web app's lesson about that — a refusal here once turned the console
      * red over a video that played perfectly.
      */
-    private fun loadComments() {
-        if (_state.value !is WatchState.Playing) return
+    fun loadComments() {
+        val current = _state.value as? WatchState.Playing ?: return
+        // Once per video. The section can be folded and unfolded all day; what
+        // it costs the second time is nothing.
+        if (current.commentsLoaded || current.loadingComments) return
+        _state.update { c ->
+            if (c is WatchState.Playing) c.copy(loadingComments = true) else c
+        }
         viewModelScope.launch {
             var found = runCatching { videos.comments(videoId) }.getOrDefault(emptyList())
 
@@ -947,16 +976,17 @@ class WatchViewModel(
                 // Once, and never on a retry loop: upstream declining is a real
                 // answer, and asking again on every visit is a request per view
                 // to an endpoint that can only say no.
-                _state.update { c ->
-                    if (c is WatchState.Playing) c.copy(loadingComments = true) else c
-                }
                 runCatching { videos.importComments(videoId) }
                 found = runCatching { videos.comments(videoId) }.getOrDefault(emptyList())
             }
 
             _state.update { current ->
                 if (current is WatchState.Playing) {
-                    current.copy(comments = found, loadingComments = false)
+                    current.copy(
+                        comments = found,
+                        loadingComments = false,
+                        commentsLoaded = true,
+                    )
                 } else {
                     current
                 }
@@ -973,12 +1003,15 @@ class WatchViewModel(
      */
     private fun loadUpNext(channelId: String) {
         if (_state.value !is WatchState.Playing) return
+        _state.update { c ->
+            if (c is WatchState.Playing) c.copy(loadingUpNext = true) else c
+        }
         viewModelScope.launch {
             val rail = runCatching { videos.upNext(videoId, channelId) }
                 .getOrDefault(emptyList())
             _state.update { current ->
                 if (current is WatchState.Playing) {
-                    current.copy(upNext = rail, nextId = nextId(rail))
+                    current.copy(upNext = rail, nextId = nextId(rail), loadingUpNext = false)
                 } else {
                     current
                 }
