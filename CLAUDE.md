@@ -3104,3 +3104,41 @@ sample text — one that does not exist. **YouTube's live ASR carries no
 punctuation at all**, so `firstClauseBoundary` never fires and every clause is
 closed by the word count instead. Inventing the data made the test pass on a
 path the real feed never takes.
+
+## A repeated row is a crash, not a repetition (2026-09-06)
+
+Reported as: on the Missed chip, scrolling far enough closes the app on its
+own. It was not memory and not the glass — 190 driven swipes on the simulator
+never fell over, and the machine's own footprint sat flat at ~360 MB.
+
+The phone's crash report is what settled it. `xcrun devicectl device info files
+--domain-type systemCrashLogs` lists a device's `.ips` files and `device copy
+from` pulls one off, which is worth writing down on its own: two days earlier
+the only crashes anybody had read were this Mac's simulator ones, and they were
+from an instrumented build nobody was running any more.
+
+```
+exception: EXC_CRASH / SIGABRT          (not EXC_BAD_ACCESS, so not Skia)
+lastExceptionBacktrace:
+  kfun:androidx.compose.foundation.lazy.LazyListMeasuredItemProvider#getAndMeasure
+  kfun:androidx.compose.ui.layout.LayoutNodeSubcompositionsState.Scope.subcompose
+```
+
+An unhandled Kotlin exception thrown **out of `subcompose` while measuring the
+list** — which is what a `LazyColumn` does when a key arrives twice.
+
+- **The server is not wrong.** `/api/feed/missed` pages by offset, so a video
+  ingested between two requests shifts the window and hands back a row that is
+  already on screen. Measured against the running gateway at 13:00 the seven
+  pages were clean, which is why this only ever happens while a scan is running
+  — reported at 07:18 and again at 07:19, and never since.
+- **`loadMore` was `current.videos + it.videos`.** A list that is keyed is a
+  promise of unique keys, and appending two pages the caller has not compared
+  is making that promise without checking it. `appendNew` keeps the row already
+  drawn — somebody may be looking at it — and drops the repeat.
+- **Both feeds that append had it**, Home and the channel page, and the search
+  screen's upstream half now has `distinctBy` for the same reason: those rows
+  come from yt-dlp, which this app does not get to promise anything about.
+- The regression test is at the ViewModel, not the list: the invariant is
+  *state has unique ids*, and it is checkable in milliseconds without a
+  measure pass. It was red before the fix — `[one, two, two, three]`.

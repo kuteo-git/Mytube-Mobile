@@ -6,6 +6,7 @@ import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.VideoRepository
+import com.mytube.app.ui.appendNew
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -261,7 +262,7 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
             }.fold(
                 onSuccess = {
                     current.copy(
-                        videos = current.videos + it.videos,
+                        videos = current.videos.appendNew(it.videos),
                         nextPageToken = it.nextPageToken,
                         loadingMore = false,
                     )

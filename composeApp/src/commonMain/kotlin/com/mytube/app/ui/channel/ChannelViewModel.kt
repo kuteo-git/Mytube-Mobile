@@ -7,6 +7,7 @@ import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.domain.repository.VideoRepository
+import com.mytube.app.ui.appendNew
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -173,7 +174,7 @@ class ChannelViewModel(
             }.fold(
                 onSuccess = {
                     current.copy(
-                        videos = current.videos + it.videos,
+                        videos = current.videos.appendNew(it.videos),
                         nextPageToken = it.nextPageToken,
                         loadingMore = false,
                     )

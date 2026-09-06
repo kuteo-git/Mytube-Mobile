@@ -263,7 +263,13 @@ fun SearchContent(
             // this row already appeared on this screen".
             val local = (state as? SearchState.Ready)?.videos.orEmpty()
             val localIds = local.map { it.id }.toSet()
-            val remaining = upstreamResults(upstream).filter { it.id !in localIds }
+            // `distinctBy` for the reason `appendNew` exists: these rows are
+            // keyed, and a key arriving twice throws out of `subcompose` during
+            // measure rather than drawing one row twice. Upstream is yt-dlp's
+            // answer, which this app does not get to promise anything about.
+            val remaining = upstreamResults(upstream)
+                .filter { it.id !in localIds }
+                .distinctBy { it.id }
 
             // A library half with nothing in it is not drawn at all.
             //

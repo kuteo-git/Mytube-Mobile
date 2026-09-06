@@ -218,6 +218,37 @@ class HomeViewModelTest {
     }
 
     /**
+     * A page that repeats a row must not repeat a key.
+     *
+     * The missed feed pages by offset, so a video arriving between two requests
+     * shifts the window and hands back a row already on screen. `LazyColumn` is
+     * keyed on the video id, and a duplicate key is not a cosmetic fault — it
+     * throws out of `subcompose` during measure and takes the app with it.
+     * Measured on the phone: `EXC_CRASH / SIGABRT`, an unhandled Kotlin
+     * exception whose backtrace is
+     * `LazyListMeasuredItemProvider.getAndMeasure -> subcompose`.
+     */
+    @Test
+    fun aRepeatedRowIsNotAppendedTwice() = runTest(dispatcher) {
+        val videos = FakeVideos(
+            pages = listOf(page("a", next = "")),
+            missedPages = listOf(
+                page("one", "two", next = "cursor"),
+                page("two", "three", next = ""),
+            ),
+        )
+        val model = HomeViewModel(videos)
+        advance()
+        model.select(Chip.Missed)
+        advance()
+        model.loadMore()
+        advance()
+
+        val state = assertIs<HomeState.Ready>(model.state.value)
+        assertEquals(listOf("one", "two", "three"), state.videos.map { it.id })
+    }
+
+    /**
      * A missed list that fails does not take Home down with it.
      *
      * It is asked on every load purely to decide whether one chip exists, and a
