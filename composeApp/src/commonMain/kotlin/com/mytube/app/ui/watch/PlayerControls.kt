@@ -495,9 +495,27 @@ fun PlayerControls(
 
                 // The clock as a pill at the bottom left, fullscreen opposite.
                 //
-                // The bottom padding clears the seek bar's **32dp target**, not
-                // its 3dp line — a row sitting 12dp up was inside the bar's
-                // reach even though nothing looked as though it touched.
+                // ## Why this is 24 and no longer 34
+                //
+                // It was 34, to clear the seek bar's **32dp target** rather than
+                // its 3dp line, after a row sitting 12dp up turned out to be
+                // inside the bar's reach with nothing looking as though it
+                // touched. What that reasoning missed is that this pill takes no
+                // touches at all: there is no `clickable` on it, and on iOS it
+                // crosses as `GlassItem(interactive = false)` because a readout
+                // is not a button. So it cannot steal the bar's target, and what
+                // it actually has to clear is the line that is drawn — which is
+                // at the very bottom.
+                //
+                // What forced the change is at the other end of the picture.
+                // Reported from a phone: the pill touches the Previous disc. The
+                // discs are centred in the picture and are a fixed size, while
+                // the picture's *height* is `width × 9 / 16` — so the narrower
+                // the screen in dp, the less room there is between the two.
+                // Measured: on a 411dp-wide emulator the gap is 27.7dp; on a
+                // 360dp phone it is 13.3dp, and it keeps closing from there.
+                // A number fixed against the bottom cannot answer that, so the
+                // pill moves down into the room it can have.
                 //
                 // And in fullscreen it has to clear the bar's own inset too.
                 // That was missed when the bar moved up off the screen edge:
@@ -516,7 +534,7 @@ fun PlayerControls(
                             bottom = if (fullscreen) {
                                 navigationInset + Space.lg + SEEK_TARGET + Space.sm
                             } else {
-                                34.dp
+                                24.dp
                             },
                         ),
                     verticalAlignment = Alignment.CenterVertically,

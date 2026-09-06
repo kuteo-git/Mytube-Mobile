@@ -3259,3 +3259,44 @@ there**: holding the finger still mid-gesture, the picture's edges are
 pixel-identical at +0.5s and +1.5s while its content goes on playing. No easing,
 no tail. That is the control the iOS diagnosis needed and could not have —
 `adb shell input motionevent` holds a touch down, and `idb` has no equivalent.
+
+## Two rows of arithmetic (2026-09-06)
+
+### A pill with a word in it stood taller than one without
+
+Share and Save were 43.8dp against like/dislike's 40.0 — measured on Android at
+420dpi, 115px against 105. All three carry `vertical = 10.dp`, so the difference
+was the content: like/dislike is a 20dp glyph and nothing else, while a labelled
+pill also holds a `Text`, and a 14sp line left to the font measures about 24dp.
+The row takes the tallest thing in it.
+
+`GlassPill`'s label now carries `lineHeight = 20.sp` — the icon's height, so the
+two things beside each other measure the same. Measured after: all three pills
+1220..1324, exactly 105px on every one.
+
+- **In the design system, not at the call site.** Every labelled pill in the app
+  had this, and the playlist page's Play all and Shuffle are the same component.
+- **20 against 14 is a ratio of 1.43**, comfortably above what Vietnamese needs:
+  the diacritics stack above and below, and they are the first thing a tight
+  line height cuts.
+
+### The clock touched Previous, and the fixed number was at the wrong end
+
+The pill's bottom padding was 34dp, set to clear the seek bar's **32dp target**
+rather than its 3dp line. That reasoning missed something: this pill takes no
+touches at all — no `clickable`, and on iOS it crosses as
+`GlassItem(interactive = false)` because a readout is not a button. It cannot
+steal the bar's target. What it has to clear is the line that is *drawn*.
+
+What forced the change is at the other end of the picture. The discs are centred
+and a fixed size; the picture's height is `width × 9 / 16`. So the gap between
+them is a function of the screen's width in dp, and nothing about the clock:
+
+| screen | picture | gap, disc to pill |
+|---|---|---|
+| 411dp emulator | 231.4dp | 27.7dp |
+| ~360dp phone | 202.5dp | **13.3dp** |
+
+24dp now, which buys exactly 10dp at both ends. **A number fixed against the
+bottom cannot answer a squeeze coming from the top** — if this closes again on a
+narrower phone, the disc size is the term to look at, not this one.

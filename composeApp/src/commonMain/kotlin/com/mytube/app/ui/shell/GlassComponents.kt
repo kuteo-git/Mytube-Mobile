@@ -548,7 +548,25 @@ fun GlassPill(
                 .scale(scaleX = 1f, scaleY = if (flipped) -1f else 1f),
         )
         Spacer(Modifier.width(Space.sm))
-        Text(label, color = ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(
+            label,
+            color = ink,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            // The line box is the icon's height, and that is what keeps a pill
+            // with a label the same height as one without.
+            //
+            // Left to the font, a 14sp line measures ~24dp — four more than the
+            // 20dp glyph beside it — so the row took the text's height and
+            // every labelled pill stood taller than the like/dislike pill next
+            // to it, which has a glyph and no words. Measured on Android at
+            // 420dpi: 115px against 105, which is 43.8dp against 40.0.
+            //
+            // 20sp against a 14sp face is a ratio of 1.43, comfortably above
+            // what Vietnamese needs — the diacritics stack above and below and
+            // are the first thing a tight line height cuts.
+            lineHeight = 20.sp,
+        )
     }
 }
 
