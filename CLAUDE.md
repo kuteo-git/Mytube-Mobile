@@ -3232,3 +3232,30 @@ identified the cause was reading for a mechanism that explains **both**
 symptoms — the lag *and* the tail after the finger lifts — and only the implicit
 animation does. A recomposition-per-frame theory explains the first and not the
 second, and stays on the shelf.
+
+### Media3 was drawing the captions too (2026-09-06)
+
+`useController = false` removes `PlayerView`'s *controls* and says nothing about
+its text. It keeps a `SubtitleView` and renders the selected track into it, so
+every cue was drawn twice — once by Media3 and once by this app's
+`SubtitleOverlay`, which is Compose and shared with iOS. The two disagree about
+where a line breaks, so the screen carried one sentence and most of the sentence
+before it, stacked.
+
+- **Only Android.** `AVPlayerLayer` draws no text at all.
+- **Found mid-drag, and that is what made it unmistakable.** Media3 sizes
+  captions in absolute `sp`, so a `PlayerView` shrunk to a third of the screen
+  still drew them at full size, spilling out of the picture and riding it down.
+  Doubled text on a full-width player reads as a rendering artefact; text that
+  does not scale with the thing it is on names its own cause.
+- **The track stays selected**, and only the view is hidden. Turning the track
+  off would stop the drawing by taking away what `SubtitleOverlay` draws from.
+- Set in `update` as well as `factory`, the lesson `videoGravity` cost on iOS:
+  a property assigned once at construction is one that reverts when the view is
+  rebuilt, with nothing reporting it.
+
+The drag itself was measured on Android in the same sitting and is **correct
+there**: holding the finger still mid-gesture, the picture's edges are
+pixel-identical at +0.5s and +1.5s while its content goes on playing. No easing,
+no tail. That is the control the iOS diagnosis needed and could not have —
+`adb shell input motionevent` holds a touch down, and `idb` has no equivalent.
