@@ -606,7 +606,18 @@ fun WatchContent(
                     DescriptionBox(state.video, Modifier.padding(horizontal = Space.lg))
                 }
 
-                item(key = "comments-gap") { Spacer(Modifier.height(Space.xl)) }
+                // The break between the video's own facts and the sections
+                // under them, and it is `lg` rather than `xl` so that it equals
+                // the one above the up-next rail.
+                //
+                // Both gaps carry 8dp of their own from `CommentsHeading`'s
+                // padding, which sits *outside* its pane — so this spacer made
+                // 32dp on screen against the rail's 24, measured at 96px and
+                // 72px on a 3x phone. Two sections one under the other,
+                // separated by different amounts, is the fault the comment
+                // inside `CommentSection` already names for the space these
+                // sections open into.
+                item(key = "comments-gap") { Spacer(Modifier.height(Space.lg)) }
 
                 commentSection(
                     comments = state.comments,

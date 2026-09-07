@@ -3300,3 +3300,24 @@ them is a function of the screen's width in dp, and nothing about the clock:
 24dp now, which buys exactly 10dp at both ends. **A number fixed against the
 bottom cannot answer a squeeze coming from the top** — if this closes again on a
 narrower phone, the disc size is the term to look at, not this one.
+
+### Two sections, two spacers, one of them larger for no recorded reason (2026-09-07)
+
+Reported as a question rather than a bug: why is the gap above Comments bigger
+than the gap above Up next? It was, by 8dp, and the cause is two constants.
+
+`Spacer(Space.xl)` before the comments section and `Spacer(Space.lg)` before the
+rail. Both gaps also carry 8dp that is not theirs — `CommentsHeading` pads
+`vertical = Space.sm` *outside* its pane — so what reached the screen was 32dp
+against 24dp. Measured on the reported phone at 3x: 96px and 72px.
+
+Now `lg` in both places, measured after on a 2.625x emulator: 63px each, 24.0dp.
+
+- **The larger one looked deliberate and was not.** It has an `item` key of its
+  own, `"comments-gap"`, which reads as somebody adding a section break on
+  purpose. If that were the intent the rail would carry the same break, and it
+  never did. Nothing in the file gave a reason for either number.
+- **Padding outside a pane is a gap nobody counts.** The 8dp belongs to the
+  heading and shows up as space above *and* below the comments pane, so a spacer
+  written next to it is never the whole distance. `CommentSection` already
+  records the same trap for the space the section opens into.
