@@ -8,6 +8,7 @@ import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.domain.repository.VideoRepository
 import com.mytube.app.ui.appendNew
+import com.mytube.app.ui.watch.QueueItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -124,12 +125,23 @@ class ChannelViewModel(
      *   address, and opening the watch screen on an empty id opens it on nothing.
      * - **`inLibrary` skips the round trip** for a row that already has one.
      *
-     * The queue is passed through untouched. It is a list of *upstream* ids and
-     * every one of them takes this same path when it is reached, so translating
-     * the whole page here would be forty writes for a video somebody has not
-     * pressed.
+     * The rest of the page is **not** translated here — that would be forty
+     * writes for videos nobody has pressed. It travels as [QueueItem], carrying
+     * the address and the flag, and `WatchViewModel` takes these same three
+     * steps for each row as it is reached. It used to travel as bare ids with a
+     * comment here claiming they took this path anyway; they did not, and
+     * pressing next answered *"gateway answered 404"* for the second video of
+     * every channel.
+     *
+     * The row just written is marked as being in the library on its way out, so
+     * the screen this opens does not ask the gateway to write it a second time
+     * — one call is one full metadata fetch upstream.
      */
-    fun openVideo(video: Video, queue: List<String>, onOpened: (String, List<String>) -> Unit) {
+    fun openVideo(
+        video: Video,
+        queue: List<QueueItem>,
+        onOpened: (String, List<QueueItem>) -> Unit,
+    ) {
         if (_opening.value.isNotEmpty()) return
         _openFailed.value = false
 
@@ -142,12 +154,19 @@ class ChannelViewModel(
         viewModelScope.launch {
             runCatching { videos.ensureExternal(video.sourceUrl) }
                 .onSuccess { id ->
-                    if (id.isNotEmpty()) onOpened(id, queue) else _openFailed.value = true
+                    if (id.isNotEmpty()) {
+                        onOpened(id, queue.map { if (it.id == video.id) written(id) else it })
+                    } else {
+                        _openFailed.value = true
+                    }
                 }
                 .onFailure { _openFailed.value = true }
             _opening.value = ""
         }
     }
+
+    /** The row this call has just written, in the catalogue under [id]. */
+    private fun written(id: String) = QueueItem(id = id, inLibrary = true)
 
     fun toggleSubscribed() {
         val current = _state.value as? ChannelState.Ready ?: return

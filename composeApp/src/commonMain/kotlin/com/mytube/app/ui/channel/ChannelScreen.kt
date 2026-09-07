@@ -43,6 +43,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.SortOption
+import com.mytube.app.ui.watch.QueueItem
+import com.mytube.app.ui.watch.asQueueItem
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.ChannelAvatar
 import com.mytube.app.ui.home.VideoCard
@@ -78,7 +80,7 @@ fun ChannelScreen(
      * reasoning it wrote down applies here — a sorted list you can only leave by
      * playing something is not a sorted list, it is a way of finding one video.
      */
-    onOpenVideo: (String, List<String>) -> Unit,
+    onOpenVideo: (String, List<QueueItem>) -> Unit,
     /** Opens the sheet asking which collections this belongs in. See `App.kt`. */
     onSaveToPlaylist: (Video) -> Unit,
 ) {
@@ -114,7 +116,7 @@ fun ChannelContent(
     opening: String = "",
     /** The last attempt came back with no id. */
     openFailed: Boolean = false,
-    onOpenVideo: (Video, List<String>) -> Unit,
+    onOpenVideo: (Video, List<QueueItem>) -> Unit,
     onRetry: () -> Unit,
     onSelectSort: (SortOption) -> Unit,
     onToggleSubscribed: () -> Unit,
@@ -152,7 +154,7 @@ fun ChannelContent(
         // The ids in the order shown, computed once per page rather than per
         // card: it is the same list for every row, and rebuilding it inside
         // `items` would allocate one per visible thumbnail on every scroll frame.
-        val queue = remember(ready.videos) { ready.videos.map { it.id } }
+        val queue = remember(ready.videos) { ready.videos.map { it.asQueueItem() } }
 
         LazyColumn(
             state = listState,

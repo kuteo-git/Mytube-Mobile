@@ -263,7 +263,7 @@ class WatchViewModel(
      * Popular and then played through has to stay in that order, or sorting was
      * only ever a way of finding one video to leave the list by.
      */
-    private val queue: List<String> = emptyList(),
+    private val queue: List<QueueItem> = emptyList(),
     playerFactory: VideoPlayerFactory,
 ) : ViewModel() {
 
@@ -482,8 +482,8 @@ class WatchViewModel(
      * a channel page still has somewhere to go, which is what the rail is for.
      */
     private fun nextId(upNext: List<Video>): String {
-        val here = queue.indexOf(videoId)
-        if (here >= 0 && here + 1 < queue.size) return queue[here + 1]
+        val here = queue.indexOfFirst { it.id == videoId }
+        if (here >= 0 && here + 1 < queue.size) return queue[here + 1].id
         return upNext.firstOrNull()?.id.orEmpty()
     }
 
@@ -779,10 +779,41 @@ class WatchViewModel(
         }
     }
 
+    /**
+     * Write this video's row before anything asks the catalogue about it.
+     *
+     * Only for a queue entry that says it needs it — a **channel page's** rows
+     * come from YouTube and most have no row at all, which is why pressing next
+     * used to answer *"gateway answered 404 for /api/videos/<id>"* for a video
+     * that was fine. `ChannelViewModel.openVideo` does exactly this for the row
+     * somebody presses; this is the same three steps for every row reached
+     * *after* it, which is the half that was missing.
+     *
+     * - **The address, not an id formatted into a URL.** The gateway's
+     *   `POST /api/videos/external` takes one and the queue already carries it.
+     * - **An empty id back is a refusal wearing a success's clothes**, so the
+     *   id is left alone and the load fails the way it would have anyway —
+     *   which is honest: there is genuinely nothing to play.
+     * - **A row already in the library is not written again.** One call is one
+     *   full metadata fetch upstream, and this runs in front of a viewer who is
+     *   waiting for a picture.
+     *
+     * Not caught here: a failure belongs to the same `runCatching` the load
+     * already has, because a row that could not be written is a video that
+     * cannot play, and that is the message the screen is for.
+     */
+    private suspend fun ensureInCatalogue() {
+        val entry = queue.firstOrNull { it.id == videoId } ?: return
+        if (entry.inLibrary || entry.sourceUrl.isEmpty()) return
+        val written = videos.ensureExternal(entry.sourceUrl)
+        if (written.isNotEmpty()) videoId = written
+    }
+
     private fun load() {
         _state.value = WatchState.Loading
         viewModelScope.launch {
             _state.value = runCatching {
+                ensureInCatalogue()
                 val video = videos.video(videoId)
                 when (val stream = streams.stream(videoId, PHONE_MAX_HEIGHT)) {
                     is Stream.Playable -> {

@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mytube.app.domain.model.Video
+import com.mytube.app.ui.watch.QueueItem
+import com.mytube.app.ui.watch.asQueueItem
 import com.mytube.app.ui.home.MoreVertical
 import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
@@ -64,7 +66,7 @@ fun PlaylistScreen(
     mediaBaseUrl: String,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenVideo: (String, List<String>) -> Unit,
+    onOpenVideo: (String, List<QueueItem>) -> Unit,
     onOpenChannel: (String) -> Unit,
     onDeleted: (playlistId: String) -> Unit,
 ) {
@@ -108,7 +110,7 @@ fun PlaylistContent(
     mediaBaseUrl: String,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenVideo: (String, List<String>) -> Unit,
+    onOpenVideo: (String, List<QueueItem>) -> Unit,
     onOpenChannel: (String) -> Unit,
     onRetry: () -> Unit,
     onRemove: (Video) -> Unit,
@@ -142,14 +144,14 @@ fun PlaylistContent(
             onRetry = onRetry,
         ) {
             val ready = state as? PlaylistState.Ready ?: return@TabScaffold
-            val queue = ready.videos.map { it.id }
+            val queue = ready.videos.map { it.asQueueItem() }
 
             LazyColumn(Modifier.fillMaxSize(), contentPadding = detailContentPadding()) {
                 item(key = "header") {
                     PlaylistHeader(
                         state = ready,
                         canPlay = queue.isNotEmpty(),
-                        onPlayAll = { queue.firstOrNull()?.let { onOpenVideo(it, queue) } },
+                        onPlayAll = { queue.firstOrNull()?.let { onOpenVideo(it.id, queue) } },
                         // Shuffled **here**, and the shuffled order is what is
                         // handed over as the queue — not a random first video
                         // followed by the list in its own order, which is what
@@ -163,7 +165,7 @@ fun PlaylistContent(
                         // one press that starts one sitting.
                         onShuffle = {
                             val shuffled = queue.shuffled()
-                            shuffled.firstOrNull()?.let { onOpenVideo(it, shuffled) }
+                            shuffled.firstOrNull()?.let { onOpenVideo(it.id, shuffled) }
                         },
                         onStartRenaming = onStartRenaming,
                         onCancelRenaming = onCancelRenaming,

@@ -66,6 +66,7 @@ import com.mytube.app.ui.shell.rememberBarsVisible
 import com.mytube.app.ui.shell.Tab
 import com.mytube.app.ui.watch.WatchLayer
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.mytube.app.ui.watch.QueueItem
 import com.mytube.app.ui.watch.WatchScreen
 import com.mytube.app.ui.watch.WatchViewModel
 import com.mytube.app.ui.settings.ServerSetupScreen
@@ -191,7 +192,7 @@ private data class WatchSession(
      * played through. The web app carries the same thing in the URL; here there
      * is no URL, and the session is the equivalent.
      */
-    val queue: List<String> = emptyList(),
+    val queue: List<QueueItem> = emptyList(),
 )
 
 /**

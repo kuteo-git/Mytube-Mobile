@@ -3410,3 +3410,40 @@ as two different controls. The description takes it through
 content that is either there or not while this is the *same* text at two
 heights — `maxLines` changes and the box has to travel between them. Measured
 at 30fps: the box passes through 330, 507 and 644px, none of which it rests at.
+
+## The queue was a list of ids the catalogue had never heard of (2026-09-08)
+
+Reported: open the Hoài Lâm channel, play `XSAw8ya7zxM`, press **next** —
+*"gateway answered 404 for /api/videos/DJv6T34qPAs"*.
+
+A channel's uploads come from YouTube, so most of its rows have no catalogue
+entry, and `ChannelViewModel.openVideo` has written the row before navigating
+since the day that fault was first reported. Its own doc comment then said of
+the rest of the page: *"It is a list of upstream ids and every one of them takes
+this same path when it is reached."* **Nothing took it.** `WatchSession.queue`
+was `List<String>`, and `advanceTo` handed the next id straight to
+`videos.video(id)`.
+
+So this is the fourth time the app has blamed YouTube for a video YouTube was
+serving — after `live`, after `local`, and after the channel page's own first
+row. The three before it were a tier declared and not read; this one is a claim
+in a comment that no type held anyone to.
+
+- **The queue carries what the decision needs**, not an id somebody has to look
+  the answer up for. `QueueItem` is the id, the address, and whether the row is
+  already there — `Video.sourceUrl` and `Video.inLibrary`, which have existed
+  for exactly this since the channel page was written.
+- **`ensureInCatalogue` runs inside `load`'s own `runCatching`.** A row that
+  could not be written is a video that cannot play, and that is the message the
+  screen is already for.
+- **The row just written is marked on its way out of `openVideo`.** Without it
+  the watch screen writes it a second time on arrival, and one call is one full
+  metadata fetch upstream — the same cost the server's own guard on
+  `refreshMetadata` exists to refuse.
+- **The playlist page needed no thought.** Its rows are catalogue rows, so
+  `asQueueItem` carries `inLibrary = true` and nothing is written.
+- **The regression test is at the ViewModel**, with a fake catalogue that
+  throws the gateway's own 404 for an id it has no row for. It was red on the
+  reported symptom — `Failed(message=gateway answered 404 for /api/videos/second)`
+  — before the fix. A test on `openVideo` alone would have stayed green
+  throughout, because that is the one path which was always correct.

@@ -8,6 +8,8 @@ import com.mytube.app.domain.repository.ChannelPage
 import com.mytube.app.domain.repository.VideoRepository
 import com.mytube.app.ui.channel.ChannelState
 import com.mytube.app.ui.channel.ChannelViewModel
+import com.mytube.app.ui.watch.QueueItem
+import com.mytube.app.ui.watch.asQueueItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -46,10 +48,18 @@ class ChannelViewModelTest {
         advance()
 
         var opened = ""
-        model.openVideo(upstream("abc"), listOf("abc")) { id, _ -> opened = id }
+        var queue = emptyList<QueueItem>()
+        model.openVideo(upstream("abc"), listOf(upstream("abc").asQueueItem())) { id, rest ->
+            opened = id
+            queue = rest
+        }
         advance()
 
         assertEquals(1, videos.ensureCalls)
+        // The row is written now, and the queue says so — otherwise the watch
+        // screen writes it a second time on arrival, which is one full metadata
+        // fetch upstream for a row that is already there.
+        assertEquals(listOf(QueueItem("written-id", inLibrary = true)), queue)
         // The id the *server* answered with, not the one that was pressed. They
         // are usually the same and the difference is not this side's to assume.
         assertEquals("written-id", opened)
