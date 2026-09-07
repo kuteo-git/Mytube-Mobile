@@ -456,7 +456,15 @@ fun skeletonShade(): Color {
 fun WatchSkeleton(modifier: Modifier = Modifier) {
     val shade = skeletonShade()
 
-    Column(modifier.fillMaxWidth()) {
+    // It scrolls because the real page does, and because a `Column` that runs
+    // out of room does not clip its overflow — it measures what is left with a
+    // maximum height of zero and then draws the children at their natural size
+    // anyway, one on top of the other. Reported as a light band inside the last
+    // rail thumbnail, which is exactly what two translucent copies of the same
+    // shape look like: measured, 4px of overlap on a 914dp emulator and 80px on
+    // an 844dp phone, and none at all once the density was dropped far enough
+    // for the whole thing to fit.
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         // Title: 20sp over 28sp of line, two lines of it.
         Column(Modifier.padding(start = Space.lg, end = Space.lg, top = Space.md)) {
             SkeletonLine(shade, 1f, 20.dp)

@@ -3514,3 +3514,34 @@ not touched, and it always passes through Loading. Verified both ways against
 the previous commit: 3 red frames at `136..744 (0,0,0) then 744..1352
 (19,19,19)`, and green after.
 
+### A Column that runs out of room stacks what is left (2026-09-08)
+
+Reported as a light band inside the bottom rail thumbnail, with the right
+instinct attached — *"có phải là bug ko?"*. It was, and the band is what two
+translucent copies of one shape look like: `skeletonShade` is `Tokens.surface`
+at an alpha, so a second thumbnail drawn over the first reads brighter than
+either.
+
+Measured on the reported screenshot before any code was read: the band is
+`x 48..552` — 16dp of margin and then exactly 168dp — and 80px tall, sitting at
+the foot of a thumbnail whose own height is 168 × 9/16 = 94.5dp to the pixel.
+The same fault on the emulator was **4px**, which is why nobody saw it there.
+
+**A `Column` does not clip what does not fit.** It measures the children that
+are left with a maximum height of zero, and they then draw at their natural
+size anyway — on top of each other. So the overlap is exactly the overflow, and
+the two numbers say so: an 844dp phone overlaps by 80px where a 914dp emulator
+overlaps by 4.
+
+The experiment that settled it was one command: `adb shell wm density 320`.
+With everything smaller the whole skeleton fits, and the gap between the two
+thumbnails came back — 32px of background, no band at all. It is scrollable
+now, which is what the real page is.
+
+- **The loop is about the shape below a thumbnail.** What follows one is
+  background; a *brighter* band there is the next one lying on top of it. That
+  is the reported symptom rather than a restatement of the fix, and it went red
+  at `4px of doubled shade at y=2177` before the change and green after, with
+  the thumbnail measuring 248px — 94.5dp at 2.625 — and 42px of background
+  under it.
+
