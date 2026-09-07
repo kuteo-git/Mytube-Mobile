@@ -443,14 +443,19 @@ fun skeletonShade(): Color {
  * "this is what is arriving". A spinner over a black rectangle is also the same
  * picture as a video that failed, and telling those apart is the whole reason
  * this app draws skeletons at all.
+ *
+ * **It draws no picture.** This is only ever the page *under* the video, and
+ * `WatchScreen` holds the 16:9 slot open in every state — the outer box that
+ * stops the title sliding under the picture during a drag. Drawing one here as
+ * well put two 16:9 boxes on top of each other: the player's own black slot,
+ * and a grey placeholder for it underneath. Measured on the phone at 1170
+ * wide, 658px of black and then 658px of grey, with the title bars pushed a
+ * whole picture's height down the screen.
  */
 @Composable
 fun WatchSkeleton(modifier: Modifier = Modifier) {
     val shade = skeletonShade()
     Column(modifier.fillMaxWidth()) {
-        // The picture keeps its 16:9 box in every state, so nothing below it
-        // moves when the video arrives.
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(shade))
         Column(Modifier.padding(Space.lg)) {
             Box(Modifier.fillMaxWidth(0.9f).height(20.dp).clip(RoundedCornerShape(4.dp)).background(shade))
             Spacer(Modifier.height(Space.sm))

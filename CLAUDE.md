@@ -3447,3 +3447,36 @@ in a comment that no type held anyone to.
   reported symptom — `Failed(message=gateway answered 404 for /api/videos/second)`
   — before the fix. A test on `openVideo` alone would have stayed green
   throughout, because that is the one path which was always correct.
+
+## The loading screen drew two pictures, one on top of the other (2026-09-08)
+
+Reported from the phone with a screenshot: the skeleton is pushed a whole
+picture's height down the page. Measured off that screenshot, at 1170 wide —
+**658px of black and then 658px of grey**, and 1170 × 9 / 16 is 658 to the
+pixel. Two 16:9 boxes stacked.
+
+The black one is the player's own slot. `WatchScreen` holds it open in every
+state, and that is load-bearing for the drag: *"the outer box holds the full
+16:9 slot open for the whole gesture, so nothing under the picture moves at
+all"*. `WatchSkeleton` then opened with a 16:9 shade box of its own, under a
+comment saying *"the picture keeps its 16:9 box in every state, so nothing
+below it moves when the video arrives"* — which was true, and was already
+true without it.
+
+- **Two comments, each correct, describing the same slot.** Neither file was
+  wrong on its own; they were wrong about each other. The skeleton draws only
+  the page *under* the video now, and says so where somebody would add a
+  picture back.
+- **The loop was a screen recording, not a screenshot.** Loading lasts a few
+  hundred milliseconds and `screencap` takes longer than that, so a burst of
+  stills missed it every time — fourteen frames, all of them the video already
+  playing. `screenrecord --time-limit 4` plus `ffmpeg -vf fps=15` catches it
+  without having to slow the network down, which the emulator's own
+  `adb emu network delay` did not do anyway.
+- **What the loop asserts is the symptom, not the fix**: walk the middle column
+  of every frame, and go red if two adjacent uniform bands are each 16:9 tall.
+  It named the bug on the reporter's own screenshot before any code was read —
+  `136..744 (0,0,0) then 744..1352 (19,19,19)` on the emulator — and is green
+  after, with the title bars now starting 42px under the picture.
+- **No unit seam, and that is the finding.** §8 rules out Compose UI tests and a
+  ViewModel cannot see a layout; the driven recording is the whole check.
