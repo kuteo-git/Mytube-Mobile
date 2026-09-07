@@ -1,5 +1,6 @@
 package com.mytube.app.ui.watch
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -64,6 +65,22 @@ fun DescriptionBox(
     Column(
         modifier
             .fillMaxWidth()
+            // Opens and closes at the same speed as the comments section and the
+            // up-next rail, because `SECTION_SPRING` is the one spec all three
+            // share — the comment on it says why: two things a thumb's width
+            // apart that fold at different speeds read as two different
+            // controls.
+            //
+            // `animateContentSize` rather than `AnimatedVisibility`, which is
+            // what the other two use. Those fold content that is either there or
+            // not; this one is the *same* text at two heights, and there is
+            // nothing to enter or exit — `maxLines` changes and the box has to
+            // travel between the two heights that produces.
+            //
+            // Before the modifier the box jumped from two lines to twenty in a
+            // single frame, which reads as the page having been replaced rather
+            // than opened.
+            .animateContentSize(SECTION_SPRING)
             .glassControl(RoundedCornerShape(12.dp))
             .then(if (expanded) Modifier else Modifier.clickable(onClick = onToggleExpanded))
             .padding(Space.md),

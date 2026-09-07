@@ -3401,3 +3401,12 @@ that lost the description. `descriptionOpen` now sits beside them.
 - **The rule generalises**: anything inside an `item { }` that must outlive
   scrolling belongs above the list. A `remember` there is a cache for as long as
   the row happens to be on screen, not a place to keep an answer somebody gave.
+
+**And it opens the way the sections around it do.** `SECTION_SPRING` is the one
+spec the comments and the up-next rail already share, and its own comment gives
+the reason: two things a thumb's width apart that fold at different speeds read
+as two different controls. The description takes it through
+`animateContentSize` rather than `AnimatedVisibility`, because those two fold
+content that is either there or not while this is the *same* text at two
+heights — `maxLines` changes and the box has to travel between them. Measured
+at 30fps: the box passes through 330, 507 and 644px, none of which it rests at.
