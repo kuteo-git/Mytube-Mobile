@@ -416,6 +416,7 @@ class SearchViewModelTest {
         override suspend fun comments(videoId: String) =
             emptyList<com.mytube.app.domain.model.Comment>()
         override suspend fun importComments(videoId: String) = Unit
+        override suspend fun refreshMetadata(videoId: String) = Unit
         override suspend fun channelPage(
             channelId: String,
             sortToken: String,

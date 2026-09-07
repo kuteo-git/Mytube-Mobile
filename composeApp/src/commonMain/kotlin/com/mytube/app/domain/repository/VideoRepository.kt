@@ -170,6 +170,16 @@ interface VideoRepository {
      */
     suspend fun importComments(videoId: String)
 
+    /**
+     * Fetch this video's metadata from the source again.
+     *
+     * Called when the row is missing something the screen wants to draw — today
+     * that is the description, which most of the library has never had. It
+     * returns nothing on purpose: what the caller needs afterwards is the video
+     * row, and asking for that is [video].
+     */
+    suspend fun refreshMetadata(videoId: String)
+
     /** What to play after this one. */
     /**
      * What to play after this one, optionally narrowed to one channel.

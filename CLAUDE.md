@@ -3321,3 +3321,54 @@ Now `lg` in both places, measured after on a 2.625x emulator: 63px each, 24.0dp.
   heading and shows up as space above *and* below the comments pane, so a spacer
   written next to it is never the whole distance. `CommentSection` already
   records the same trap for the space the section opens into.
+
+## The description was never there to draw (2026-09-07)
+
+Reported as: why does it not show the video description? It did not, and
+`DescriptionBox` was right — `video.description` was the empty string, so the
+box drew the view count and the date and stopped.
+
+The measurement chain, all of it against the running gateway:
+
+| | |
+|---|---|
+| `GET /api/videos/{id}` over the feed's first 24 | **0 of 24** had a description |
+| `catalog.videos` | **2761 of 43295** rows, 6.4% |
+| the reported video `l5XJnEpGpDo` | 0 characters in the database |
+| who ever writes the column | `ytdlp/downloader.go`, reached only by the **download** path |
+| the web app | reads the same field, so it was equally blank |
+
+So 6.4% is exactly the share that has been downloaded. A flat listing carries no
+description, and nothing else ever filled one in.
+
+**The work was in the server repository first**, as it was for narration, the
+missed chip and playlists: there was nothing here to call. `RefreshVideoMetadata`
+is a new RPC and `POST /api/videos/{id}/metadata` the route. Measured: first call
+`{"updated":true}` in 1.86s, 0 → 906 characters; second call
+`{"updated":false,"skipped":true}` in 16ms.
+
+- **The guard is on the server, not here.** One call is one full metadata fetch,
+  and that library has been blocked once by YouTube for asking too often — the
+  note on its `BackfillTopics` records the cost, which was every full metadata
+  request answered with "Sign in to confirm you're not a bot", taking stream
+  resolution down with it. The server can see the row, so it refuses in
+  milliseconds when a description is already there. A second guard here would be
+  a copy of the row going stale on the side that cannot check.
+- **`fillDescription` runs in its own coroutine.** The caller's block has
+  `awaitSubtitles` behind it and the viewer is waiting on that; a round trip to
+  YouTube in front of it would be the up-next rail's lesson in a new place.
+- **The id is checked before the state is written.** The fetch takes seconds and
+  pressing next takes one, so without it a video's description lands under the
+  next video's title.
+- **A failure is silence.** The page is whole without this, which is the same
+  judgement `loadComments` already makes.
+- **Six fakes stopped compiling**, which is the port doing its job: a method
+  added to `VideoRepository` cannot be forgotten by an implementation.
+
+Measured end to end on the emulator: opening *This is genuinely f***ed..*
+(`dtli77ZzhT0`) took its row from **0 to 582** characters and the box drew the
+text, clamped to two lines with `…more` under it.
+
+**The server's backfill is the right way to fill in the rest and is deliberately
+not what answers this.** Its pass is bounded, paced and prioritised because it
+walks forty thousand rows; a video somebody has just opened cannot wait for it.

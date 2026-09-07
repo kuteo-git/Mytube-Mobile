@@ -921,6 +921,7 @@ class WatchViewModel(
             }.getOrElse(::asState)
 
             loadUpNext("")
+            fillDescription()
             // Before the narration decision below, and deliberately: on a video
             // nobody has opened before there are no caption tracks yet, and the
             // pass this app is about to ask for reads one.
@@ -943,6 +944,65 @@ class WatchViewModel(
                 }
             ) {
                 startNarration()
+            }
+        }
+    }
+
+    /**
+     * The description, fetched when the row has none.
+     *
+     * Most of the library has none: only the download path ever wrote one, so a
+     * video that arrived through a scan carries an empty string. Measured
+     * against the running gateway, 0 of the feed's first 24 videos had a
+     * description and 2761 of 43295 rows in the catalogue did — 6.4%, which is
+     * the share that has been downloaded. The box under the picture drew the
+     * view count and the date and nothing else, and there was no way to tell
+     * that from a video whose author wrote none.
+     *
+     * ## Why this asks, rather than the server filling it in
+     *
+     * The server has a backfill that walks the catalogue and would do this
+     * eventually — bounded, paced, and prioritised, because that library has
+     * been blocked once by YouTube for asking too often. A video somebody has
+     * just opened cannot wait for a scheduled pass to reach it, and one open is
+     * the cheapest possible target: exactly the videos that get watched.
+     *
+     * ## Why it is safe to call every time
+     *
+     * The refusal lives on the server, which is the side that can see the row:
+     * a video that already has a description is answered from the database in
+     * milliseconds without touching upstream. A guard here as well would be a
+     * second place deciding the same thing, and this side's copy of the row is
+     * the one that goes stale.
+     *
+     * A failure is silence. The page is whole without this — the video plays,
+     * up next is there — which is the judgement `loadComments` already makes for
+     * the other thing on this screen nothing depends on.
+     *
+     * Its own coroutine, so it does not sit in front of `awaitSubtitles`: this
+     * is a round trip to YouTube and the caller's block has work behind it that
+     * the viewer is actually waiting on.
+     */
+    private fun fillDescription() {
+        val current = _state.value as? WatchState.Playing ?: return
+        if (current.video.description.isNotEmpty()) return
+        val id = current.video.id
+
+        viewModelScope.launch {
+            runCatching { videos.refreshMetadata(id) }.getOrElse { return@launch }
+            val filled = runCatching { videos.video(id) }.getOrNull() ?: return@launch
+            if (filled.description.isEmpty()) return@launch
+
+            _state.update { state ->
+                // The id is checked because the fetch outlives the video: a
+                // pass takes seconds and pressing next takes one, and writing
+                // this answer onto whatever is playing now would print one
+                // video's description under another's title.
+                if (state is WatchState.Playing && state.video.id == id) {
+                    state.copy(video = state.video.copy(description = filled.description))
+                } else {
+                    state
+                }
             }
         }
     }

@@ -198,6 +198,7 @@ class ChannelViewModelTest {
         override suspend fun comments(videoId: String) =
             emptyList<com.mytube.app.domain.model.Comment>()
         override suspend fun importComments(videoId: String) = Unit
+        override suspend fun refreshMetadata(videoId: String) = Unit
         override suspend fun playlists(videoId: String) =
             emptyList<com.mytube.app.domain.model.Playlist>()
         override suspend fun playlist(playlistId: String, pageToken: String) =

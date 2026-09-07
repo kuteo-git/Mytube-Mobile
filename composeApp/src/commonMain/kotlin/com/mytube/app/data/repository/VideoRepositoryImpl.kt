@@ -155,6 +155,9 @@ class VideoRepositoryImpl(
     override suspend fun importComments(videoId: String) =
         gateway.importComments(requireBaseUrl(), server.profileId(), videoId)
 
+    override suspend fun refreshMetadata(videoId: String) =
+        gateway.refreshMetadata(requireBaseUrl(), server.profileId(), videoId)
+
     override suspend fun upNext(videoId: String, channelId: String): List<Video> =
         gateway.upNext(requireBaseUrl(), server.profileId(), videoId, channelId)
             .videos.map { it.toDomain() }

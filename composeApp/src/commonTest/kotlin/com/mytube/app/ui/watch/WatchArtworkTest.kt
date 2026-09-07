@@ -147,6 +147,7 @@ class WatchArtworkTest {
         override suspend fun subtitleCues(url: String) = emptyList<SubtitleCue>()
         override suspend fun comments(videoId: String) = emptyList<Comment>()
         override suspend fun importComments(videoId: String) {}
+        override suspend fun refreshMetadata(videoId: String) = Unit
         override suspend fun upNext(videoId: String, channelId: String) = emptyList<Video>()
         override suspend fun recordProgress(
             videoId: String,

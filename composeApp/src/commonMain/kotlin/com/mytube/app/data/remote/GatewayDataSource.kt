@@ -368,6 +368,31 @@ class GatewayDataSource(private val client: HttpClient) {
     }
 
     /**
+     * Ask the server to fetch this video's metadata from YouTube again.
+     *
+     * The one field this app asks for is the description, and it is missing for
+     * most of the library: only the download path ever wrote one, so a video
+     * that arrived through a scan carries an empty string. Measured against the
+     * running gateway: 0 of the feed's first 24 videos had one, and 2761 of
+     * 43295 rows in the catalogue.
+     *
+     * **The server refuses before it fetches.** One call is one full metadata
+     * fetch upstream, and that library has been blocked once for making too
+     * many — a row that already has a description is answered from the row in
+     * milliseconds. So this is safe to call on open, and the guard that matters
+     * is on the side that can see the row.
+     *
+     * Nothing is returned. What the caller wants is the *video*, and reading it
+     * again is a separate request whose answer is the whole row rather than a
+     * claim about one field.
+     */
+    suspend fun refreshMetadata(baseUrl: String, userId: String, videoId: String) {
+        client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/metadata") {
+            identify(userId)
+        }.orThrow()
+    }
+
+    /**
      * Where the viewer has got to.
      *
      * Fire and forget from the caller's point of view — nothing is returned, and
