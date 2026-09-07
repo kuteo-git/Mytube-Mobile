@@ -3480,3 +3480,37 @@ true without it.
   after, with the title bars now starting 42px under the picture.
 - **No unit seam, and that is the finding.** §8 rules out Compose UI tests and a
   ViewModel cannot see a layout; the driven recording is the whole check.
+
+### And then it was a page nobody's app has (2026-09-08)
+
+Reported next, and it is the same failure one level up: with the extra picture
+gone, what was left was two bars, a circle and a third bar — a stand-in for a
+screen this app stopped being months ago.
+
+`FeedSkeleton` already carries the rule and its own scar: *"Every measurement
+here is `VideoCard`'s, and that is the whole point"*, written after a skeleton
+with its own idea of a card made the feed visibly change geometry the instant
+it loaded. `WatchSkeleton` had never been held to it.
+
+It now draws the page in the order the page is in — title, channel row with its
+Subscribe pill, the three action pills, the description pane, Comments, the
+up-next header, its two chips, and two rail rows with 168dp thumbnails — with
+every measurement taken from the composable it stands in for.
+
+- **The panes are drawn in the same shade as what is inside them.** A skeleton
+  that picks the text out more strongly than the pane says the wrong thing
+  about which of the two is the surface.
+- **The pills are the row's real widths**, not three of one size: a row of
+  equal pills is a different picture from the one that arrives.
+- **`SkeletonLine`, `SkeletonPill`, `SkeletonPane`.** Written out longhand this
+  was fifteen near-identical `Box` chains, which is how the next screen's
+  skeleton gets a corner radius nothing else has.
+
+The loop needed one thing said out loud: **the trigger has to be a cold video.**
+Opening one from the feed is often instant, so the run went green on a build
+that still had the bug — a loop green for the wrong reason, which is worse than
+a red one. Pressing the first row of the up-next rail is a video the app has
+not touched, and it always passes through Loading. Verified both ways against
+the previous commit: 3 red frames at `136..744 (0,0,0) then 744..1352
+(19,19,19)`, and green after.
+

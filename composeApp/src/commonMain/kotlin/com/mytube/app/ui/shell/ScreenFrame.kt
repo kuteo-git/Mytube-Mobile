@@ -455,19 +455,163 @@ fun skeletonShade(): Color {
 @Composable
 fun WatchSkeleton(modifier: Modifier = Modifier) {
     val shade = skeletonShade()
+
     Column(modifier.fillMaxWidth()) {
-        Column(Modifier.padding(Space.lg)) {
-            Box(Modifier.fillMaxWidth(0.9f).height(20.dp).clip(RoundedCornerShape(4.dp)).background(shade))
+        // Title: 20sp over 28sp of line, two lines of it.
+        Column(Modifier.padding(start = Space.lg, end = Space.lg, top = Space.md)) {
+            SkeletonLine(shade, 1f, 20.dp)
+            Spacer(Modifier.height(8.dp))
+            SkeletonLine(shade, 0.7f, 20.dp)
+        }
+
+        // `ChannelRow`: a 40dp avatar, the name over the subscriber count, and
+        // the Subscribe pill at the far end.
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(shade))
+            Spacer(Modifier.width(Space.md))
+            Column(Modifier.weight(1f)) {
+                SkeletonLine(shade, 0.5f, 15.dp)
+                Spacer(Modifier.height(6.dp))
+                SkeletonLine(shade, 0.32f, 12.dp)
+            }
+            Spacer(Modifier.width(Space.sm))
+            Box(
+                Modifier
+                    .width(104.dp)
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(shade),
+            )
+        }
+
+        // `WatchActions`: the like/dislike pill, then Share and Save. Their
+        // widths are the row's real ones, because a row of three equal pills is
+        // a different picture from the one that arrives.
+        Spacer(Modifier.height(Space.md))
+        Row(
+            Modifier.padding(horizontal = Space.lg),
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        ) {
+            SkeletonPill(shade, 116.dp)
+            SkeletonPill(shade, 118.dp)
+            SkeletonPill(shade, 104.dp)
+        }
+
+        // `DescriptionBox`: a 12dp pane holding the counts line and two lines
+        // of the description itself.
+        Spacer(Modifier.height(Space.md))
+        Column(
+            Modifier
+                .padding(horizontal = Space.lg)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(shade)
+                .padding(Space.md),
+        ) {
+            SkeletonLine(shade, 0.55f, 14.dp)
             Spacer(Modifier.height(Space.sm))
-            Box(Modifier.fillMaxWidth(0.6f).height(20.dp).clip(RoundedCornerShape(4.dp)).background(shade))
-            Spacer(Modifier.height(Space.lg))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(Size.avatar).clip(CircleShape).background(shade))
+            SkeletonLine(shade, 1f, 14.dp)
+            Spacer(Modifier.height(6.dp))
+            SkeletonLine(shade, 0.8f, 14.dp)
+        }
+
+        // `CommentsHeading` — one 18sp line in its own pane.
+        Spacer(Modifier.height(Space.lg))
+        SkeletonPane(shade, Modifier.padding(horizontal = Space.lg)) {
+            SkeletonLine(shade, 0.45f, 18.dp)
+        }
+
+        // `UpNextRail`'s header, which is two lines: what plays next, and whose
+        // channel it is.
+        Spacer(Modifier.height(Space.lg))
+        SkeletonPane(shade, Modifier.padding(horizontal = Space.lg)) {
+            SkeletonLine(shade, 0.85f, 14.dp)
+            Spacer(Modifier.height(6.dp))
+            SkeletonLine(shade, 0.4f, 12.dp)
+        }
+
+        // The rail's two chips, and its rows: a 168dp thumbnail with three
+        // lines beside it, which is `SuggestionRow`'s own shape.
+        Spacer(Modifier.height(Space.md))
+        Row(
+            Modifier.padding(horizontal = Space.lg),
+            horizontalArrangement = Arrangement.spacedBy(Space.sm),
+        ) {
+            SkeletonPill(shade, 64.dp, 36.dp)
+            SkeletonPill(shade, 132.dp, 36.dp)
+        }
+        Spacer(Modifier.height(Space.md))
+        repeat(2) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.sm)) {
+                Box(
+                    Modifier
+                        .width(168.dp)
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(shade),
+                )
                 Spacer(Modifier.width(Space.md))
-                Box(Modifier.fillMaxWidth(0.45f).height(16.dp).clip(RoundedCornerShape(4.dp)).background(shade))
+                Column(Modifier.weight(1f)) {
+                    SkeletonLine(shade, 1f, 13.dp)
+                    Spacer(Modifier.height(6.dp))
+                    SkeletonLine(shade, 0.75f, 13.dp)
+                    Spacer(Modifier.height(6.dp))
+                    SkeletonLine(shade, 0.5f, 12.dp)
+                }
             }
         }
     }
+}
+
+/** One line of stand-in text, at the height the real line occupies. */
+@Composable
+private fun SkeletonLine(shade: Color, width: Float, height: Dp) {
+    Box(
+        Modifier
+            .fillMaxWidth(width)
+            .height(height)
+            .clip(RoundedCornerShape(4.dp))
+            .background(shade),
+    )
+}
+
+/** A capsule control: an action pill, a chip, the Subscribe button. */
+@Composable
+private fun SkeletonPill(shade: Color, width: Dp, height: Dp = 40.dp) {
+    Box(
+        Modifier
+            .width(width)
+            .height(height)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(shade),
+    )
+}
+
+/**
+ * One of the page's own panes, at `glassControl`'s 12dp radius.
+ *
+ * The pane is drawn in the same shade as what is inside it, so what reads is
+ * its outline rather than two greys arguing — the real thing is a translucent
+ * surface with text on it, and a skeleton that picks out the text more strongly
+ * than the pane says the wrong thing about which is which.
+ */
+@Composable
+private fun SkeletonPane(
+    shade: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(shade)
+            .padding(horizontal = Space.md, vertical = Space.sm),
+        content = content,
+    )
 }
 
 /**
