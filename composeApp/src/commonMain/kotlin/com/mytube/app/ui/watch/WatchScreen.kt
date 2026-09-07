@@ -225,6 +225,11 @@ fun WatchContent(
     // scrolled to.
     var commentsOpen by rememberSaveable(videoId) { mutableStateOf(false) }
 
+    // Here rather than inside `DescriptionBox`, for the reason the two lines
+    // above are here: that box is an item of the list below, and a `remember`
+    // in a lazy item dies when the item scrolls out of the viewport.
+    var descriptionOpen by rememberSaveable(videoId) { mutableStateOf(false) }
+
     // Hoisted, and keyed on the video: without a key this state outlives the
     // video it belongs to, and opening another one from the rail drops the
     // viewer into the middle of the previous video's comments. It is hoisted
@@ -603,7 +608,12 @@ fun WatchContent(
 
                 item(key = "description") {
                     Spacer(Modifier.height(Space.md))
-                    DescriptionBox(state.video, Modifier.padding(horizontal = Space.lg))
+                    DescriptionBox(
+                        video = state.video,
+                        expanded = descriptionOpen,
+                        onToggleExpanded = { descriptionOpen = !descriptionOpen },
+                        modifier = Modifier.padding(horizontal = Space.lg),
+                    )
                 }
 
                 // The break between the video's own facts and the sections

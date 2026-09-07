@@ -10,10 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -42,15 +38,34 @@ import com.mytube.app.ui.theme.Tokens
  * at eleven pixels of text to read the thing they are already looking at.
  */
 @Composable
-fun DescriptionBox(video: Video, modifier: Modifier = Modifier) {
+fun DescriptionBox(
+    video: Video,
+    /**
+     * Whether the whole text is showing.
+     *
+     * Hoisted, and that is the whole of a bug this used to have. It was
+     * `remember(video.id)` **inside** this composable, and this composable is an
+     * item of the watch page's `LazyColumn` — which disposes an item once it is
+     * scrolled out of the viewport, taking every `remember` in it. Measured:
+     * press "more", scroll down past the up-next rail, scroll back, and the box
+     * is showing two lines and "...more" again.
+     *
+     * The same page already had the answer twice over. `commentsOpen` and
+     * `expandedReplies` are `rememberSaveable`, declared above the list rather
+     * than inside an item, which is why the comments section stays open through
+     * exactly the same journey.
+     */
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val strings = LocalStrings.current
-    var expanded by remember(video.id) { mutableStateOf(false) }
 
     Column(
         modifier
             .fillMaxWidth()
             .glassControl(RoundedCornerShape(12.dp))
-            .then(if (expanded) Modifier else Modifier.clickable { expanded = true })
+            .then(if (expanded) Modifier else Modifier.clickable(onClick = onToggleExpanded))
             .padding(Space.md),
     ) {
         Text(
@@ -79,7 +94,7 @@ fun DescriptionBox(video: Video, modifier: Modifier = Modifier) {
                 color = Tokens.text,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.clickable { expanded = !expanded },
+                modifier = Modifier.clickable(onClick = onToggleExpanded),
             )
         }
     }

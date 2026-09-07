@@ -3372,3 +3372,32 @@ text, clamped to two lines with `…more` under it.
 **The server's backfill is the right way to fill in the rest and is deliberately
 not what answers this.** Its pass is bounded, paced and prioritised because it
 walks forty thousand rows; a video somebody has just opened cannot wait for it.
+
+### A `remember` inside a lazy item is not state, it is a cache (2026-09-07)
+
+Reported: press "more", scroll down until the description is out of sight,
+scroll back, and it has collapsed to two lines again.
+
+`DescriptionBox` held `var expanded by remember(video.id)`, and that composable
+is an **item of the watch page's `LazyColumn`**. A lazy list disposes an item
+once it leaves the viewport, and every `remember` inside it goes with it, so
+scrolling back composes it fresh at `false`.
+
+**The same file already had the answer twice.** `commentsOpen` and
+`expandedReplies` are `rememberSaveable`, declared above the list rather than
+inside an item, which is why the comments section survives exactly the journey
+that lost the description. `descriptionOpen` now sits beside them.
+
+- **Hoisted rather than made saveable in place.** `rememberSaveable` inside the
+  item would also have worked — a lazy list keeps a `SaveableStateHolder` per
+  item key — but it would leave three pieces of the same page keeping the same
+  kind of state in two different ways, and the one that is different is the one
+  that will be copied next.
+- **No regression test, and that is the finding.** The bug is composition
+  lifetime inside a lazy list; §8 rules out Compose UI tests, and a ViewModel
+  test cannot reach a `remember`. What caught it is a driven emulator: expand,
+  six swipes down, eight back, screenshot. The script is the loop and it went
+  red before the fix and green after.
+- **The rule generalises**: anything inside an `item { }` that must outlive
+  scrolling belongs above the list. A `remember` there is a cache for as long as
+  the row happens to be on screen, not a place to keep an answer somebody gave.
