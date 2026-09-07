@@ -10,7 +10,7 @@ Trên máy tính thì web app vẫn tốt hơn và vẫn là bản chính; cái 
 thoại đi quanh nhà.
 
 <p align="center">
-  <img src="docs/screenshots/demo.gif" width="30%" alt="Mở một video, kéo xuống thành miniplayer, rồi mở lại" />
+  <img src="docs/screenshots/demo.gif" width="30%" alt="Cuộn feed trong khi miniplayer vẫn chạy, mở lên, phụ đề trên hình, bảng cài đặt, rồi thu lại" />
 </p>
 <p align="center">
   <em>Quay trên iPhone. <a href="docs/screenshots/demo.mp4">Cùng đoạn đó, chất lượng đầy đủ.</a></em>

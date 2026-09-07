@@ -10,7 +10,7 @@ app is better on a desktop and stays the primary client; this is what gets used
 while walking around the house with a phone in a pocket.
 
 <p align="center">
-  <img src="docs/screenshots/demo.gif" width="30%" alt="Opening a video, dragging it down into the miniplayer, and reopening it" />
+  <img src="docs/screenshots/demo.gif" width="30%" alt="Scrolling the feed while the miniplayer keeps playing, expanding it, subtitles over the picture, the settings sheet, then collapsing back" />
 </p>
 <p align="center">
   <em>Recorded on an iPhone. <a href="docs/screenshots/demo.mp4">Same clip at full quality.</a></em>
