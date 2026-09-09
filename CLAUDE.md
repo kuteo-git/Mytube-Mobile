@@ -3545,3 +3545,54 @@ now, which is what the real page is.
   the thumbnail measuring 248px — 94.5dp at 2.625 — and 42px of background
   under it.
 
+## A video that has ended is not a stalled one (2026-09-09)
+
+Reported first as *"bấm pause rồi để đó, 5–10s nó tự play"*, and neither the
+Android emulator nor the iOS simulator would do it — a paused video sat still
+for twenty seconds on both. What made it findable was the reporter coming back
+with the real sequence: **let a video play to its end**, and a few seconds
+later it jumps back about four seconds and plays the tail again, over and over.
+
+The watchdog. `recoverIfStalled` knew two things about a picture that has
+stopped — *it broke* and *somebody pressed pause* — and a video that has simply
+run out is neither. `wantsToPlay` is still true, the playhead stops, and six
+seconds later the stream is reattached and started.
+
+Measured on the simulator with a tagged build:
+
+```
+[DEBUG-p1a3] recover id=3705 failed=false stalledFor=7.99 pos=1526.67
+[DEBUG-p1a3] recover id=3705 failed=false stalledFor=6.00 pos=1526.67
+```
+
+`failed=false` — nothing was wrong. And the four seconds are not a number
+anywhere in this app: `recoverIfStalled` seeks to the position it was handed,
+and **an HLS seek lands on the start of the segment containing it**.
+
+- **The loop is the seek bar, not the picture.** A pixel diff of the video was
+  the first attempt and it is too blunt: the replay is a few seconds of a
+  half-hour video, so the frame barely changes — measured, a mean difference of
+  0.90 where playing scores 4.10 and a still frame 0.00, which no threshold
+  separates honestly. The red hairline is drawn whether or not the controls are
+  showing and *is* the playhead: it fell 1169px → 1155 and climbed back, twice
+  inside a minute. After the fix, 110 samples over two and a half minutes, all
+  1169.
+  - And the end has to be *reached*, not guessed at. "Two equal samples in a
+    row" fires on a plateau while it buffers, so the check also requires the
+    fill to be at the right-hand edge — without that the run is green about a
+    video that never finished.
+- **`shouldRecoverStall` is a named pure function**, for the reason
+  `wholeSeconds` and `levelsFor` are: every one of its answers is a judgement
+  somebody has to be able to check, and nothing in the type system catches one
+  being wrong — the player reattaches either way, and the fault shows up as a
+  video behaving oddly a minute later. The bookkeeping stays with the platform,
+  which is the only side that knows when the playhead last moved.
+- **A broadcast is untouched**, because it declares no duration and therefore
+  never ends. That is the case the watchdog exists for, and the whole of §1:
+  iOS suspends an app within seconds of its sound stopping, so a stream that
+  stalls overnight is the app ending.
+- **The first report was not wrong, it was incomplete.** A pause a few seconds
+  before the end looks exactly like this, and so does walking away. Two hours
+  went into a symptom that could not be reproduced because the trigger named
+  was not the trigger.
+

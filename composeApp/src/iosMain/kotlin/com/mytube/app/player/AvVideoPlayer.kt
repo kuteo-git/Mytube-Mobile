@@ -3,6 +3,7 @@ package com.mytube.app.player
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.NarrationClip
+import com.mytube.app.domain.player.shouldRecoverStall
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.VideoPlayer
@@ -232,6 +233,7 @@ class AvVideoPlayer : VideoPlayer {
     private var loaded: PlayingMedia? = null
     private var wantsToPlay = false
 
+
     /** Wall clock, in seconds. The playhead cannot time its own absence. */
     private fun now(): Double = NSDate().timeIntervalSince1970
 
@@ -295,22 +297,28 @@ class AvVideoPlayer : VideoPlayer {
      * that has to be reopened by hand — which is the thing being fixed.
      */
     private fun recoverIfStalled(position: Double) {
-        if (!wantsToPlay) return
-        val item = av.currentItem
         val media = loaded ?: return
-
+        val item = av.currentItem
         val failed = item == null || item.status == AVPlayerItemStatusFailed
+
+        // The playhead moved, so nothing is wrong. Noted here rather than in
+        // the decision, because when it last moved is the one thing only this
+        // side knows.
         if (!failed && position != movedTo) {
             movedTo = position
             movedAt = now()
-                return
+            return
         }
-        val stalledFor = now() - movedAt
-        if (!failed && stalledFor < STALL_SECONDS) return
-        // Spaced out rather than tried on every tick. A tick is a quarter of a
-        // second, and a server that is down answers a reattach as fast as it
-        // answers anything — four requests a second at a router that is off.
-        if (now() - lastRecovery < RECOVERY_INTERVAL_SECONDS) return
+        if (!shouldRecoverStall(
+                wantsToPlay = wantsToPlay,
+                hasEnded = _state.value.hasEnded,
+                itemFailed = failed,
+                stalledForSeconds = now() - movedAt,
+                sinceLastRecoverySeconds = now() - lastRecovery,
+            )
+        ) {
+            return
+        }
         lastRecovery = now()
 
         val url = NSURL.URLWithString(media.url) ?: return
@@ -536,20 +544,6 @@ class AvVideoPlayer : VideoPlayer {
         }
     }
 }
-
-/**
- * How long a playhead may stand still before the stream is started again.
- *
- * Six seconds, and it is a compromise between two measured facts: AVPlayer's
- * own retry rides out a ten-second outage without help, so anything shorter
- * fights a recovery that was already working, and a broadcast that has been
- * still for six seconds is not buffering — a live playlist declares five-second
- * segments.
- */
-private const val STALL_SECONDS = 6.0
-
-/** How often a reattach may be attempted. @see AvVideoPlayer.recoverIfStalled */
-private const val RECOVERY_INTERVAL_SECONDS = 5.0
 
 /**
  * How often the watchdog looks.
