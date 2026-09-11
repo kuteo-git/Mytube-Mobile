@@ -279,8 +279,16 @@ fun TabScaffold(
             // The skeleton, not a spinner. A spinner in the middle of an empty
             // screen says "wait"; this says what is coming, and the page then
             // fills in rather than appearing.
+            //
+            // It scrolls for the reason `WatchSkeleton` does: a `Column` that
+            // runs out of room does not clip its overflow, it measures what is
+            // left with a maximum height of zero and draws the children at their
+            // natural size anyway, one on top of the other. `FeedSkeleton`'s
+            // three cards fit an emulator's window and not a real phone's, so
+            // the last card was stacking on the one before it — reported as a
+            // layer covering the end of the list.
             loading -> Column(
-                Modifier.fillMaxSize().padding(top = topChrome()),
+                Modifier.fillMaxSize().padding(top = topChrome()).verticalScroll(rememberScrollState()),
             ) { skeleton() }
 
             needsServer -> Centered {

@@ -23,6 +23,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -153,7 +155,16 @@ fun HomeContent(
             is HomeState.Loading -> Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(top = tabContentPadding().calculateTopPadding()),
+                    .padding(top = tabContentPadding().calculateTopPadding())
+                    // A `Column` that runs out of room does not clip its
+                    // overflow — it measures what is left with a maximum height
+                    // of zero and draws the children at their natural size
+                    // anyway, one on top of the other. `FeedSkeleton`'s three
+                    // cards fit an emulator's taller window and not a real
+                    // phone's, so the last card stacked on the one before it —
+                    // reported as a layer covering the end of the list, the same
+                    // fault `WatchSkeleton` already had to scroll for.
+                    .verticalScroll(rememberScrollState()),
             ) {
                 // The chip row is pinned above the feed, so a loading state
                 // without it is a screen whose whole content steps down by a
