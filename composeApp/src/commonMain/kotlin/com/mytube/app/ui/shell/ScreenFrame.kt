@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -506,9 +507,16 @@ fun WatchSkeleton(modifier: Modifier = Modifier) {
         // `WatchActions`: the like/dislike pill, then Share and Save. Their
         // widths are the row's real ones, because a row of three equal pills is
         // a different picture from the one that arrives.
+        //
+        // It scrolls because the real row does, and because these three come to
+        // 386dp with their spacing and padding — inside a 390dp phone by 4dp and
+        // outside a 360dp one, where a plain `Row` clamps the last pill to
+        // whatever is left and Save arrives 26dp wider than it was drawn.
         Spacer(Modifier.height(Space.md))
         Row(
-            Modifier.padding(horizontal = Space.lg),
+            Modifier
+                .horizontalScroll(rememberScrollState(), enabled = false)
+                .padding(horizontal = Space.lg),
             horizontalArrangement = Arrangement.spacedBy(Space.sm),
         ) {
             SkeletonPill(shade, 116.dp)
@@ -817,13 +825,36 @@ fun CollectionListSkeleton(modifier: Modifier = Modifier, rows: Int = 6) {
  * whose whole content shifts down by a row the moment it arrives. Fixed widths
  * rather than words: the real chips are as wide as the topics the server names,
  * and inventing plausible ones here would be a translation nobody wrote.
+ *
+ * # It overflows on purpose, and has to be allowed to
+ *
+ * The five widths come to 448dp with their spacing and padding, against 366dp
+ * of room on a 390dp phone — which is right, because [ChipRow] is a `LazyRow`
+ * whose last chip is cut by the screen edge at its full width. A plain `Row`
+ * cannot say that: `Modifier.width` coerces into the constraint it is handed, so
+ * the last chip came out 22dp wide and stopped at the padding edge, promising a
+ * row that ends where what arrives is a row that continues. On a 360dp phone the
+ * same arithmetic leaves it 0dp and the chip disappears altogether.
+ *
+ * This is the horizontal half of the fault [WatchSkeleton] records, with the
+ * opposite symptom: a fixed `width` or `height` **clamps** and vanishes, while
+ * `aspectRatio` does not clamp and draws at natural size on top of its
+ * neighbour. Same cause, and the two look nothing alike.
+ *
+ * So the row scrolls — which measures with an unbounded main axis and clips at
+ * the bounds, exactly as the real one does — and refuses the gesture, because
+ * what is past the edge here is more placeholder rather than more content.
  */
 @Composable
 fun ChipRowSkeleton(modifier: Modifier = Modifier) {
     val shade = skeletonShade()
 
     Row(
-        modifier.padding(horizontal = Space.md),
+        modifier
+            .horizontalScroll(rememberScrollState(), enabled = false)
+            // Inside the scroll, so it is the row's content that is inset —
+            // which is what `ChipRow`'s `contentPadding` means.
+            .padding(horizontal = Space.md),
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
     ) {
         listOf(56.dp, 88.dp, 72.dp, 96.dp, 80.dp).forEach { width ->
