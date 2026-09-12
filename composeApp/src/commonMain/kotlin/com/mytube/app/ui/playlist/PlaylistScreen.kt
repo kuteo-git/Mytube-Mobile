@@ -144,7 +144,10 @@ fun PlaylistContent(
             onRetry = onRetry,
         ) {
             val ready = state as? PlaylistState.Ready ?: return@TabScaffold
-            val queue = ready.videos.map { it.asQueueItem() }
+            // Computed once per page rather than per recomposition: it is the
+            // same list for every row, and this screen recomposes for a rename
+            // alert and an animating header. `ChannelContent` says the same.
+            val queue = remember(ready.videos) { ready.videos.map { it.asQueueItem() } }
 
             LazyColumn(Modifier.fillMaxSize(), contentPadding = detailContentPadding()) {
                 item(key = "header") {
