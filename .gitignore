@@ -17,3 +17,7 @@ DerivedData/
 
 # Built APKs. They are large, and a fresh one is one command away.
 dist/
+
+# JVM crash dumps — a Kotlin/Native compile can leave these in the project root.
+hs_err_pid*.log
+replay_pid*.log
