@@ -263,9 +263,25 @@ class WatchViewModel(
      * Popular and then played through has to stay in that order, or sorting was
      * only ever a way of finding one video to leave the list by.
      */
-    private val queue: List<QueueItem> = emptyList(),
+    openedFrom: List<QueueItem> = emptyList(),
     playerFactory: VideoPlayerFactory,
 ) : ViewModel() {
+
+    /**
+     * The list, with every row this sitting has written marked as written.
+     *
+     * A `var`, and that is the whole of it: the queue is a *copy* of what the
+     * catalogue holds, `ensureInCatalogue` is the thing that changes what the
+     * catalogue holds, and a copy nobody updates is a copy that is wrong from
+     * the first write onwards. It used to be the constructor `val`, so the row
+     * this sitting had just written still read `inLibrary = false` for the rest
+     * of the sitting — and pressing retry, or leaving a video and coming back
+     * to it, asked the gateway to write it again. One call is one full metadata
+     * fetch upstream, which is the cost `ChannelViewModel.openVideo` marks its
+     * own row to avoid; this is that same bookkeeping for the rows reached
+     * after it.
+     */
+    private var queue: List<QueueItem> = openedFrom
 
     /**
      * Which video this is, and it can change without this object being replaced.
@@ -806,7 +822,25 @@ class WatchViewModel(
         val entry = queue.firstOrNull { it.id == videoId } ?: return
         if (entry.inLibrary || entry.sourceUrl.isEmpty()) return
         val written = videos.ensureExternal(entry.sourceUrl)
-        if (written.isNotEmpty()) videoId = written
+        if (written.isEmpty()) return
+        // The queue is rewritten before `videoId` is, and both halves matter.
+        //
+        // Marking it written is what stops the next visit to this row asking
+        // the gateway a second time. Carrying the *new* id is what keeps the
+        // row findable: `nextId` looks this video up in the queue by id, so an
+        // id that changed here with the queue left alone would match nothing,
+        // and the rest of a channel sorted by Popular would quietly follow the
+        // recommendation rail instead of the order somebody chose. The gateway
+        // answers with the id it was asked about today; this does not depend on
+        // it.
+        queue = queue.map {
+            if (it.id == entry.id) {
+                QueueItem(id = written, sourceUrl = it.sourceUrl, inLibrary = true)
+            } else {
+                it
+            }
+        }
+        videoId = written
     }
 
     private fun load() {

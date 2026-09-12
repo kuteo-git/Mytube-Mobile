@@ -155,7 +155,7 @@ class ChannelViewModel(
             runCatching { videos.ensureExternal(video.sourceUrl) }
                 .onSuccess { id ->
                     if (id.isNotEmpty()) {
-                        onOpened(id, queue.map { if (it.id == video.id) written(id) else it })
+                        onOpened(id, queue.map { if (it.id == video.id) it.written(id) else it })
                     } else {
                         _openFailed.value = true
                     }
@@ -165,8 +165,14 @@ class ChannelViewModel(
         }
     }
 
-    /** The row this call has just written, in the catalogue under [id]. */
-    private fun written(id: String) = QueueItem(id = id, inLibrary = true)
+    /**
+     * This row, now in the catalogue under [id].
+     *
+     * The address is carried rather than dropped: it is the only thing a row
+     * can be re-resolved from, and nothing is gained by forgetting it.
+     */
+    private fun QueueItem.written(id: String) =
+        copy(id = id, inLibrary = true)
 
     fun toggleSubscribed() {
         val current = _state.value as? ChannelState.Ready ?: return

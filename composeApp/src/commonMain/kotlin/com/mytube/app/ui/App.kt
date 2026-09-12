@@ -1018,7 +1018,7 @@ fun App(
                         streams = container.streamRepository,
                         narration = container.narrationRepository,
                         preferences = container.preferencesRepository,
-                        queue = session.queue,
+                        openedFrom = session.queue,
                         // Told after the fact: the ViewModel has already loaded
                         // the next video by the time this runs — see
                         // `advanceTo` — and this is the route catching up with
