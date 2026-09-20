@@ -22,6 +22,7 @@ import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
 import com.mytube.app.domain.repository.VideoRepository
 import com.mytube.app.ui.home.imageModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -315,6 +316,17 @@ class WatchViewModel(
 
     /** The poll watching the server's narration pass, cancelled when it ends. */
     private var narrationPoll: Job? = null
+
+    /**
+     * The load in flight, and the video it is for.
+     *
+     * Held for the reason [narrationPoll] is: without it `load()` was fire and
+     * forget, and two of them could run at once — which is not a rare shape. A
+     * press of Try again over a slow network, or pressing next while the
+     * current video is still resolving, is all it takes.
+     */
+    private var loadJob: Job? = null
+    private var loadingId = ""
 
     /** The end is reported on every tick; this makes the advance happen once. */
     private var advanced = false
@@ -818,11 +830,11 @@ class WatchViewModel(
      * already has, because a row that could not be written is a video that
      * cannot play, and that is the message the screen is for.
      */
-    private suspend fun ensureInCatalogue() {
-        val entry = queue.firstOrNull { it.id == videoId } ?: return
-        if (entry.inLibrary || entry.sourceUrl.isEmpty()) return
+    private suspend fun ensureInCatalogue(id: String): String {
+        val entry = queue.firstOrNull { it.id == id } ?: return id
+        if (entry.inLibrary || entry.sourceUrl.isEmpty()) return id
         val written = videos.ensureExternal(entry.sourceUrl)
-        if (written.isEmpty()) return
+        if (written.isEmpty()) return id
         // The queue is rewritten before `videoId` is, and both halves matter.
         //
         // Marking it written is what stops the next visit to this row asking
@@ -840,16 +852,43 @@ class WatchViewModel(
                 it
             }
         }
-        videoId = written
+        // Only when this is still the video being loaded. `load()` cancels the
+        // one it replaces, so a stale write-back should be impossible — and
+        // this is the same check `fillDescription` makes for the same reason:
+        // an invariant worth keeping is one that does not depend on every
+        // caller remembering it.
+        if (videoId == id) videoId = written
+        // Returned rather than left for the caller to re-read `videoId`: the
+        // gateway answers with the id it filed the row under, and that is the
+        // one the next two calls have to ask about. A caller reading the field
+        // instead would be reading a value another load may have moved.
+        return written
     }
 
     private fun load() {
+        val id = videoId
+        // A load already running for *this* video is the one the viewer is
+        // waiting on, so a second press of Try again is a double tap rather
+        // than a new intention. Two overlapping is worse than wasted work:
+        // both read the queue before either has written, so both ask the
+        // gateway to write the row — and one call is one full metadata fetch
+        // upstream, which this library has been blocked for before.
+        if (loadJob?.isActive == true && loadingId == id) return
+        // A *different* video does replace it, and the old one is cancelled
+        // rather than left to finish: it would otherwise write its stream, its
+        // state and its id over the newer one's. Measured before this line
+        // existed — pressing next during a slow load left `currentVideoId` on
+        // the video that had already been left.
+        loadJob?.cancel()
+        loadingId = id
         _state.value = WatchState.Loading
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             _state.value = runCatching {
-                ensureInCatalogue()
-                val video = videos.video(videoId)
-                when (val stream = streams.stream(videoId, PHONE_MAX_HEIGHT)) {
+                // The id the row was actually filed under, which is not always
+                // the one that was asked for.
+                val playing = ensureInCatalogue(id)
+                val video = videos.video(playing)
+                when (val stream = streams.stream(playing, PHONE_MAX_HEIGHT)) {
                     is Stream.Playable -> {
                         // Where the viewer left off. The server already knows —
                         // it is in the video's own user state — so the position
@@ -983,7 +1022,13 @@ class WatchViewModel(
                     // formats cannot be described is "no tier and no error".
                     is Stream.NothingPlayable -> WatchState.Unavailable(video, "no_tier")
                 }
-            }.getOrElse(::asState)
+            }
+                // `runCatching` catches everything, cancellation included. A
+                // load cancelled by the one replacing it would otherwise report
+                // `Failed` — drawn over the newer load's `Loading`, for a video
+                // nobody is waiting on any more.
+                .onFailure { if (it is CancellationException) throw it }
+                .getOrElse(::asState)
 
             loadUpNext("")
             fillDescription()

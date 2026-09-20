@@ -26,6 +26,7 @@ import com.mytube.app.domain.repository.VideoPlayerFactory
 import com.mytube.app.domain.repository.VideoRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -184,6 +185,71 @@ class WatchQueueTest {
         assertEquals(1, videos.ensured.size, "the write was attempted once")
     }
 
+
+    /**
+     * A load already running is the one the viewer is waiting on.
+     *
+     * `retry()` is `load()`, and `load()` had no job: two presses of Try again
+     * over a slow network launched two coroutines that both read the queue
+     * before either had written anything, so both asked the gateway to write
+     * the row. One call is one full metadata fetch upstream, and this library
+     * has been blocked for making too many of them.
+     *
+     * The test the first fix shipped with could not catch this — it put
+     * `advanceUntilIdle()` between the two presses, which is the sequential
+     * case, and the fake did not suspend, which makes every case sequential.
+     */
+    @Test
+    fun `a row is written once when two loads overlap`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"), ensureDelayMillis = 100)
+        val model = open(
+            videos,
+            queue = listOf(item("first", inLibrary = true), item("second")),
+            streams = FailingStreams,
+        )
+
+        model.advanceTo("second", fromTheStart = true)
+        // Half way through the write, which is where a thumb lands.
+        testScheduler.advanceTimeBy(50)
+        model.retry()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("https://www.youtube.com/watch?v=second"),
+            videos.ensured,
+            "the row was written more than once",
+        )
+    }
+
+    /**
+     * The guard above must not swallow a real change of video.
+     *
+     * Ignoring a second load is right only while it is the *same* video. A
+     * viewer pressing next during a slow load is asking for something else, and
+     * a guard that could not tell the two apart would leave them watching the
+     * video they had already left.
+     */
+    @Test
+    fun `advancing to another video replaces a load in flight`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first", "third"), ensureDelayMillis = 100)
+        val model = open(
+            videos,
+            queue = listOf(
+                item("first", inLibrary = true),
+                item("second"),
+                item("third", inLibrary = true),
+            ),
+        )
+
+        model.advanceTo("second", fromTheStart = true)
+        testScheduler.advanceTimeBy(50)
+        model.advanceTo("third", fromTheStart = true)
+        advanceUntilIdle()
+
+        assertEquals("third", model.currentVideoId)
+        assertTrue(model.state.value is WatchState.Playing, "the newer video is what plays")
+    }
+
     private fun item(id: String, inLibrary: Boolean = false) = QueueItem(
         id = id,
         sourceUrl = if (inLibrary) "" else "https://www.youtube.com/watch?v=$id",
@@ -242,6 +308,16 @@ class WatchQueueTest {
     private class FakeVideos(
         private val catalogue: MutableSet<String>,
         private val writesAs: (String) -> String = { it },
+        /**
+         * How long `ensureExternal` takes to answer.
+         *
+         * Zero by default, and that default is why this file could not see a
+         * whole class of fault: a fake that never suspends runs every coroutine
+         * to completion before the next one starts, so two overlapping loads
+         * cannot be written as a test even though they happen on a real
+         * network. The concurrency tests set it.
+         */
+        private val ensureDelayMillis: Long = 0,
     ) : VideoRepository {
         val ensured = mutableListOf<String>()
 
@@ -262,6 +338,7 @@ class WatchQueueTest {
 
         override suspend fun ensureExternal(sourceUrl: String): String {
             ensured += sourceUrl
+            if (ensureDelayMillis > 0) delay(ensureDelayMillis)
             val id = writesAs(sourceUrl.substringAfterLast('='))
             if (id.isNotEmpty()) catalogue += id
             return id
