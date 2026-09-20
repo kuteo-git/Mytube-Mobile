@@ -59,7 +59,18 @@ class ChannelViewModelTest {
         // The row is written now, and the queue says so — otherwise the watch
         // screen writes it a second time on arrival, which is one full metadata
         // fetch upstream for a row that is already there.
-        assertEquals(listOf(QueueItem("written-id", inLibrary = true)), queue)
+        assertEquals(
+            listOf(
+                QueueItem(
+                    "written-id",
+                    // `written` keeps the address: the row is findable by it if
+                    // the id ever has to be resolved again.
+                    sourceUrl = "https://www.youtube.com/watch?v=abc",
+                    inLibrary = true,
+                ),
+            ),
+            queue,
+        )
         // The id the *server* answered with, not the one that was pressed. They
         // are usually the same and the difference is not this side's to assume.
         assertEquals("written-id", opened)
