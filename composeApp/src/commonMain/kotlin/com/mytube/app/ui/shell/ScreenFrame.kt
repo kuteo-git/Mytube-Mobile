@@ -477,7 +477,7 @@ fun WatchSkeleton(modifier: Modifier = Modifier) {
         // Title: 20sp over 28sp of line, two lines of it.
         Column(Modifier.padding(start = Space.lg, end = Space.lg, top = Space.md)) {
             SkeletonLine(shade, 1f, 20.dp)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Space.sm))
             SkeletonLine(shade, 0.7f, 20.dp)
         }
 
@@ -491,7 +491,7 @@ fun WatchSkeleton(modifier: Modifier = Modifier) {
             Spacer(Modifier.width(Space.md))
             Column(Modifier.weight(1f)) {
                 SkeletonLine(shade, 0.5f, 15.dp)
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(SKELETON_LINE_GAP))
                 SkeletonLine(shade, 0.32f, 12.dp)
             }
             Spacer(Modifier.width(Space.sm))
@@ -531,14 +531,14 @@ fun WatchSkeleton(modifier: Modifier = Modifier) {
             Modifier
                 .padding(horizontal = Space.lg)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(SKELETON_PANE_RADIUS))
                 .background(shade)
                 .padding(Space.md),
         ) {
             SkeletonLine(shade, 0.55f, 14.dp)
             Spacer(Modifier.height(Space.sm))
             SkeletonLine(shade, 1f, 14.dp)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(SKELETON_LINE_GAP))
             SkeletonLine(shade, 0.8f, 14.dp)
         }
 
@@ -553,7 +553,7 @@ fun WatchSkeleton(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(Space.lg))
         SkeletonPane(shade, Modifier.padding(horizontal = Space.lg)) {
             SkeletonLine(shade, 0.85f, 14.dp)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(SKELETON_LINE_GAP))
             SkeletonLine(shade, 0.4f, 12.dp)
         }
 
@@ -574,21 +574,44 @@ fun WatchSkeleton(modifier: Modifier = Modifier) {
                     Modifier
                         .width(168.dp)
                         .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(RAIL_THUMB_RADIUS))
                         .background(shade),
                 )
                 Spacer(Modifier.width(Space.md))
                 Column(Modifier.weight(1f)) {
                     SkeletonLine(shade, 1f, 13.dp)
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(SKELETON_LINE_GAP))
                     SkeletonLine(shade, 0.75f, 13.dp)
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(SKELETON_LINE_GAP))
                     SkeletonLine(shade, 0.5f, 12.dp)
                 }
             }
         }
     }
 }
+
+/**
+ * The gap between two stacked lines of one label — a name over its subscriber
+ * count, a title over its channel. Smaller than [Space.sm], which is the gap
+ * between two *things*; these are one thing on two lines.
+ */
+private val SKELETON_LINE_GAP = 6.dp
+
+/** A line of text's own corner. Too small to read as a shape, big enough not to be a rectangle. */
+private val SKELETON_LINE_RADIUS = 4.dp
+
+/**
+ * One of the page's panes, which is `glassControl`'s radius.
+ *
+ * Named rather than written out at both call sites: `DescriptionBox` and
+ * `CommentsHeading` draw the real ones, and a skeleton whose corners disagree
+ * with them is the geometry changing as the page arrives — the fault
+ * [FeedSkeleton] records.
+ */
+private val SKELETON_PANE_RADIUS = 12.dp
+
+/** `SuggestionRow`'s thumbnail corner. @see UpNextRail */
+private val RAIL_THUMB_RADIUS = 8.dp
 
 /** One line of stand-in text, at the height the real line occupies. */
 @Composable
@@ -597,7 +620,7 @@ private fun SkeletonLine(shade: Color, width: Float, height: Dp) {
         Modifier
             .fillMaxWidth(width)
             .height(height)
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(SKELETON_LINE_RADIUS))
             .background(shade),
     )
 }
@@ -631,7 +654,7 @@ private fun SkeletonPane(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(SKELETON_PANE_RADIUS))
             .background(shade)
             .padding(horizontal = Space.md, vertical = Space.sm),
         content = content,

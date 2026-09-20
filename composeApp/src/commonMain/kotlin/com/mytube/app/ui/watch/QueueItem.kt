@@ -18,13 +18,20 @@ import com.mytube.app.domain.model.Video
  * the queue carries what that decision needs rather than an id somebody has to
  * look the answer up for: the address to write, and whether it has to be
  * written at all.
+ *
+ * **Neither field has a default, and `inLibrary` is why.** A default of `true`
+ * reads as "do not write this", so a caller that forgot the flag would get back
+ * exactly the 404 this type was added to stop, with nothing reporting it. That
+ * is the trap `startAtBeginning` was already caught by — *"it bought one short
+ * call site and paid for it with a fault nothing can catch"* — and here the
+ * convenient default is the bug itself.
  */
 data class QueueItem(
     val id: String,
     /** @see Video.sourceUrl */
-    val sourceUrl: String = "",
+    val sourceUrl: String,
     /** @see Video.inLibrary */
-    val inLibrary: Boolean = true,
+    val inLibrary: Boolean,
 )
 
 fun Video.asQueueItem() = QueueItem(id = id, sourceUrl = sourceUrl, inLibrary = inLibrary)

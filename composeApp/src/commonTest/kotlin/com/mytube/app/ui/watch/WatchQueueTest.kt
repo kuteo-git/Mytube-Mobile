@@ -92,6 +92,98 @@ class WatchQueueTest {
         assertTrue(model.state.value is WatchState.Playing)
     }
 
+    /**
+     * Retry must not buy the write twice.
+     *
+     * `load()` runs `ensureInCatalogue` every time, and `retry()` is `load()`.
+     * The queue used to be a constructor `val`, so the row this sitting had
+     * already written still read `inLibrary = false` — and every press of Try
+     * again was another `POST /api/videos/external`, which is one full metadata
+     * fetch upstream. The charter records what this library has already been
+     * blocked for: *"every full metadata request answered with 'Sign in to
+     * confirm you're not a bot', taking stream resolution down with it."*
+     */
+    @Test
+    fun `a row written once is not written again when the stream is retried`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"))
+        val model = open(
+            videos,
+            queue = listOf(item("first", inLibrary = true), item("second")),
+            streams = FailingStreams,
+        )
+
+        model.advanceTo("second", fromTheStart = true)
+        advanceUntilIdle()
+        assertTrue(model.state.value is WatchState.Failed, "expected the stream to fail")
+        assertEquals(1, videos.ensured.size)
+
+        model.retry()
+        advanceUntilIdle()
+        model.retry()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("https://www.youtube.com/watch?v=second"),
+            videos.ensured,
+            "the row was already written; two retries must not write it twice",
+        )
+    }
+
+    /**
+     * A row written under a different id keeps its place in the queue.
+     *
+     * `ensureInCatalogue` may be handed back an id other than the one it asked
+     * about, and `nextId` finds this video in the queue **by id**. Without the
+     * queue being rewritten alongside `videoId`, nothing matches — and the rest
+     * of a channel sorted by Popular quietly follows the recommendation rail
+     * instead of the order somebody chose. Silent, which is what makes it worth
+     * a test rather than a comment.
+     */
+    @Test
+    fun `a row written under a new id still knows what follows it`() = runTest(dispatcher) {
+        val videos = FakeVideos(
+            catalogue = mutableSetOf("first", "third"),
+            writesAs = { "$it-in-catalogue" },
+        )
+        val model = open(
+            videos,
+            queue = listOf(
+                item("first", inLibrary = true),
+                item("second"),
+                item("third", inLibrary = true),
+            ),
+        )
+
+        model.advanceTo("second", fromTheStart = true)
+        advanceUntilIdle()
+
+        val state = model.state.value
+        assertTrue(state is WatchState.Playing, "expected the video to play, was $state")
+        assertEquals("second-in-catalogue", state.video.id)
+        assertEquals("third", state.nextId, "next must stay inside the queue")
+    }
+
+    /**
+     * An empty id back is a refusal wearing a success's clothes.
+     *
+     * The gateway answers 200 with `{"videoId":""}` when it could not resolve
+     * the address. Nothing is renamed on the strength of that, and the load
+     * fails the way it would have anyway — which is honest: there is genuinely
+     * nothing to play.
+     */
+    @Test
+    fun `an empty id back leaves the video alone and fails the load`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"), writesAs = { "" })
+        val model = open(videos, queue = listOf(item("first", inLibrary = true), item("second")))
+
+        model.advanceTo("second", fromTheStart = true)
+        advanceUntilIdle()
+
+        val state = model.state.value
+        assertTrue(state is WatchState.Failed, "expected the load to fail, was $state")
+        assertEquals(1, videos.ensured.size, "the write was attempted once")
+    }
+
     private fun item(id: String, inLibrary: Boolean = false) = QueueItem(
         id = id,
         sourceUrl = if (inLibrary) "" else "https://www.youtube.com/watch?v=$id",
@@ -101,18 +193,20 @@ class WatchQueueTest {
     private suspend fun kotlinx.coroutines.test.TestScope.open(
         videos: FakeVideos,
         queue: List<QueueItem>,
+        streams: StreamRepository = FakeStreams,
+        videoId: String = "first",
     ): WatchViewModel {
         val model = WatchViewModel(
-            videoId = "first",
+            videoId = videoId,
             startAtBeginning = true,
             autoPlay = false,
             onFinished = {},
             mediaBaseUrl = "http://mac:8180",
             videos = videos,
-            streams = FakeStreams,
+            streams = streams,
             narration = FakeNarration,
             preferences = FakePreferences,
-            queue = queue,
+            openedFrom = queue,
             playerFactory = FakePlayerFactory(),
         )
         advanceUntilIdle()
@@ -137,8 +231,18 @@ class WatchQueueTest {
         override fun release() {}
     }
 
-    /** The catalogue, and what the gateway was asked to write into it. */
-    private class FakeVideos(private val catalogue: MutableSet<String>) : VideoRepository {
+    /**
+     * The catalogue, and what the gateway was asked to write into it.
+     *
+     * [writesAs] is how the gateway names the row it has written. It answers
+     * with the id it was asked about today, so the default does that — but the
+     * app does not depend on it, and the test for that needs a gateway which
+     * answers with something else.
+     */
+    private class FakeVideos(
+        private val catalogue: MutableSet<String>,
+        private val writesAs: (String) -> String = { it },
+    ) : VideoRepository {
         val ensured = mutableListOf<String>()
 
         override suspend fun video(id: String): Video {
@@ -158,8 +262,8 @@ class WatchQueueTest {
 
         override suspend fun ensureExternal(sourceUrl: String): String {
             ensured += sourceUrl
-            val id = sourceUrl.substringAfterLast('=')
-            catalogue += id
+            val id = writesAs(sourceUrl.substringAfterLast('='))
+            if (id.isNotEmpty()) catalogue += id
             return id
         }
 
@@ -227,6 +331,12 @@ class WatchQueueTest {
     private object FakeStreams : StreamRepository {
         override suspend fun stream(videoId: String, maxHeight: Int): Stream =
             Stream.Playable(url = "http://mac:8180/hls/$videoId/master.m3u8", height = 720)
+    }
+
+    /** A gateway that is reachable for the write and not for the stream. */
+    private object FailingStreams : StreamRepository {
+        override suspend fun stream(videoId: String, maxHeight: Int): Stream =
+            error("gateway answered 500 for /api/videos/$videoId/stream")
     }
 
     private object FakeNarration : NarrationRepository {

@@ -7,12 +7,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -105,13 +109,24 @@ fun DescriptionBox(
                 maxLines = if (expanded) Int.MAX_VALUE else 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(Space.sm))
+            // A 14sp line measures about 20dp, and when the box is open this is
+            // the *only* way to close it again — the box's own `clickable` is
+            // gone by then. So the target is grown to 48dp rather than left at
+            // the height of the ink, which is the lesson the player's gear cost
+            // when it was reported as hard to hit. The min height supplies the
+            // gap above the line, so there is no spacer as well.
+            //
+            // `Role.Button` because a screen reader otherwise announces this as
+            // text that happens to respond — it is the control this pane is for.
             Text(
                 text = if (expanded) strings.showLess else strings.showMore,
                 color = Tokens.text,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.clickable(onClick = onToggleExpanded),
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button, onClick = onToggleExpanded)
+                    .wrapContentHeight(Alignment.CenterVertically),
             )
         }
     }
