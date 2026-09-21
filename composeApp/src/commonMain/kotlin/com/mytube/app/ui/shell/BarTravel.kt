@@ -11,13 +11,11 @@ package com.mytube.app.ui.shell
  *
  * @param topHidden the top bar and everything pinned under it — today the
  *   feed's chip row.
- * @param bottomHidden the tab bar slides off the bottom edge.
- * @param bottomCollapsed the tab bar narrows to the selected glyph instead,
- *   opening a berth the miniplayer walks into. Never true with [bottomHidden].
+ * @param bottomCollapsed the tab bar narrows to the selected glyph, opening a
+ *   berth the miniplayer walks into.
  */
 data class BarTravel(
     val topHidden: Boolean,
-    val bottomHidden: Boolean,
     val bottomCollapsed: Boolean,
 )
 
@@ -49,12 +47,22 @@ data class BarTravel(
  *   expanded the watch layer covers the shell, and the drag that collapses it
  *   lands where a *whole* bar is.
  */
-fun barTravel(barsShowing: Boolean, playerRestsOnBar: Boolean): BarTravel {
-    if (barsShowing) return BarTravel(false, false, false)
-    // The top bar has nothing resting on it, so it always just leaves.
-    return BarTravel(
-        topHidden = true,
-        bottomHidden = !playerRestsOnBar,
-        bottomCollapsed = playerRestsOnBar,
-    )
-}
+fun barTravel(barsShowing: Boolean, playerRestsOnBar: Boolean): BarTravel = BarTravel(
+    // The top bar has nothing resting on it and nothing to navigate with, so it
+    // leaves the moment a reader is moving down a feed.
+    topHidden = !barsShowing,
+    // **The tab bar never leaves.** It narrows or it stays whole.
+    //
+    // It used to slide off the bottom whenever nothing was playing, and that
+    // was asked for and then reversed once it could be seen: *"tao muốn khi ko
+    // mini player, nó vẫn hiện dù scroll"*. The reason it reads wrong is that
+    // this bar is not chrome over the content, it is how somebody leaves the
+    // page — and a reader half way down a feed who wants Settings should not
+    // have to flick back up to find the way there. It is also what this app's
+    // own reference does: Apple Music's tab bar collapses around a playing
+    // track and never disappears.
+    //
+    // So `bottomHidden` is gone rather than pinned to false: a value nothing
+    // can ever set is a value somebody will one day wire up again.
+    bottomCollapsed = !barsShowing && playerRestsOnBar,
+)

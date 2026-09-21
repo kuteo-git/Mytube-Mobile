@@ -4020,3 +4020,44 @@ It cost a round trip here. `--terminate-existing` on the launch, or a terminate
 before it, and the check is that the app comes back under a **different bundle
 path**: `6B7CAC77-…` before, `27C1FA53-…` after. The version string says nothing
 — `CFBundleShortVersionString` has been 1.0 since the project began.
+
+
+## The tab bar never leaves (2026-09-21)
+
+Reported as *"Chip và bottombar luôn luôn hiện, ko auto hide khi scroll nữa"*
+and fixed as one thing, which was half right and had to be split.
+
+**What was wrong.** `barsHidden` was computed once —
+`if (barsShowing || collapsing) 0f else 1f` — and handed to *both* bars, so the
+term that exists to keep the **bottom** bar (the miniplayer rests on it, and
+sliding it away takes the player with it) pinned the top bar and the chip row
+as well. Anything playing, and neither ever left again. Measured through
+Compose's own semantics: with the miniplayer up the chip "All" sat at y=147
+before three flings and y=147 after; with it closed, both nodes were gone.
+
+**What was then wrong in the other direction.** Splitting them made the tab bar
+slide off the bottom whenever nothing was playing — and seen on the phone that
+was immediately reversed: *"tao muốn khi ko mini player, nó vẫn hiện dù
+scroll"*. The reason it reads wrong is that this bar is not chrome over the
+content, it is **how somebody leaves the page**. A reader half way down a feed
+who wants Settings should not have to flick back up to find the way there. It
+is also what this app's own reference does — Apple Music's tab bar collapses
+around a playing track and never disappears.
+
+So the rule is two sentences and they are not the same sentence:
+
+| | |
+|---|---|
+| the top bar and the chip row | leave whenever the reader is moving down |
+| the tab bar | **never leaves**; it narrows for a player, or stays whole |
+
+- **`bottomHidden` was deleted rather than pinned to false.** A value nothing
+  can ever set is a value somebody will one day wire up again.
+- `barsHidden` stays as a `0f` constant where the miniplayer's offset and the
+  drag's landing point read it, so the day that bar earns a reason to leave it
+  is one value to change rather than four call sites to find.
+- **`barTravel` is a named pure function with a test**, for the reason
+  `wholeSeconds` and `shouldRecoverStall` are: nothing in the type system
+  catches a float handed to one consumer too many — both bars took a `Float`
+  and both were happy. The test was red on exactly the reported case before the
+  first fix, and its assertions changed with the second.

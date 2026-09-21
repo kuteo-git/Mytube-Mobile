@@ -435,11 +435,11 @@ fun App(
             // well, and neither ever left again. The bottom bar is the one the
             // miniplayer rests on; the top bar has nothing on it. See
             // [barTravel], which holds the rule where a test can read it.
-            val barsHidden by animateFloatAsState(
-                targetValue = if (travel.bottomHidden) 1f else 0f,
-                animationSpec = tween(220),
-                label = "bars",
-            )
+            // Kept as a number rather than deleted: the miniplayer's offset and
+            // the drag's landing point are both built from it, and the day the
+            // tab bar earns a reason to leave again it is one value to change
+            // rather than four call sites to find.
+            val barsHidden = 0f
             val topHidden by animateFloatAsState(
                 targetValue = if (travel.topHidden) 1f else 0f,
                 animationSpec = tween(220),

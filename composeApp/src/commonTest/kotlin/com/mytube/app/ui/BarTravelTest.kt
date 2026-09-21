@@ -21,7 +21,6 @@ class BarTravelTest {
     fun `at the top nothing moves`() {
         val t = barTravel(barsShowing = true, playerRestsOnBar = false)
         assertFalse(t.topHidden)
-        assertFalse(t.bottomHidden)
         assertFalse(t.bottomCollapsed)
     }
 
@@ -34,10 +33,10 @@ class BarTravelTest {
     }
 
     @Test
-    fun `scrolling down with nothing playing takes both bars away`() {
+    fun `scrolling down with nothing playing takes the chips and leaves the tab bar`() {
         val t = barTravel(barsShowing = false, playerRestsOnBar = false)
         assertTrue(t.topHidden)
-        assertTrue(t.bottomHidden)
+        // The tab bar is how somebody leaves the page, so it stays whole.
         assertFalse(t.bottomCollapsed)
     }
 
@@ -46,21 +45,19 @@ class BarTravelTest {
         val t = barTravel(barsShowing = false, playerRestsOnBar = true)
         // The regression. Nothing rests on the top bar, so nothing keeps it.
         assertTrue(t.topHidden)
-        // And the bottom one narrows rather than leaving, or the player goes
-        // with it.
-        assertFalse(t.bottomHidden)
+        // And the bottom one narrows to make room for the player.
         assertTrue(t.bottomCollapsed)
     }
 
     @Test
-    fun `the bottom bar never leaves and collapses at once`() {
+    fun `the tab bar only ever narrows, and only for a player`() {
         for (showing in listOf(true, false)) {
             for (resting in listOf(true, false)) {
                 val t = barTravel(showing, resting)
-                assertFalse(
-                    t.bottomHidden && t.bottomCollapsed,
-                    "showing=$showing resting=$resting",
-                )
+                if (t.bottomCollapsed) {
+                    assertTrue(resting, "collapsed with nothing to make room for")
+                    assertFalse(showing, "collapsed while the reader is at the top")
+                }
             }
         }
     }
