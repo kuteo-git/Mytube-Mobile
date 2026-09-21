@@ -3596,3 +3596,139 @@ and **an HLS seek lands on the start of the segment containing it**.
   went into a symptom that could not be reproduced because the trigger named
   was not the trigger.
 
+
+## The tab bar collapses, and every control answers a finger (2026-09-20)
+
+Asked for against Apple Music on iOS 26, video by video. Three changes, all in
+`ui/shell`, and the last one is the only design system in this app that is about
+*movement* rather than about paint.
+
+### The bar narrows to make room for the bar beside it
+
+Scrolling down does not merely hide the tabs any more: the row shrinks to
+`[the selected tab, as a circle] [miniplayer] [search]`, and scrolling back up
+opens it again. One number, `collapse`, animated by `App.kt` because the
+miniplayer is a *sibling* of the shell and has to walk into the berth on the
+same number — a spring living inside `AppShell` is a number the bar beside it
+cannot read. That is `barsHidden`'s own reasoning, applied a second time.
+
+- **The geometry is arithmetic in a `BoxWithConstraints`, not three states.**
+  `tabsWidth` lerps from the whole row to one circle, and everything else is a
+  share of it. Written as states, the halfway frame is whatever the transition
+  happened to interpolate, and the reference video's whole point is the halfway
+  frames.
+- **The berth is `Spacer(weight(1f))`, and it had to be.** It was arithmetic
+  first, and the gaps came out uneven — reported exactly that way — because the
+  *number of gaps* changes with `collapse`, so a sum written for the open row is
+  one gap short of the collapsed one. A weight has no count in it.
+- **The label's height is measured, not a constant.** `LABEL_HEIGHT = 10.dp`
+  was the first version and it clipped the descenders of "Playlists" and
+  "Settings" — reported as "Plavlists". `Modifier.layout` scales the height the
+  child *reports* by `1 - collapse` and `clipToBounds` does the rest, so the
+  icon centres in the circle without anything inventing a number the font owns.
+- **The lit pill leaves when the room it marks leaves.** A highlight behind a
+  tab that has narrowed to a circle is a second pill inside the first;
+  `alpha(1f - collapse)` is the whole fix.
+
+### The selection pill stretches between two springs
+
+One spring is a pill sliding; two springs of different stiffness are a pill that
+*stretches* — the leading edge arrives first and the trailing edge catches up.
+`lead` at 900 and `trail` at 380, both `DampingRatioNoBouncy`, with the pill
+drawn from `min` to `max + 1`. The ink crosses with it,
+`lerpColor(Tokens.text2, Tokens.brand, lit)`, so the label lights up as the pane
+reaches it rather than a frame after.
+
+### The tab glyphs are SF Symbols on both platforms
+
+`TabGlyph` is `expect/actual`. iOS asks `UIImage.systemImageNamed` at the
+display's own density and remembers the bitmap on `(name, density)`; Android
+draws five PNGs rendered from the same symbols by an AppKit script at 192pt.
+
+**This is a licence decision and it is the household's, stated here rather than
+implied.** Apple's terms restrict these glyphs by *platform*, not by
+distribution, and that was said once. The answer given was that this app is
+neither shipped to a store nor open-sourced, so the exposure is nil — and it is
+recorded so nobody rediscovers the question and quietly reverses it.
+
+### A press blooms, and it is one object everything shares
+
+Every control in the app grew a press on 2026-09-02, and that press was a
+*squash*. Measured against the reference video frame by frame — brightness and
+bounding box on frames 6 onward — a pressed Liquid Glass control **grows**. It
+was read backwards, corrected from the measurement, and the correction is the
+entry.
+
+`GlassPress` now carries a bloom: `PRESS_INSET` of 6dp past each edge, taken as
+the smaller of the two axis ratios so the scale stays uniform.
+
+- **A distance, not a ratio.** 6dp is a fifth of a small disc and a fiftieth of
+  a wide pill, so small controls feel springy and large ones barely move —
+  without anybody deciding per control that they should.
+- **Two springs, and the second one wobbles.** Down is `StiffnessHigh` with
+  `DampingRatioMediumBouncy`; up is `StiffnessMedium` with
+  `DampingRatioLowBouncy`, which is the "nhúc nhích" that was asked for. One
+  symmetric curve reads as an animation playing rather than as a material
+  responding.
+- **A pressed control is drawn over its neighbours.** `zIndex` flips on the way
+  down and back only when the release spring has finished — otherwise the pane
+  beside it bites the part that has bloomed. The tab capsule stopped clipping
+  for the same reason, and its comment says so.
+- **`Modifier.pressable` is the one call site.** Material, squash and click
+  folded together, because written apart the next control written gets the
+  material and no press — which is precisely how fifteen of them were silent.
+- **`PressGuardTest` scans every `clickable(` call site**, not every file: a
+  file-granularity check was fooled once by `WatchActions.kt`, which held a
+  compliant pill beside a bare `clickable` on a pill *half*. The window is ±34
+  lines and an exemption is a `press-guard: <reason>` comment in place.
+  **Proven to fail** — it was red on that exact line before the half was fixed.
+- **iOS's seven platform-drawn panes cannot go through it.** They are SwiftUI,
+  above the whole Compose scene, so a `graphicsLayer` on the Kotlin side reaches
+  a glyph that is no longer being rendered. `GlassPressStyle` in
+  `PlayerGlass.swift` is the same decision written twice, and both copies say
+  so: a SwiftUI response is 2π/√k, which is 0.06s and 0.16s.
+
+## The watch page is glass, and its own ground was hiding it (2026-09-21)
+
+Asked for in one sentence: the watch screen's background should be blurred like
+the miniplayer's, so the layer underneath shows through faintly. The material
+was already built — `GlassBackdrop` samples the recording every floating pane
+reads — so this is one call, and it was invisible for a day.
+
+**`WatchScreen` painted its own opaque `Tokens.bg` over it.** The glass was the
+layer's first child, correct, sampling correctly; the page's own `Column`
+carried `.background(Tokens.bg.copy(alpha = 1f - drag))` and covered every pixel
+of it. Two grounds, one of them glass, and the one on top winning — which is
+word for word the fault that line was *written* to fix, in the opposite
+direction, and its comment still described that older arrangement.
+
+Diagnosed by lowering the tint to 0.25 and finding the page still black: a tint
+that low cannot be black, so the sample was never reaching the screen. **A
+material that does not show is either the wrong tint or the wrong layer, and one
+cheap measurement separates them.**
+
+- **The ground belongs to the layer, not to the page.** `WatchLayer` draws it
+  and fades it with the drag; `WatchScreen` is transparent outside fullscreen.
+  Fullscreen keeps a solid one — there is no tab to show through and the picture
+  fills the screen.
+- **A third tint, `TINT_PAGE` at 0.86.** Both existing numbers were tried and
+  both are wrong here, in opposite directions: `TINT_MODAL` at 0.95 shows
+  nothing through at all, which is a solid page with an expensive way of being
+  black, and `TINT_GLASS` at 0.75 — the miniplayer's own tone, which is what was
+  asked for by name — turns out to be an *edge* number. Across a whole screen
+  the feed behind it stops being a hint of a layer underneath and becomes a
+  second page competing with the title, the pills and the comments. Reported
+  immediately as wanting it darker. "One number, and it has to stay one" is a
+  rule about panes read against each other along a shared edge; this one shares
+  none.
+- **The fade stays on the ground and never on the layer.** `graphicsLayer {
+  alpha }` on the Box applies to the picture too, and the picture travelling
+  into the bar must stay solid all the way down — the fault once reported as the
+  player disappearing instead of shrinking.
+- **The sheet is untouched.** It samples `sheetBackdrop`, which records this
+  page with its own `drawRect(Tokens.bg)` in front, so the settings sheet reads
+  the same as it always did.
+
+Measured on the emulator: the feed's thumbnails are visibly soft behind the
+channel row and the description pane, and a held drag at mid-gesture shows the
+video shrunk and solid over a feed that is sharp from the first pixel.

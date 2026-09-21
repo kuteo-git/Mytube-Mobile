@@ -284,6 +284,28 @@ const val TINT_GLASS = 0.75f
 const val TINT_MODAL = 0.95f
 
 /**
+ * And the tone a whole *page* of glass takes.
+ *
+ * The watch screen's ground, which is the only page in this app made of the
+ * material rather than merely floating panes of it. It sits between the other
+ * two on purpose, and neither of them is right for it:
+ *
+ * - [TINT_GLASS] is an edge content passes *under*, and at 0.75 across a whole
+ *   screen the feed behind it is not a hint of a layer underneath, it is a
+ *   second page competing with the title, the pills and the comments on top of
+ *   it. Reported as wanting it darker, and that is what this answers.
+ * - [TINT_MODAL] is a surface somebody stops at and answers, and at 0.95
+ *   nothing shows through at all — which is a solid page with an expensive way
+ *   of being black, and the opposite of what was asked for.
+ *
+ * So: dark enough that the page's own text owns the screen, light enough that
+ * the tab underneath is still visibly there. A third number is what "one
+ * number, and it has to stay one" was never about — that rule is for panes read
+ * against each other along a shared edge, and this one shares none.
+ */
+const val TINT_PAGE = 0.86f
+
+/**
  * How far the material blurs, everywhere it is used.
  *
  * One number for the two bars, the miniplayer, the sheet and the chips, for the

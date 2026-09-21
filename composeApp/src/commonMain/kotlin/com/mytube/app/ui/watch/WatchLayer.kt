@@ -1,7 +1,6 @@
 package com.mytube.app.ui.watch
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,15 +10,18 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import com.mytube.app.ui.theme.Tokens
-import kotlinx.coroutines.launch
+import com.mytube.app.ui.shell.GlassBackdrop
+import com.mytube.app.ui.shell.LocalBackdrop
+import com.mytube.app.ui.shell.TINT_PAGE
 import kotlin.time.TimeSource
+import kotlinx.coroutines.launch
 
 /**
  * How far the video has been dragged toward the miniplayer, 0 to 1.
@@ -150,11 +152,25 @@ fun WatchLayer(
             // is sharp from the first pixel and the video visibly shrinks *into*
             // a bar that is already there.
             //
-            // So the blur is gone and the bar is drawn from the start, by
-            // `App.kt` — the only place that knows where it lands. All that is
-            // left here is the paint thinning out, which is the honest
-            // description of one screen being uncovered by another.
-            .background(Tokens.bg.copy(alpha = 1f - progress))
+            // So the bar is drawn from the start, by `App.kt` — the only place
+            // that knows where it lands.
+            //
+            // # And the glass came back, because the fault was never the glass
+            //
+            // What broke the gesture was a blur that **changed**: 28dp of it at
+            // rest, running down to nothing as the finger fell, so the feed
+            // sharpened instead of the video arriving. A blur that does not
+            // move has none of that in it. The page sits on the same material
+            // the miniplayer is made of — it samples the same recording, from
+            // the same place outside it — so the tab underneath shows through
+            // softly, and what thins across the drag is only the tint.
+            //
+            // `TINT_GLASS`, which is the miniplayer's own tone, because that
+            // is what was asked for: the same material as the bar the video
+            // collapses into. `TINT_MODAL` was tried first on the argument that
+            // this is a page somebody stops at and reads rather than an edge
+            // content passes under — and at 0.95 nothing shows through it at
+            // all, which is a solid page with an expensive way of being black.
             .pointerInput(height, pictureHeight) {
                 detectVerticalDragGestures(
                     onDragStart = { startedAt = TimeSource.Monotonic.markNow() },
@@ -187,6 +203,19 @@ fun WatchLayer(
                 )
             },
     ) {
+        // Drawn first, so it is the ground and not a film over the page.
+        //
+        // Its alpha is the drag's, for the reason the paint's was: the layer
+        // itself must stay solid or the picture travelling into the bar fades
+        // out before it arrives — which was reported as the player
+        // disappearing instead of shrinking.
+        GlassBackdrop(
+            modifier = Modifier.matchParentSize().graphicsLayer { alpha = 1f - progress },
+            backdrop = LocalBackdrop.current,
+            fromTop = true,
+            tint = TINT_PAGE,
+        )
+
         CompositionLocalProvider(
             LocalDragProgress provides progress,
             LocalDragTravel provides travel,

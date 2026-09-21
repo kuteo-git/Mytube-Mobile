@@ -282,12 +282,6 @@ fun WatchContent(
     // fullscreen must not leave the phone sideways with no system bars.
     ApplyFullscreen(fullscreen)
 
-    // The ground fades with the drag rather than staying solid.
-    //
-    // This was painting an opaque `Tokens.bg` *inside* the layer that was busy
-    // fading its own background to let the tab through — so the tab never
-    // appeared, and what a dragging finger uncovered was a flat dark rectangle.
-    // Two backgrounds, one of them fading, and the one on top winning.
     // What the settings sheet blurs.
     //
     // Its own state, not the shell's `LocalHaze`. That one is registered on the
@@ -310,7 +304,21 @@ fun WatchContent(
         Modifier
             .fillMaxSize()
             .layerBackdrop(sheetBackdrop)
-            .background(if (fullscreen) Tokens.bg else Tokens.bg.copy(alpha = 1f - drag)),
+            // The page has no ground of its own, outside fullscreen.
+            //
+            // `WatchLayer` draws one for it, and it is glass — the same
+            // material and the same tint the miniplayer is made of, sampling
+            // the same recording — so the tab underneath shows through softly
+            // instead of the page being a flat dark rectangle. A `Tokens.bg`
+            // here is opaque and is drawn *over* that, which is exactly what
+            // it was: the glass was built, installed, and invisible, because
+            // this line covered every pixel of it.
+            //
+            // It used to fade with the drag (`alpha = 1f - drag`) for the same
+            // reason the glass now does, and the fade moved with the ground.
+            // Fullscreen keeps a solid one: there is no tab to show through,
+            // and the picture fills the screen anyway.
+            .background(if (fullscreen) Tokens.bg else Color.Transparent),
     ) {
         // No status-bar gap in fullscreen — there is no status bar, and the gap
         // would be a black band where the picture should be.
