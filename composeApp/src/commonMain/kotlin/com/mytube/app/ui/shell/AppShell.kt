@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -52,6 +53,8 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.theme.Tokens
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -379,22 +382,47 @@ private fun BottomBar(
                 // At rest it is one item wide, inset a little; collapsed it is
                 // the circle exactly, because by then it is the only thing left
                 // with any width and the capsule has closed around it.
-                val lit by animateFloatAsState(
-                    targetValue = Tab.entries.indexOf(current).toFloat(),
+                // Two springs on one index, and the pill is the gap between
+                // them.
+                //
+                // A single value would slide a rigid pane across. What the
+                // reference does is *stretch*: the leading edge leaves before
+                // the trailing one catches up, so the pill elongates across the
+                // gap and settles at the far end. Two stiffnesses give exactly
+                // that, and taking `min` and `max` of the pair means neither
+                // edge has to know which way it is going — left to right or
+                // right to left, the faster one is always the leading edge.
+                //
+                // At rest the two agree and the pill is one item wide again.
+                val target = Tab.entries.indexOf(current).toFloat()
+                val lead by animateFloatAsState(
+                    targetValue = target,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
+                        stiffness = 900f,
                     ),
-                    label = "lit-tab",
+                    label = "lit-lead",
                 )
+                val trail by animateFloatAsState(
+                    targetValue = target,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = 380f,
+                    ),
+                    label = "lit-trail",
+                )
+                val litFrom = min(lead, trail)
+                val litTo = max(lead, trail) + 1f
                 val litInset = Space.xs * (1f - collapse)
                 Box(
                     Modifier
                         .align(Alignment.CenterStart)
-                        .offset(x = itemWhole * lit * (1f - collapse) + litInset)
+                        .offset(x = itemWhole * litFrom * (1f - collapse) + litInset)
                         .width(
-                            (lerp(itemWhole, circle, collapse) - litInset * 2)
-                                .coerceAtLeast(0.dp),
+                            (
+                                lerp(itemWhole * (litTo - litFrom), circle, collapse) -
+                                    litInset * 2
+                                ).coerceAtLeast(0.dp),
                         )
                         .height(Size.topBar - Space.xs * 2)
                         // Gone by the time the bar has closed.
@@ -418,12 +446,21 @@ private fun BottomBar(
                         .height(Size.topBar),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Tab.entries.forEach { tab ->
+                    Tab.entries.forEachIndexed { index, tab ->
                         val selected = tab == current
                         TabItem(
                             icon = tabIcon(tab),
                             label = strings(tab),
-                            selected = selected,
+                            // How much of this item the pill is standing on.
+                            //
+                            // The ink follows the pane rather than the state, so
+                            // while it travels both ends read as chosen and the
+                            // colour crosses with it — which is what the
+                            // reference does and what makes the movement read as
+                            // one thing moving rather than two lights swapping.
+                            lit = (
+                                min(litTo, index + 1f) - max(litFrom, index.toFloat())
+                                ).coerceIn(0f, 1f),
                             collapse = collapse,
                             // The selected tab keeps a circle's worth of room and
                             // the others give theirs up. The three widths sum to
@@ -497,7 +534,8 @@ private fun BottomBar(
 private fun TabItem(
     icon: ImageVector,
     label: String,
-    selected: Boolean,
+    /** 0 for a tab the pill is nowhere near, 1 for the one it is standing on. */
+    lit: Float,
     /** How far the bar has narrowed — see [BottomBar]'s `collapse`. */
     collapse: Float,
     /** The share of the capsule this item has at this point in the movement. */
@@ -544,10 +582,18 @@ private fun TabItem(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            // The selected tab is brighter, not a different colour: the design
-            // system has one accent and it belongs to the brand, not to
-            // navigation.
-            tint = if (selected) Tokens.text else Tokens.text2,
+            // The chosen tab wears the brand's colour.
+            //
+            // This app's rule was the opposite — *"the selected tab is
+            // brighter, not a different colour: the design system has one accent
+            // and it belongs to the brand, not to navigation"* — and it is
+            // reversed deliberately, against a screen recording of Apple Music
+            // where the accent is exactly what says which tab you are on. The
+            // cost is that red now means two things in this app: what is live,
+            // and where you are.
+            //
+            // Lerped rather than switched, so it crosses with the pill.
+            tint = lerpColor(Tokens.text2, Tokens.brand, lit),
             modifier = Modifier.size(24.dp),
         )
         // The word leaves before the room does, and it takes its height with it.
@@ -569,7 +615,7 @@ private fun TabItem(
         Text(
             modifier = Modifier.alpha((1f - collapse) * (1f - collapse)),
             text = label,
-            color = if (selected) Tokens.text else Tokens.text2,
+            color = lerpColor(Tokens.text2, Tokens.brand, lit),
             fontSize = 10.sp,
             // Tight, and that is what fixes the gap.
             //
@@ -579,7 +625,7 @@ private fun TabItem(
             // centred while the ink sat high in it, and the bar looked as though
             // it had less padding above than below. Reported exactly that way.
             lineHeight = 10.sp,
-            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            fontWeight = if (lit > 0.5f) FontWeight.Medium else FontWeight.Normal,
         )
         }
     }
