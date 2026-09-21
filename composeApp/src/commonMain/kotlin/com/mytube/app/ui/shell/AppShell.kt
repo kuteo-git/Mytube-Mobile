@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -449,7 +450,7 @@ private fun BottomBar(
                     Tab.entries.forEachIndexed { index, tab ->
                         val selected = tab == current
                         TabItem(
-                            icon = tabIcon(tab),
+                            tab = tab,
                             label = strings(tab),
                             // How much of this item the pill is standing on.
                             //
@@ -532,7 +533,7 @@ private fun BottomBar(
 
 @Composable
 private fun TabItem(
-    icon: ImageVector,
+    tab: Tab,
     label: String,
     /** 0 for a tab the pill is nowhere near, 1 for the one it is standing on. */
     lit: Float,
@@ -579,9 +580,11 @@ private fun TabItem(
             .padding(vertical = Space.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
+        TabGlyph(
+            tab = tab,
+            // Filled once the pill has mostly arrived, so the shape changes with
+            // the colour rather than a beat after it.
+            selected = lit > 0.5f,
             // The chosen tab wears the brand's colour.
             //
             // This app's rule was the opposite — *"the selected tab is
@@ -609,7 +612,23 @@ private fun TabItem(
         Spacer(Modifier.height(2.dp * (1f - collapse)))
         Box(
             Modifier
-                .height(LABEL_HEIGHT * (1f - collapse))
+                // Measured, not guessed.
+                //
+                // This was a constant once — 10dp, on the reasoning that a 10sp
+                // face with `lineHeight = 10.sp` lays out in 10sp of box. It
+                // does not: the line box carries the descenders too, so the `y`
+                // of "Playlists" and the `g` of "Settings" were sliced off. It
+                // read as "Plavlists" and "Settinas", which is exactly what a
+                // clip a few pixels short looks like.
+                //
+                // So the child is measured as it wants to be and only its
+                // *reported* height is scaled. At rest that is its own height,
+                // and there is no number left here to be wrong.
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    val height = (placeable.height * (1f - collapse)).roundToInt()
+                    layout(placeable.width, height) { placeable.place(0, 0) }
+                }
                 .clipToBounds(),
         ) {
         Text(
@@ -631,12 +650,3 @@ private fun TabItem(
     }
 }
 
-/**
- * The line the label occupies, so the column can give it back.
- *
- * Measured rather than asked for: a 10sp face with `lineHeight = 10.sp` lays
- * out in 10sp of box, and this is that in dp at the one density where dp and sp
- * agree — which is the only honest way to write it down without a `TextLayout`
- * pass nobody needs.
- */
-private val LABEL_HEIGHT = 10.dp
