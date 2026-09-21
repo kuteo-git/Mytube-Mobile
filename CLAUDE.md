@@ -3806,3 +3806,54 @@ team `XW5H2HDYS8`, bundle `com.xtube.com`.
   playing.
 - **Not installed.** `devicectl list devices` reports *Nguyen Luc's iPhone* as
   `unavailable`, so the `.ipa` is built, signed and waiting in `dist/`.
+
+
+## The weekly re-signing, and the build step that was causing half of it (2026-09-21)
+
+Asked as a question about the build — *"auto sign cái ios app, ko cần phải
+build lại vào mỗi tuần được ko?"* — and the build was only half of the answer.
+
+Measured off the archive's own `embedded.mobileprovision` before anything was
+said about it:
+
+| | |
+|---|---|
+| provisioning profile | created 17 Sep, expires **24 Sep** — seven days |
+| signing certificate | 30 Aug 2026 → 30 Aug 2027 — a year |
+| team | `XW5H2HDYS8`, `Luc Nguyen`, `IsXcodeManaged` |
+
+**Seven days is the free Apple ID's number.** A paid membership's
+Xcode-managed development profile lasts a year. So no flag and no
+`-allowProvisioningUpdates` changes it — the thing that expires is not
+something this repository owns.
+
+Three routes were put up and the household chose the free one:
+**AltServer on the Mac that already runs the gateway.** It re-signs over wifi
+rather than removing the seven days, and as of AltStore Classic 2.3
+(14 September 2026) *Remote AltServer* refreshes from anywhere on wifi rather
+than needing that Mac awake on the same network. Its floor is iOS 17.4 and
+this app's `MinimumOSVersion` is 16.0, so nothing here had to move.
+
+### What did change: the export step is gone
+
+`tools/ios-ipa.sh` archives and then **packages the IPA by hand** — a zip with
+`Payload/Mytube.app` in it, which is all an IPA is.
+
+- **`xcodebuild -exportArchive` signs, and that is the step that expires.** It
+  embeds the seven-day profile, so an export is a build step that starts
+  failing a week after it last worked for a reason that has nothing to do with
+  the code. That is precisely the complaint.
+- **AltStore re-signs whatever it is handed**, with the Apple ID on the phone.
+  So the signature the export was adding is one that gets thrown away.
+- **The archive still signs and that is fine**: the *certificate* signs there
+  and it is good for a year. It is the profile added on export that is good for
+  a week.
+- `cd` into the staging directory before zipping. An IPA carrying the whole
+  path from the root of the disk is one no installer opens.
+
+Verified: 12 MB, one top-level `Payload`, the binary and `Info.plist` where
+they belong.
+
+**The first install is still a GUI flow on the Mac with the phone plugged in**
+— AltServer's "Install AltStore", the Apple ID, Wi-Fi sync, trusting the
+profile, Developer Mode. Recorded as not automatable rather than forgotten.
