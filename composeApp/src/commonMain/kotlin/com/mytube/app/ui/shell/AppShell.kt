@@ -442,14 +442,17 @@ private fun BottomBar(
             // The player is a sibling of this shell — it floats over screens
             // with no tab bar at all — so what this row contributes is the
             // space, and the caller walks the player into it on the same
-            // fraction. One gap while the bar is whole and two once it has
-            // narrowed, which is why the term carries `collapse` rather than
-            // being a constant.
-            Spacer(
-                Modifier.width(
-                    (total - tabsWidth - circle - gap * (1f + collapse)).coerceAtLeast(0.dp),
-                ),
-            )
+            // fraction.
+            //
+            // **A weight, not a width.** It was arithmetic once — the room left
+            // after the two panes and the gaps — and the count of gaps changes
+            // with the collapse, so the sum came out one gap short: the player
+            // landed touching the search button with 8dp of nothing beyond it.
+            // A weight cannot be off by a term.
+            Spacer(Modifier.weight(1f))
+            // The second gap, which only exists once there is something between
+            // the two panes to have gaps either side of.
+            Spacer(Modifier.width(gap * collapse))
 
             // Square, so `GLASS_SHAPE` at 50 percent draws a circle. No label:
             // the tabs carry one because they name a place among three, and a
@@ -539,12 +542,22 @@ private fun TabItem(
             tint = if (selected) Tokens.text else Tokens.text2,
             modifier = Modifier.size(24.dp),
         )
-        // The word leaves before the room does.
+        // The word leaves before the room does, and it takes its height with it.
         //
-        // A label fading in step with the width would still be legible at half a
-        // letter wide, which reads as text being cut off rather than as a bar
-        // closing. Squared, it is gone by the time the pane is half shut.
+        // Fading alone was not enough: an invisible label still occupies its
+        // line, so the column stayed 37dp of icon-plus-word inside a 56dp
+        // circle and the glyph sat about 6dp above the middle of it. Measured,
+        // and reported as the icon not being centred.
+        //
+        // Squared for the fade, because a label dimming in step with the width
+        // is still legible at half a letter wide — which reads as text being
+        // cut off rather than as a bar closing.
         Spacer(Modifier.height(2.dp * (1f - collapse)))
+        Box(
+            Modifier
+                .height(LABEL_HEIGHT * (1f - collapse))
+                .clipToBounds(),
+        ) {
         Text(
             modifier = Modifier.alpha((1f - collapse) * (1f - collapse)),
             text = label,
@@ -560,5 +573,16 @@ private fun TabItem(
             lineHeight = 10.sp,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
         )
+        }
     }
 }
+
+/**
+ * The line the label occupies, so the column can give it back.
+ *
+ * Measured rather than asked for: a 10sp face with `lineHeight = 10.sp` lays
+ * out in 10sp of box, and this is that in dp at the one density where dp and sp
+ * agree — which is the only honest way to write it down without a `TextLayout`
+ * pass nobody needs.
+ */
+private val LABEL_HEIGHT = 10.dp
