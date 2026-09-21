@@ -14,6 +14,7 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.drawPlainBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
@@ -232,6 +233,54 @@ fun GlassBackdrop(
  * how the next one to pin something forgets.
  */
 val LocalBackdrop = compositionLocalOf<LayerBackdrop?> { null }
+
+/**
+ * The same sample with **no edge at all** — a blur and a tint, nothing else.
+ *
+ * # A page is not a pane
+ *
+ * [GlassBackdrop] is built for something that floats: a bar, a capsule, a
+ * sheet. The lens and the highlight are what make those read as a *piece* of
+ * glass — light bending at the rim is how an eye is told where the material
+ * stops. A full-screen ground has no rim to bend at, so the same effects draw
+ * a bright line up both sides of the screen and a refracted band across the
+ * top and bottom, which reads as a frame somebody put around the page.
+ * Reported exactly that way: *"màn watch cho nó blur thôi, ko có viền đc ko"*.
+ *
+ * So this is `drawPlainBackdrop` — the library's own answer for a sample with
+ * no shape furniture on it — carrying [GLASS_BLUR] and the tint and nothing
+ * else. `vibrancy` stays: it is not an edge, it is what stops a blurred
+ * thumbnail going grey, and the page underneath is the feed.
+ *
+ * It is also cheaper by a whole `RuntimeShader`, which matters here for a
+ * reason the panes do not have: this one is the width and height of the
+ * screen and it is redrawn on every frame of the drag.
+ */
+@Composable
+fun PageBackdrop(
+    modifier: Modifier = Modifier,
+    backdrop: Backdrop?,
+    tint: Float = TINT_PAGE,
+) {
+    if (backdrop != null) {
+        Box(
+            modifier.drawPlainBackdrop(
+                backdrop = backdrop,
+                shape = { RoundedCornerShape(0.dp) },
+                effects = {
+                    vibrancy()
+                    blur(GLASS_BLUR.toPx())
+                },
+                onDrawSurface = { drawRect(Tokens.bg.copy(alpha = tint)) },
+            ),
+        )
+        return
+    }
+
+    // No recording — a Preview, or any screen outside the shell. The page keeps
+    // its own colour rather than becoming a hole.
+    Box(modifier.background(Tokens.bg))
+}
 
 /**
  * How much of the app's own colour sits over the blur, everywhere.

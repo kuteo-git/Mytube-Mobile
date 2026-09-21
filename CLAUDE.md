@@ -3857,3 +3857,66 @@ they belong.
 **The first install is still a GUI flow on the Mac with the phone plugged in**
 — AltServer's "Install AltStore", the Apple ID, Wi-Fi sync, trusting the
 profile, Developer Mode. Recorded as not automatable rather than forgotten.
+
+
+## A page has no rim, and one frame in which the layer is not there (2026-09-21)
+
+Two things reported off one screen recording of the phone, and only one of them
+is fixed.
+
+### The ground was wearing a pane's edges
+
+*"màn watch cho nó blur thôi, ko có viền đc ko"* — right, and the reason is a
+distinction this charter already draws and had not applied here. `GlassBackdrop`
+is built for something that **floats**: a bar, a capsule, a sheet. Its `lens`
+and its default highlight are what make those read as a *piece* of glass —
+light bending at the rim is how an eye is told where the material stops. A
+full-screen ground has no rim to bend at, so the same effects draw a bright
+line up both sides of the screen and a refracted band across the top and
+bottom, which reads as a frame somebody put around the page.
+
+`PageBackdrop` is `drawPlainBackdrop` — the library's own entry point for a
+sample with no shape furniture on it — carrying `GLASS_BLUR` and the tint and
+nothing else. `vibrancy` stays: it is not an edge, it is what stops a blurred
+thumbnail going grey.
+
+It is also cheaper by a whole `RuntimeShader`, which matters here in a way it
+does not for the panes: this one is the size of the screen and is redrawn on
+every frame of the drag.
+
+### The flicker is measured, iOS-only, and not yet fixed
+
+Reported as *"nó bị chớp chớp khi kéo xuống + lên"*. Measured off the reporter's
+own recording rather than described: mean luminance per frame, 30fps, and five
+frames spike **+0.09 (about 42% brighter)** and are undone by the very next
+frame — f002, f011, f016, f027, f063 of 70.
+
+Reading those frames says what the spike *is*: **the entire watch layer is
+missing for one frame.** Not the ground thinning, not the page fading — the
+Home feed, sharp, at full brightness, with no glass and none of the page's own
+title, pills or comments on it.
+
+What is known, and what is not:
+
+- **The check is the symptom, not a fix.** A one-frame spike that the next
+  frame undoes; a ground thinning across a drag moves both neighbours with it
+  and scores nothing.
+- **Android does not do it.** A held drag driven by `adb shell input
+  motionevent`, 171 frames down and back up: zero spikes. So this is not the
+  backdrop library being wrong about arithmetic; it is something about how the
+  iOS scene is composited.
+- **The simulator is a bad reproducer and that is recorded rather than worked
+  around.** Six runs of a `CGEvent` drag on the old build produced it **once**;
+  five runs of the new build produced none. That is not a difference anybody
+  should believe, so the `PageBackdrop` change is **not** claimed as the fix
+  even though it is the obvious suspect. The phone did it five times in 2.3
+  seconds; the phone is where this has to be measured.
+- **The loop's first version was green about a gesture that never happened.**
+  It dragged from the middle of the page, which is the `LazyColumn` — so the
+  list scrolled and the layer never moved. The drag has to start on the
+  picture. A loop that passes for the wrong reason is worse than one that fails.
+- The standing suspicion, untested: the watch page holds a **second**
+  `rememberLayerBackdrop` (`sheetBackdrop`, for the settings sheet) and records
+  it on every frame whether or not that sheet is open — so a drag frame is two
+  layer recordings plus a consumer plus an interop view being resized. That is
+  the cheapest thing to remove if the next recording still flickers.

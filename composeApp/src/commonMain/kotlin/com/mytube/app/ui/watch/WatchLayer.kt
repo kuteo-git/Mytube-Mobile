@@ -17,9 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import com.mytube.app.ui.shell.GlassBackdrop
 import com.mytube.app.ui.shell.LocalBackdrop
-import com.mytube.app.ui.shell.TINT_PAGE
+import com.mytube.app.ui.shell.PageBackdrop
 import kotlin.time.TimeSource
 import kotlinx.coroutines.launch
 
@@ -209,11 +208,9 @@ fun WatchLayer(
         // itself must stay solid or the picture travelling into the bar fades
         // out before it arrives — which was reported as the player
         // disappearing instead of shrinking.
-        GlassBackdrop(
+        PageBackdrop(
             modifier = Modifier.matchParentSize().graphicsLayer { alpha = 1f - progress },
             backdrop = LocalBackdrop.current,
-            fromTop = true,
-            tint = TINT_PAGE,
         )
 
         CompositionLocalProvider(
