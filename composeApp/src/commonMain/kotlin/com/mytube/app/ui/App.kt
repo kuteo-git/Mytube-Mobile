@@ -1,28 +1,11 @@
 package com.mytube.app.ui
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
-import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
-import com.mytube.app.ui.watch.MiniPlayer
-import com.mytube.app.ui.watch.WatchState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,58 +14,57 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.backhandler.BackHandler
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mytube.app.AppContainer
-import com.mytube.app.ui.home.HomeScreen
-import com.mytube.app.ui.home.Chip
-import com.mytube.app.ui.home.ChipRow
-import com.mytube.app.ui.home.Size
-import com.mytube.app.ui.home.HomeState
-import com.mytube.app.ui.home.HomeViewModel
-import com.mytube.app.ui.home.Space
-import com.mytube.app.ui.shell.rememberLandingKnock
-import com.mytube.app.ui.shell.AppShell
-import com.mytube.app.ui.theme.Tokens
-import com.mytube.app.ui.shell.GlassMenu
-import com.mytube.app.ui.shell.dismissMenuOnOutsidePress
-import com.mytube.app.ui.shell.LocalBackdrop
-import com.mytube.app.ui.shell.LocalNativeGlass
-import com.mytube.app.ui.shell.NativeGlassBridge
-import com.mytube.app.ui.shell.NativeGlassRegistry
-import com.mytube.app.ui.shell.LocalMiniPlayerShowing
-import com.mytube.app.ui.shell.edgeBack
-import kotlin.math.roundToInt
-import com.mytube.app.ui.shell.rememberBarsVisible
-import com.mytube.app.ui.shell.Tab
-import com.mytube.app.ui.watch.WatchLayer
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.mytube.app.ui.watch.QueueItem
-import com.mytube.app.ui.watch.WatchScreen
-import com.mytube.app.ui.watch.WatchViewModel
-import com.mytube.app.ui.settings.ServerSetupScreen
-import com.mytube.app.ui.settings.ServerSetupViewModel
-import androidx.compose.runtime.CompositionLocalProvider
-import com.mytube.app.ui.i18n.LocalStrings
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.mytube.app.AppContainer
+import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
+import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
+import com.mytube.app.domain.model.Profile
+import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.ui.channel.ChannelScreen
 import com.mytube.app.ui.channel.ChannelViewModel
 import com.mytube.app.ui.history.HistoryScreen
 import com.mytube.app.ui.history.HistoryViewModel
+import com.mytube.app.ui.home.Chip
+import com.mytube.app.ui.home.ChipRow
+import com.mytube.app.ui.home.HomeScreen
+import com.mytube.app.ui.home.HomeState
+import com.mytube.app.ui.home.HomeViewModel
+import com.mytube.app.ui.home.Size
+import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.Language
+import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.deviceLanguage
-import com.mytube.app.domain.model.Profile
-import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.ui.playlist.PlaylistNameAlert
 import com.mytube.app.ui.playlist.PlaylistScreen
 import com.mytube.app.ui.playlist.PlaylistViewModel
@@ -99,13 +81,34 @@ import com.mytube.app.ui.search.SearchScreen
 import com.mytube.app.ui.search.SearchViewModel
 import com.mytube.app.ui.settings.LanguageScreen
 import com.mytube.app.ui.settings.ProfileScreen
+import com.mytube.app.ui.settings.ServerSetupScreen
+import com.mytube.app.ui.settings.ServerSetupViewModel
 import com.mytube.app.ui.settings.SettingsScreen
 import com.mytube.app.ui.settings.VoiceScreen
+import com.mytube.app.ui.shell.AppShell
+import com.mytube.app.ui.shell.GlassMenu
+import com.mytube.app.ui.shell.LocalBackdrop
+import com.mytube.app.ui.shell.LocalMiniPlayerShowing
+import com.mytube.app.ui.shell.LocalNativeGlass
+import com.mytube.app.ui.shell.NativeGlassBridge
+import com.mytube.app.ui.shell.NativeGlassRegistry
+import com.mytube.app.ui.shell.Tab
+import com.mytube.app.ui.shell.dismissMenuOnOutsidePress
+import com.mytube.app.ui.shell.edgeBack
+import com.mytube.app.ui.shell.rememberBarsVisible
+import com.mytube.app.ui.shell.rememberLandingKnock
 import com.mytube.app.ui.subscriptions.SubscriptionsScreen
 import com.mytube.app.ui.subscriptions.SubscriptionsViewModel
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import com.mytube.app.ui.theme.MytubeTheme
+import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.watch.MiniPlayer
+import com.mytube.app.ui.watch.QueueItem
+import com.mytube.app.ui.watch.WatchLayer
+import com.mytube.app.ui.watch.WatchScreen
+import com.mytube.app.ui.watch.WatchState
+import com.mytube.app.ui.watch.WatchViewModel
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /**
  * Which screen is showing.
@@ -402,10 +405,43 @@ fun App(
             // 220ms: inside the 150–300ms band where motion reads as movement
             // rather than as a delay.
             val barsShowing = rememberBarsVisible(tabScroll.getValue(tab))
+            // Two answers to "get out of the way", and which one applies is
+            // decided by whether there is anything to keep on screen.
+            //
+            // With the miniplayer up the bar **collapses**: the tab capsule
+            // narrows to the selected glyph and the player moves down into the
+            // room that opens beside it. Sliding it away instead would take the
+            // player with it — it rests on the bar — and the one thing saying
+            // something is still playing would leave the screen.
+            //
+            // With nothing playing there is nothing to keep, so the bar slides
+            // off the bottom as it always has.
+            // Only once the player *is* a bar.
+            //
+            // While the video is expanded the watch layer covers the shell, and
+            // the drag that collapses it has to land where a whole bar is — the
+            // landing point is computed from the same terms, so a bar that had
+            // already narrowed would put the picture down beside itself.
+            val collapsing = watching?.minimised == true && !barsShowing
             val barsHidden by animateFloatAsState(
-                targetValue = if (barsShowing) 0f else 1f,
+                targetValue = if (barsShowing || collapsing) 0f else 1f,
                 animationSpec = tween(220),
                 label = "bars",
+            )
+            // A spring, where the slide is a tween.
+            //
+            // The slide is a thing leaving; this is a thing changing shape, and
+            // a shape that arrives with a little overshoot reads as a pane
+            // settling rather than as a value being animated. No bounce —
+            // `DampingRatioNoBouncy` — because three pieces move together and a
+            // bounce on a row of them reads as wobble.
+            val collapse by animateFloatAsState(
+                targetValue = if (collapsing) 1f else 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+                label = "collapse",
             )
             val scope = rememberCoroutineScope()
             // Null until the server answers. Read once for the process: it is
@@ -677,6 +713,7 @@ fun App(
                     AppShell(
                         current = tab,
                         barsHidden = barsHidden,
+                        collapse = collapse,
                         // Only the Home tab has anything to pin under the bar.
                         // The others pass nothing and the bar is its ordinary
                         // height, which is why the shell measures it rather than
@@ -980,9 +1017,23 @@ fun App(
             }
             val tabBarPx = with(density) { Size.topBar.toPx() }
             val miniPlayerPx = with(density) { Size.miniPlayer.toPx() }
+            val miniGapPx = with(density) { Size.miniGap.toPx() }
             // Reserved only where there is a tab bar to reserve for: search and
             // the channel page have none.
-            val tabBarReservedPx = if (route is Route.Home) tabBarPx else 0f
+            // How much of the bar the player still has to rest on top of.
+            //
+            // It goes to nothing as the bar collapses, because the player is no
+            // longer sitting above the bar by then — it has moved down into the
+            // row beside the tab circle. One term, read by the padding, by the
+            // drag's landing point and by nothing else, so the three cannot
+            // drift apart.
+            val tabBarReserved =
+                if (route is Route.Home) lerp(Size.topBar, 0.dp, collapse) else 0.dp
+            val tabBarReservedPx = with(density) { tabBarReserved.toPx() }
+            // What the bar leaves either side of the player once it has
+            // narrowed: the tab circle on the left, the search circle on the
+            // right, each with the row's own gap beside it.
+            val miniSideInset = lerp(0.dp, Size.topBar + Space.sm, collapse)
             val session = watching
             // Not on the setup screen. Somebody typing an address is fixing the
             // connection this video came through, and a bar playing over that
@@ -1102,8 +1153,15 @@ fun App(
                             // matching only the 56dp row left the player
                             // hanging 34dp short of the screen edge.
                             y = if (route is Route.Home) {
-                                (barsHidden * (tabBarPx + navigationInsetPx))
-                                    .roundToInt()
+                                (
+                                    barsHidden * (tabBarPx + navigationInsetPx) +
+                                        // The player's own gap above the bar,
+                                        // given back as it lands *in* the row.
+                                        // It is inside `MiniPlayer`, where an
+                                        // outer padding cannot reach it, so the
+                                        // last few pixels are travelled here.
+                                        miniGapPx * collapse
+                                    ).roundToInt()
                             } else {
                                 0
                             },
@@ -1123,9 +1181,13 @@ fun App(
                     // icons, which is why they vanished and the bar
                     // looked covered. It rests on top of the whole
                     // thing, and slides down by the whole thing.
+                    // Narrowing from the sides as the bar makes room: the
+                    // player walks into the berth `BottomBar` opens for it,
+                    // rather than appearing there.
+                    .padding(start = miniSideInset, end = miniSideInset)
                     .padding(
                         bottom = navigationInset + when {
-                            route is Route.Home -> Size.topBar
+                            route is Route.Home -> tabBarReserved
                             // The search screen's field now owns the bottom of
                             // that screen, the same way the tab bar owns Home's.
                             // Without this the bar rests across the one control
@@ -1155,6 +1217,7 @@ fun App(
                             watching = null
                         },
                         showSurface = true,
+                        collapse = collapse,
                         modifier = miniPlayerModifier,
                     )
                 } else {

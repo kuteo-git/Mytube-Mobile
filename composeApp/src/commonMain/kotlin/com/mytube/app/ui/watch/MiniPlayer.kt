@@ -3,6 +3,7 @@ package com.mytube.app.ui.watch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,12 +19,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,8 +40,8 @@ import com.mytube.app.ui.shell.BarBackdrop
 import com.mytube.app.ui.shell.GLASS_MARGIN
 import com.mytube.app.ui.shell.GLASS_SHAPE
 import com.mytube.app.ui.shell.pressSquish
-import com.mytube.app.ui.shell.rememberLandingKnock
 import com.mytube.app.ui.shell.rememberGlassPress
+import com.mytube.app.ui.shell.rememberLandingKnock
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -141,6 +143,16 @@ fun MiniPlayer(
     onExpand: () -> Unit,
     onPlayPause: () -> Unit,
     onClose: () -> Unit,
+    /**
+     * How far the bar around this one has narrowed: 0 whole, 1 collapsed.
+     *
+     * The close button goes with it. Collapsed, this bar is a capsule between
+     * two circles with a title in it, and two glyphs there leave the title a
+     * few letters wide — the reference keeps one control. X comes back when the
+     * bar opens, because it is the only way to stop playback outright and a
+     * control that only exists at the top of a feed is one people cannot find.
+     */
+    collapse: Float = 0f,
     /**
      * Space kept clear under the row, inside the bar's own glass.
      *
@@ -315,13 +327,25 @@ fun MiniPlayer(
                 )
             }
 
-            BarButton(onClick = onClose) {
-                Icon(
-                    imageVector = CloseIcon,
-                    contentDescription = strings.close,
-                    tint = Tokens.text,
-                    modifier = Modifier.size(22.dp),
-                )
+            // Width to nothing rather than removed from the tree: a button that
+            // leaves takes its space with it in one frame, and the title beside
+            // it would jump the width of a glyph. Clipped so the mark goes with
+            // the room.
+            Box(
+                Modifier
+                    .width(BAR_BUTTON_WIDTH * (1f - collapse))
+                    .clipToBounds(),
+            ) {
+                if (collapse < 1f) {
+                    BarButton(onClick = onClose) {
+                        Icon(
+                            imageVector = CloseIcon,
+                            contentDescription = strings.close,
+                            tint = Tokens.text,
+                            modifier = Modifier.size(22.dp).alpha(1f - collapse),
+                        )
+                    }
+                }
             }
         }
 

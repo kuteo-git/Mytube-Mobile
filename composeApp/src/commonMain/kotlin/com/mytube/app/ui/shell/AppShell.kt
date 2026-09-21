@@ -1,23 +1,27 @@
 package com.mytube.app.ui.shell
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.material3.Icon
@@ -30,21 +34,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
-import com.mytube.app.ui.shell.rememberSelectionTick
+import com.kyant.backdrop.backdrops.layerBackdrop
 import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
-import androidx.compose.ui.draw.clip
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.theme.Tokens
 import kotlin.math.roundToInt
-import com.kyant.backdrop.backdrops.layerBackdrop
 
 /**
  * The frame every screen sits in: a bar above, a bar below, content between.
@@ -86,6 +94,17 @@ fun AppShell(
      * the bars.
      */
     barsHidden: Float = 0f,
+    /**
+     * How far the bar has narrowed to make room for the miniplayer: 0 whole,
+     * 1 collapsed.
+     *
+     * Separate from [barsHidden] because they are two answers to one question
+     * and only one can be right at a time — see `BottomBar`. Animated by the
+     * caller for [barsHidden]'s reason: the miniplayer is a sibling of this
+     * shell and has to move on the same number, and a spring living in here
+     * would be a number it cannot read.
+     */
+    collapse: Float = 0f,
     /**
      * What the top bar holds, under the status inset. Empty on most tabs.
      *
@@ -175,6 +194,7 @@ fun AppShell(
                 onSearch = onSearch,
                 searchLabel = strings.search,
                 hidden = hide,
+                collapse = collapse,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
@@ -270,6 +290,27 @@ private fun BottomBar(
     onSearch: () -> Unit,
     searchLabel: String,
     hidden: Float,
+    /**
+     * 0 while the bar is whole, 1 once it has narrowed to the selected tab.
+     *
+     * Collapsing is a *shape*, not a disappearance. With nothing playing the bar
+     * slides off the bottom on scroll, which is what [hidden] does and what this
+     * app has always done; with the miniplayer up it cannot, because sliding
+     * would take away the one thing on screen saying something is still playing.
+     *
+     * So the capsule narrows to a circle holding the selected glyph alone, the
+     * other two tabs shrink to nothing, and the space that opens between it and
+     * the search button is exactly where the miniplayer lands — the caller walks
+     * the player into it on this same fraction, so the three pieces arrive
+     * together rather than one after another. Apple Music does this, and a
+     * screen recording of that app is the reference.
+     *
+     * Everything below is a lerp on this one number, and nothing appears or
+     * disappears while it runs. That is what keeps the picture bound: the
+     * miniplayer is the same node at both ends, and a node removed and added
+     * back is a player that rebinds and goes black.
+     */
+    collapse: Float,
     modifier: Modifier = Modifier,
 ) {
     val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -299,13 +340,25 @@ private fun BottomBar(
         // holds no scroll position of its own. Apple Music draws exactly this —
         // the tabs in one capsule, the magnifier in a circle beside it — and the
         // separation is what says the two are different kinds of thing.
+        BoxWithConstraints(Modifier.fillMaxWidth().height(Size.topBar)) {
+        // The room the three pieces share, inside the margins set above.
+        val total = maxWidth
+        val circle = Size.topBar
+        val gap = Space.sm
+        // Whole, the capsule takes everything the search button leaves; narrowed,
+        // it is a circle. One item's share is a third of the whole, which is what
+        // lets the selected glyph stay where it was while the others leave.
+        val tabsWhole = total - circle - gap
+        val tabsWidth = lerp(tabsWhole, circle, collapse)
+        val itemWhole = tabsWhole / 3
+
         Row(
             Modifier.fillMaxWidth().height(Size.topBar),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 Modifier
-                    .weight(1f)
+                    .width(tabsWidth)
                     .height(Size.topBar)
                     .clip(GLASS_SHAPE)
                     // On each pane, not on the row. The gap between the two
@@ -313,19 +366,62 @@ private fun BottomBar(
                     .consumeTaps(),
             ) {
                 BarBackdrop(Modifier.matchParentSize(), fromTop = false, shape = GLASS_SHAPE)
+
+                // The lit pill, under the selected tab and travelling between
+                // them.
+                //
+                // Animated by **index**, not by press: what moves is the mark,
+                // and where it goes is a layout question this row already
+                // answers — item `i` starts at `i * itemWhole`. Interpolating
+                // the index therefore interpolates the position, and nothing
+                // has to measure anything.
+                //
+                // At rest it is one item wide, inset a little; collapsed it is
+                // the circle exactly, because by then it is the only thing left
+                // with any width and the capsule has closed around it.
+                val lit by animateFloatAsState(
+                    targetValue = Tab.entries.indexOf(current).toFloat(),
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                    label = "lit-tab",
+                )
+                val litInset = Space.xs * (1f - collapse)
+                Box(
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .offset(x = itemWhole * lit * (1f - collapse) + litInset)
+                        .width(
+                            (lerp(itemWhole, circle, collapse) - litInset * 2)
+                                .coerceAtLeast(0.dp),
+                        )
+                        .height(Size.topBar - Space.xs * 2)
+                        // White rather than a second surface token: `surface`
+                        // and `surfaceHover` are six units apart, which is what
+                        // the design system uses for a pointer hovering and what
+                        // the Like button proved is invisible as a state.
+                        .background(Tokens.text.copy(alpha = 0.12f), GLASS_SHAPE),
+                )
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(Size.topBar)
-                        .padding(horizontal = Space.sm),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                        .height(Size.topBar),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Tab.entries.forEach { tab ->
+                        val selected = tab == current
                         TabItem(
                             icon = tabIcon(tab),
                             label = strings(tab),
-                            selected = tab == current,
+                            selected = selected,
+                            collapse = collapse,
+                            // The selected tab keeps a circle's worth of room and
+                            // the others give theirs up. The three widths sum to
+                            // the capsule's at both ends, so nothing is squashed
+                            // on the way between them.
+                            width = lerp(itemWhole, if (selected) circle else 0.dp, collapse),
                             onClick = {
                                 // Pressing the tab already on scrolls it to the
                                 // top rather than moving anywhere, and a tick
@@ -339,7 +435,21 @@ private fun BottomBar(
                 }
             }
 
-            Spacer(Modifier.width(Space.sm))
+            Spacer(Modifier.width(gap))
+
+            // The miniplayer's berth, and deliberately empty.
+            //
+            // The player is a sibling of this shell — it floats over screens
+            // with no tab bar at all — so what this row contributes is the
+            // space, and the caller walks the player into it on the same
+            // fraction. One gap while the bar is whole and two once it has
+            // narrowed, which is why the term carries `collapse` rather than
+            // being a constant.
+            Spacer(
+                Modifier.width(
+                    (total - tabsWidth - circle - gap * (1f + collapse)).coerceAtLeast(0.dp),
+                ),
+            )
 
             // Square, so `GLASS_SHAPE` at 50 percent draws a circle. No label:
             // the tabs carry one because they name a place among three, and a
@@ -368,6 +478,7 @@ private fun BottomBar(
                 )
             }
         }
+        }
     }
 }
 
@@ -376,6 +487,10 @@ private fun TabItem(
     icon: ImageVector,
     label: String,
     selected: Boolean,
+    /** How far the bar has narrowed — see [BottomBar]'s `collapse`. */
+    collapse: Float,
+    /** The share of the capsule this item has at this point in the movement. */
+    width: Dp,
     onClick: () -> Unit,
 ) {
     // The squash, on a tab as on every other control.
@@ -389,9 +504,30 @@ private fun TabItem(
     val press = rememberGlassPress(source)
     Column(
         modifier = Modifier
-            .pressSquish(press)
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
-            .padding(horizontal = Space.md, vertical = Space.xs),
+            // Measured, not intrinsic. The item's width is the caller's share of
+            // a capsule that is itself moving, and an item that sized itself
+            // would fight it — the glyph would drift as the pane closed rather
+            // than sit still while the pane arrives around it.
+            .width(width)
+            // Nothing to press once it has no width. A tab that has given up its
+            // room and still answers is the dead button §5 of the server charter
+            // refuses, in the one shape nothing on screen distinguishes.
+            .then(if (width > 0.dp) Modifier.pressSquish(press) else Modifier)
+            .then(
+                if (width > 0.dp) {
+                    Modifier.clickable(
+                        interactionSource = source,
+                        indication = null,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            // Clipped, so the glyph goes with the room rather than spilling out
+            // of a pane that has closed around it.
+            .clipToBounds()
+            .padding(vertical = Space.xs),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
@@ -403,8 +539,14 @@ private fun TabItem(
             tint = if (selected) Tokens.text else Tokens.text2,
             modifier = Modifier.size(24.dp),
         )
-        Spacer(Modifier.height(2.dp))
+        // The word leaves before the room does.
+        //
+        // A label fading in step with the width would still be legible at half a
+        // letter wide, which reads as text being cut off rather than as a bar
+        // closing. Squared, it is gone by the time the pane is half shut.
+        Spacer(Modifier.height(2.dp * (1f - collapse)))
         Text(
+            modifier = Modifier.alpha((1f - collapse) * (1f - collapse)),
             text = label,
             color = if (selected) Tokens.text else Tokens.text2,
             fontSize = 10.sp,
