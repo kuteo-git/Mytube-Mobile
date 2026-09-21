@@ -3783,3 +3783,26 @@ a failed feed, a video that would not load.
 **A state nobody can reach on a good day is a state nobody has looked at.** They
 are `GlassButton(primary = true)` now, which is the brand's red, and
 `material3.Button` is gone from `ui/` entirely.
+
+### iOS archives and exports; only the phone is missing
+
+`xcodebuild archive` for `generic/platform=iOS` with `-allowProvisioningUpdates`,
+then `-exportArchive` with `method: debugging` — **not `development`**, which is
+the name Xcode 26 no longer takes. 12 MB `Mytube.ipa`, `Apple Development` over
+team `XW5H2HDYS8`, bundle `com.xtube.com`.
+
+- **`-sdk iphonesimulator` alone does not build for the simulator.** With no
+  destination it builds every arch the SDK knows, x86_64 included, and the
+  Compose resources task stops with `Unknown iOS simulator arch: 'x86_64'`.
+  `-destination 'platform=iOS Simulator,id=<udid>'` is what narrows it.
+- **`idb`'s tap does not reach this Compose scene.** Four taps on the simulator
+  did nothing at all, with and without activating the window. What works is the
+  charter's own earlier finding — a synthesised `CGEvent` click over the
+  Simulator window — and the calibration is one AppleScript call:
+  `position, size of window 1` gives `1197, 58, 390, 896` for an iPhone 16e, and
+  the screen's origin is that position plus the 52pt title bar. Verified rather
+  than assumed: a `screencapture -R` of that rectangle against a resized `simctl
+  io screenshot` came back at RMSE 0.029, the difference being the video still
+  playing.
+- **Not installed.** `devicectl list devices` reports *Nguyen Luc's iPhone* as
+  `unavailable`, so the `.ipa` is built, signed and waiting in `dist/`.
