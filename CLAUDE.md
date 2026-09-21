@@ -3718,9 +3718,11 @@ cheap measurement separates them.**
   asked for by name — turns out to be an *edge* number. Across a whole screen
   the feed behind it stops being a hint of a layer underneath and becomes a
   second page competing with the title, the pills and the comments. Reported
-  immediately as wanting it darker. "One number, and it has to stay one" is a
-  rule about panes read against each other along a shared edge; this one shares
-  none.
+  immediately as wanting it darker, and then **0.90** after seeing 0.86 on the
+  iPhone: the simulator's own screenshot is where that last step was chosen, so
+  it is the platform the material was designed against that settled it. "One
+  number, and it has to stay one" is a rule about panes read against each other
+  along a shared edge; this one shares none.
 - **The fade stays on the ground and never on the layer.** `graphicsLayer {
   alpha }` on the Box applies to the picture too, and the picture travelling
   into the bar must stay solid all the way down — the fault once reported as the
@@ -3732,3 +3734,52 @@ cheap measurement separates them.**
 Measured on the emulator: the feed's thumbnails are visibly soft behind the
 channel row and the description pane, and a held drag at mid-gesture shows the
 video shrunk and solid over a feed that is sharp from the first pixel.
+
+
+## A release build, and the two things it showed (2026-09-21)
+
+Asked for on both platforms at once, which is why this is one entry: the same
+source produced an Android APK that could not be installed and an iOS archive
+that could, and neither fact was about the code.
+
+### Android had no release key, so `assembleRelease` made something inert
+
+`composeApp/build.gradle.kts` declared no `buildTypes` and no `signingConfigs`
+at all, so the release APK came out **unsigned** — a file that builds, reports
+success, and cannot be put on a phone.
+
+- **The key lives beside the toolchain, not in the repository.**
+  `/Volumes/Data2/dev/mytube-release.jks`, named by a gitignored
+  `keystore.properties`. §9 already treats Data2 as this machine's half of the
+  project; a key committed here is a key anybody who clones can sign with.
+- **Absent is a supported state.** A fresh clone still builds and the APK simply
+  comes out unsigned. The alternative considered and refused was falling back to
+  the debug key: that produces something which installs, says `release` on it,
+  and is signed by a key every Android SDK on earth has a copy of.
+- **`isMinifyEnabled = false`, written down rather than defaulted.** R8 strips
+  what it cannot see referenced, and this app reaches for three such things —
+  Ktor's serializers, Media3's session service through the manifest, and every
+  `expect/actual`. Each fails at *runtime*, on the build nobody exercises as
+  hard as the debug one, and §8's rule is that nothing is done because it
+  compiled. Nothing here is paying for the megabytes.
+- Measured: 14 MB, `apksigner verify` naming the household certificate, and it
+  launches. Installing it needed an **uninstall first** — a different signing
+  key is a different app to Android, so the debug install's stored server
+  address went with it.
+
+### And the release build is where three Material buttons were still hiding
+
+The first launch of the signed APK is a fresh install, which is the one state
+nobody had looked at for months: *"No server yet"* under a **blue** `Button` —
+Material's default primary, on the first screen anybody sees.
+
+The charter already records this being fixed once, on the setup screen: *"it
+stopped being Material… a screen with three kinds of button is a screen where
+none of them means anything."* That change reached the screen it was reported
+on. Five call sites elsewhere kept `androidx.compose.material3.Button`, all of
+them in states somebody only reaches when something has gone wrong — no server,
+a failed feed, a video that would not load.
+
+**A state nobody can reach on a good day is a state nobody has looked at.** They
+are `GlassButton(primary = true)` now, which is the brand's red, and
+`material3.Button` is gone from `ui/` entirely.

@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -69,6 +68,7 @@ import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.home.todayISO
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
+import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.shell.LocalGlassVisible
 import com.mytube.app.ui.shell.WatchSkeleton
 import com.mytube.app.ui.shell.pressable
@@ -838,7 +838,7 @@ private fun Message(title: String, detail: String, actionLabel: String, onAction
         }
         if (actionLabel.isNotEmpty()) {
             Spacer(Modifier.height(Space.md))
-            Button(onClick = onAction) { Text(actionLabel) }
+            GlassButton(actionLabel, onAction, primary = true)
         }
     }
 }

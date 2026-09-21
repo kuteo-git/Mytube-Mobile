@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -92,6 +93,25 @@ kotlin {
     }
 }
 
+/**
+ * The release key, or nothing.
+ *
+ * `keystore.properties` is gitignored and names a file that lives beside the
+ * toolchain on Data2 — §9's rule, applied to the one secret this project has.
+ * A key in the repository is a key anybody who clones it can sign with.
+ *
+ * **Absent is a supported state.** Another machine, or a fresh clone, still
+ * builds: the release APK simply comes out unsigned rather than the build
+ * failing on a file that was never meant to travel. An unsigned APK cannot be
+ * installed, which is the honest outcome — the alternative is a build that
+ * silently signs with the debug key and produces something that installs and
+ * says `release` on it.
+ */
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.mytube.app"
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
@@ -103,6 +123,35 @@ android {
         versionCode = 1
         versionName = "0.1.0"
     }
+
+    signingConfigs {
+        if (keystoreProperties.containsKey("storeFile")) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.findByName("release")
+            // **Not minified, and that is a decision rather than a default.**
+            //
+            // R8 strips what it cannot see referenced, and this app reaches for
+            // three things it cannot see: Ktor's serializers, Media3's session
+            // service through the manifest, and every `expect/actual` the
+            // platform resolves. Each one fails at *runtime*, on the build
+            // nobody tests as hard as the debug one. The app is a household
+            // client on the house wifi — nothing here is paying for the few
+            // megabytes shrinking would save, and §8's rule is that nothing is
+            // called done because it compiled.
+            isMinifyEnabled = false
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

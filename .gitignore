@@ -21,3 +21,7 @@ dist/
 # JVM crash dumps — a Kotlin/Native compile can leave these in the project root.
 hs_err_pid*.log
 replay_pid*.log
+
+# The release key. See keystore.properties for why it is not here.
+keystore.properties
+*.jks

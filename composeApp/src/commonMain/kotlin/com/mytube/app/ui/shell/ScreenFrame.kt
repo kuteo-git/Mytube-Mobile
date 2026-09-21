@@ -34,7 +34,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -296,7 +295,7 @@ fun TabScaffold(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(noServerTitle, color = Tokens.text)
                     Spacer(Modifier.height(Space.sm))
-                    Button(onClick = onOpenSettings) { Text(setTheAddress) }
+                    GlassButton(setTheAddress, onOpenSettings, primary = true)
                 }
             }
 
@@ -306,7 +305,7 @@ fun TabScaffold(
                     Spacer(Modifier.height(Space.xs))
                     Text(failure, color = Tokens.text2, fontSize = 12.sp)
                     Spacer(Modifier.height(Space.md))
-                    Button(onClick = onRetry) { Text(tryAgain) }
+                    GlassButton(tryAgain, onRetry, primary = true)
                 }
             }
 

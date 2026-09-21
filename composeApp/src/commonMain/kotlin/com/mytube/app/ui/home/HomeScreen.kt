@@ -27,13 +27,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import kotlin.math.roundToInt
 import com.mytube.app.ui.shell.BarBackdrop
+import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.shell.LocalBarsHidden
 import com.mytube.app.ui.shell.ChipRowSkeleton
 import com.mytube.app.ui.shell.FeedSkeleton
@@ -178,7 +178,7 @@ fun HomeContent(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(strings.noServerTitle, color = Tokens.text)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = onOpenSettings) { Text(strings.setTheAddress) }
+                    GlassButton(strings.setTheAddress, onOpenSettings, primary = true)
                 }
             }
 
@@ -188,7 +188,7 @@ fun HomeContent(
                     Spacer(Modifier.height(4.dp))
                     Text(current.message, color = Tokens.text2, style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = onRetry) { Text(strings.tryAgain) }
+                    GlassButton(strings.tryAgain, onRetry, primary = true)
                 }
             }
 

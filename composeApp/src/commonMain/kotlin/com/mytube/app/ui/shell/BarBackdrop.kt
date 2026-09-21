@@ -303,7 +303,7 @@ const val TINT_MODAL = 0.95f
  * number, and it has to stay one" was never about — that rule is for panes read
  * against each other along a shared edge, and this one shares none.
  */
-const val TINT_PAGE = 0.86f
+const val TINT_PAGE = 0.90f
 
 /**
  * How far the material blurs, everywhere it is used.
