@@ -397,6 +397,14 @@ private fun BottomBar(
                                 .coerceAtLeast(0.dp),
                         )
                         .height(Size.topBar - Space.xs * 2)
+                        // Gone by the time the bar has closed.
+                        //
+                        // Collapsed there is only one tab left, so a mark saying
+                        // which one is a mark with nothing to distinguish — and
+                        // drawn inside the circle the capsule has become, it
+                        // read as a second ring nested in the first. The circle
+                        // *is* the indicator by then.
+                        .alpha(1f - collapse)
                         // White rather than a second surface token: `surface`
                         // and `surfaceHover` are six units apart, which is what
                         // the design system uses for a pointer hovering and what
