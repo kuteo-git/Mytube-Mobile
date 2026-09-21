@@ -4006,3 +4006,17 @@ frame, take the bounding box of what moved — and the box *is* the answer:
 **Pause the video first.** The first attempts measured a bounding box the size
 of the whole crop window, because the picture behind the controls changes every
 frame and a diff cannot tell that from a control growing.
+
+
+### Installing over a running app does not replace what is running (2026-09-21)
+
+`devicectl device install app` swaps the bundle on disk and leaves any running
+process alone — including a suspended one, which on iOS is most of them. So an
+install with no launch after it can be followed by a session on the *old*
+binary, and the fix that was just measured on the simulator gets reported as
+still broken.
+
+It cost a round trip here. `--terminate-existing` on the launch, or a terminate
+before it, and the check is that the app comes back under a **different bundle
+path**: `6B7CAC77-…` before, `27C1FA53-…` after. The version string says nothing
+— `CFBundleShortVersionString` has been 1.0 since the project began.
