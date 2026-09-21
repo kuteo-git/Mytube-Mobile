@@ -14,7 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import com.mytube.app.ui.shell.LocalBackdrop
@@ -209,8 +208,9 @@ fun WatchLayer(
         // out before it arrives — which was reported as the player
         // disappearing instead of shrinking.
         PageBackdrop(
-            modifier = Modifier.matchParentSize().graphicsLayer { alpha = 1f - progress },
+            modifier = Modifier.matchParentSize(),
             backdrop = LocalBackdrop.current,
+            alpha = { 1f - progress },
         )
 
         CompositionLocalProvider(

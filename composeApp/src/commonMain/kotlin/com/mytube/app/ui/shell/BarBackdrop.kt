@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -261,6 +262,22 @@ fun PageBackdrop(
     modifier: Modifier = Modifier,
     backdrop: Backdrop?,
     tint: Float = TINT_PAGE,
+    /**
+     * How solid the ground is, read at **draw** time.
+     *
+     * A lambda, and it goes to the library's own `layerBlock` rather than into
+     * a `Modifier.graphicsLayer` wrapped around this — which is what it was.
+     * That arrangement is an offscreen alpha layer with a node inside it that
+     * samples *another* layer, and one frame in which the whole watch layer is
+     * absent is the symptom it is suspected of. `layerBlock` is the same alpha
+     * applied by the node that is already drawing, so there is one layer here
+     * instead of two.
+     *
+     * Read at draw time also means the fade costs a redraw rather than a
+     * recomposition, which is the reason every other lambda this library takes
+     * is shaped this way.
+     */
+    alpha: () -> Float = { 1f },
 ) {
     if (backdrop != null) {
         Box(
@@ -271,6 +288,7 @@ fun PageBackdrop(
                     vibrancy()
                     blur(GLASS_BLUR.toPx())
                 },
+                layerBlock = { this.alpha = alpha() },
                 onDrawSurface = { drawRect(Tokens.bg.copy(alpha = tint)) },
             ),
         )
@@ -279,7 +297,7 @@ fun PageBackdrop(
 
     // No recording — a Preview, or any screen outside the shell. The page keeps
     // its own colour rather than becoming a hole.
-    Box(modifier.background(Tokens.bg))
+    Box(modifier.graphicsLayer { this.alpha = alpha() }.background(Tokens.bg))
 }
 
 /**

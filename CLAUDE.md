@@ -3915,7 +3915,19 @@ What is known, and what is not:
   It dragged from the middle of the page, which is the `LazyColumn` — so the
   list scrolled and the layer never moved. The drag has to start on the
   picture. A loop that passes for the wrong reason is worse than one that fails.
-- The standing suspicion, untested: the watch page holds a **second**
+- **What the spike frame contains is the finding.** Read against its
+  neighbours it is `AppShell`'s own tree and nothing after it: the feed and the
+  chip row are there, and the watch layer *and the miniplayer* — both siblings
+  drawn later — are both gone. So this is not the ground fading early; it is a
+  frame in which the scene stopped being drawn part of the way through.
+- **One nested layer removed, on that reading.** The ground was a
+  `Modifier.graphicsLayer { alpha }` wrapped around a node that samples another
+  layer — an offscreen alpha layer containing a backdrop consumer. The fade now
+  goes through `drawPlainBackdrop`'s own `layerBlock`, so there is one layer
+  where there were two, and it is read at draw time rather than costing a
+  recomposition per frame. **Not claimed as the fix**: nothing here can
+  reproduce it, so the next recording from the phone is the check.
+- The remaining suspicion, untested: the watch page holds a **second**
   `rememberLayerBackdrop` (`sheetBackdrop`, for the settings sheet) and records
   it on every frame whether or not that sheet is open — so a drag frame is two
   layer recordings plus a consumer plus an interop view being resized. That is
