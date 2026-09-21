@@ -96,7 +96,20 @@ class PressGuardTest {
          * themselves best.
          */
         const val WINDOW = 34
-        val PRESS = Regex("""rememberGlassPress|\.pressable\(|pressableGlass|pressableLiquid""")
+        /**
+         * What counts as answering a finger.
+         *
+         * `LocalPressHost` is here because a control whose pane is drawn by
+         * something above it must **not** squash itself — the node it owns holds
+         * a glyph and nothing else, so all it could move is the glyph. A tab, a
+         * half of the like pill and the player's controls all read the host and
+         * hand their interactions to the capsule, which is the thing that is
+         * painted and therefore the thing that can be seen to move. The press
+         * still exists; it is worn one level up.
+         */
+        val PRESS = Regex(
+            """rememberGlassPress|\.pressable\(|pressableGlass|pressableLiquid|LocalPressHost""",
+        )
 
         /**
          * The way out, written where the exception is rather than in a list

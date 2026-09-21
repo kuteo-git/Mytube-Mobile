@@ -99,6 +99,22 @@ fun AppShell(
      */
     barsHidden: Float = 0f,
     /**
+     * How far the **top** bar and everything pinned under it have left, 0 to 1.
+     *
+     * A second number, and the reason is that the two bars are asked to get out
+     * of the way for different reasons. `barsHidden` above is suppressed while
+     * the miniplayer is resting on the tab bar, because sliding that bar away
+     * takes the player with it. Nothing rests on the top bar, so nothing keeps
+     * it — and for a while it was handed `barsHidden` anyway, which meant a
+     * reader scrolling a feed with anything playing kept the chip row on screen
+     * for ever. See [barTravel].
+     *
+     * Defaulted to `barsHidden`'s own value by the caller rather than here:
+     * a default of 0 would leave a caller that forgot it with a top bar nailed
+     * open, which is the bug this parameter exists to end.
+     */
+    topHidden: Float = barsHidden,
+    /**
      * How far the bar has narrowed to make room for the miniplayer: 0 whole,
      * 1 collapsed.
      *
@@ -126,6 +142,7 @@ fun AppShell(
 ) {
     val strings = LocalStrings.current
     val hide = barsHidden
+    val hideTop = topHidden
 
     // The provider wraps the Box rather than sitting inside it. `Modifier.align`
     // is `BoxScope`, and CompositionLocalProvider's content lambda is not one —
@@ -145,7 +162,10 @@ fun AppShell(
     val topBarHeight = with(LocalDensity.current) { topBarPx.toDp() }
 
     CompositionLocalProvider(
-        LocalBarsHidden provides hide,
+        // The top number: this reaches the chip row, and the chips are chrome
+        // pinned under the *top* bar. Giving them the bottom bar's answer is
+        // what left them on screen whenever something was playing.
+        LocalBarsHidden provides hideTop,
         LocalTopBarHeight provides topBarHeight,
     ) {
         Box(Modifier.fillMaxSize().background(Tokens.bg)) {
@@ -163,7 +183,7 @@ fun AppShell(
             // shell's flow before <main> displaces every page"*, which cost that
             // app a 44px gap under the search field on every screen.
             TopBar(
-                hidden = hide,
+                hidden = hideTop,
                 onHeight = { topBarPx = it },
                 underTopBar = underTopBar,
                 modifier = Modifier.align(Alignment.TopCenter),
@@ -363,6 +383,16 @@ private fun BottomBar(
             Modifier.fillMaxWidth().height(Size.topBar),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // **The whole capsule blooms, not the glyph inside it.**
+            //
+            // Asked for by name and against the right reference: *"bấm vào
+            // item thì ko zoom icon, phải zoom toàn bộ cái tabbar như media
+            // mini player"*. The miniplayer is the bar that already did this,
+            // because there the press is on the capsule and the capsule is
+            // what is painted. Here the capsule is painted by `BarBackdrop`
+            // and the tabs inside draw a glyph and a word, so a press on a tab
+            // could only ever move those. See [LocalPressHost].
+            val barPress = remember { MutableInteractionSource() }
             Box(
                 Modifier
                     .width(tabsWidth)
@@ -375,7 +405,8 @@ private fun BottomBar(
                     //
                     // On each pane, not on the row. The gap between the two
                     // capsules is page, and a tap there belongs to the page.
-                    .consumeTaps(),
+                    .consumeTaps()
+                    .pressHost(barPress),
             ) {
                 BarBackdrop(Modifier.matchParentSize(), fromTop = false, shape = GLASS_SHAPE)
 
@@ -457,6 +488,7 @@ private fun BottomBar(
                 ) {
                     Tab.entries.forEachIndexed { index, tab ->
                         val selected = tab == current
+                        CompositionLocalProvider(LocalPressHost provides barPress) {
                         TabItem(
                             tab = tab,
                             label = strings(tab),
@@ -485,6 +517,7 @@ private fun BottomBar(
                                 onSelect(tab)
                             },
                         )
+                        }
                     }
                 }
             }
@@ -551,15 +584,15 @@ private fun TabItem(
     width: Dp,
     onClick: () -> Unit,
 ) {
-    // The squash, on a tab as on every other control.
+    // The bloom belongs to the **capsule**, not to the tab.
     //
-    // No material of its own: a tab is a glyph and a word *on* the bar's pane,
-    // not a second pane sitting on it — lighting a surface behind it would be
-    // the selected-state fault in a new place, and selection here is already
-    // said by the ink. What is left is the movement, which is the part that
-    // answers the finger.
-    val source = remember { MutableInteractionSource() }
-    val press = rememberGlassPress(source)
+    // A tab has no material of its own: it is a glyph and a word *on* the bar's
+    // pane, not a second pane sitting on it. So a press applied here could only
+    // move the glyph, which is what was reported — *"bấm vào item thì ko zoom
+    // icon, phải zoom toàn bộ cái tabbar như media mini player"*. The
+    // interactions go to the capsule instead, which is the thing that is
+    // painted and therefore the thing that can be seen to move.
+    val source = LocalPressHost.current ?: remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             // Measured, not intrinsic. The item's width is the caller's share of
@@ -570,7 +603,6 @@ private fun TabItem(
             // Nothing to press once it has no width. A tab that has given up its
             // room and still answers is the dead button §5 of the server charter
             // refuses, in the one shape nothing on screen distinguishes.
-            .then(if (width > 0.dp) Modifier.pressSquish(press) else Modifier)
             .then(
                 if (width > 0.dp) {
                     Modifier.clickable(

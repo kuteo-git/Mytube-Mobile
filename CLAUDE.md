@@ -3932,3 +3932,77 @@ What is known, and what is not:
   it on every frame whether or not that sheet is open — so a drag frame is two
   layer recordings plus a consumer plus an interop view being resized. That is
   the cheapest thing to remove if the next recording still flickers.
+
+
+## What blooms is what is painted (2026-09-21)
+
+Four things reported in one message, and three of them turned out to be one
+sentence: **a press must move the thing that is drawn.**
+
+Every press in this app scales the node it is written on. For a control that
+draws its own pane — a chip, an action pill, a card — that node *is* the pane,
+so the right thing always happened. For a control whose pane is drawn by
+something above it, the node holds a glyph and nothing else, so all a press
+could ever move was the glyph. Three places had that shape and all three were
+reported at once:
+
+| | reported |
+|---|---|
+| the tab bar | *"bấm vào item thì ko zoom icon, phải zoom toàn bộ cái tabbar như media mini player"* |
+| like / dislike | *"bấm vào Like dislike thì icon zoom, nó phải zoom cái button cơ"* |
+| the player's controls | *"Same với mấy cái buttons trên Media player"* |
+
+The first of those is also the clearest statement of the rule, and it names the
+one bar that already did it right: the miniplayer, where the press is on the
+capsule because the capsule is what is painted.
+
+### `LocalPressHost`
+
+A container claims the bloom, every `pressable` inside routes its interactions
+there instead of squashing itself, and the container wears the movement for all
+of them. **Nothing at the call sites changed** — a control keeps asking for a
+press exactly as it did, and where it sits decides what grows. Three containers
+claim it: `GlassPane`, the like/dislike pill, and the tab capsule.
+
+- **`PressGuardTest` went red on this, correctly, and was then taught.** Taking
+  `pressSquish` off `TabItem` left a bare `clickable`, which is precisely what
+  that guard exists to catch. `LocalPressHost` is now one of the things that
+  counts as answering a finger — the press still exists, it is worn one level
+  up. That failure is this guard's proof for the release.
+- **iOS had the same fault in its own half.** `GlassPressStyle` scaled
+  `configuration.label`, which is the glyph; `.glassEffect()` is applied to the
+  stack around it, so the glass never moved. It is `PaneTouchStyle` now, which
+  reports the press upward and draws nothing, and the pane carries the scale.
+
+### And the bloom was being bitten by the rows that hold it
+
+*"Nút All | From XXX, bấm vào nó zoom lên nhưng bị cut off bên trái và phải."*
+Two scrolling rows, two axes, one cause: **a scroll container clips at its
+viewport, and neither had left the bloom anywhere to go.**
+
+- `ChipRow` is a `LazyRow` whose viewport was exactly one chip tall, so a
+  pressed chip had its rounded top and bottom sliced flat. Measured by holding
+  a touch: the changed box reached the chip's own edges and no further, while
+  the sides had 16dp of `contentPadding` and used it.
+- The up-next rail's filter chips are a `horizontalScroll` Row starting at x=0,
+  so the bloom went straight into the clip at both ends — which is the report,
+  on the other axis.
+
+Both now carry `PRESS_INSET` as padding inside the scroll. It is the distance
+the press blooms by, so it is the distance that has to be there.
+
+### The measurement that made all of this cheap
+
+`adb shell input motionevent DOWN` holds a touch, which `input tap` cannot, and
+which no iOS tool here can do at all. Hold, screenshot, diff against the resting
+frame, take the bounding box of what moved — and the box *is* the answer:
+
+| | before | after |
+|---|---|---|
+| Like | 55x55 — the icon's own bounds to the pixel | 289x117 — the pill |
+| Share (already correct) | 277x117 | unchanged |
+| the player's chevron | the glyph | 152x126 — the disc |
+
+**Pause the video first.** The first attempts measured a bounding box the size
+of the whole crop window, because the picture behind the controls changes every
+frame and a diff cannot tell that from a control growing.

@@ -1,6 +1,7 @@
 package com.mytube.app.ui.shell
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -79,8 +80,19 @@ fun GlassPane(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    // The pane is the button, so the pane is what blooms.
+    //
+    // A control in here draws a glyph and nothing else — this node is what
+    // paints the glass around it — so a press left on the control could only
+    // ever move the glyph. Reported that way about the player's controls, and
+    // measured: the changed box under a held finger was the icon's own bounds
+    // to the pixel. See [LocalPressHost].
+    val pressSource = remember { MutableInteractionSource() }
+
     if (!LocalNativeGlass.current) {
-        Box(modifier.glassSurface(shape.compose()), content = { content() })
+        Box(modifier.pressHost(pressSource).glassSurface(shape.compose())) {
+            CompositionLocalProvider(LocalPressHost provides pressSource) { content() }
+        }
         return
     }
 

@@ -46,6 +46,7 @@ import com.mytube.app.ui.home.formatRelative
 import com.mytube.app.ui.home.formatViews
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.PRESS_INSET
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.shell.pressableGlassControl
@@ -164,7 +165,14 @@ fun UpNextRail(
             Column {
                 Spacer(Modifier.height(Space.md))
                 Row(
-                    Modifier.horizontalScroll(rememberScrollState()),
+                    // `horizontalScroll` clips at the viewport's edges, and the
+                    // content started at x=0 — so a pressed chip bloomed
+                    // straight into the clip and was cut off down both sides.
+                    // Reported that way. The padding is inside the scroll, so
+                    // the bloom has somewhere to go at either end.
+                    Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = PRESS_INSET),
                     horizontalArrangement = Arrangement.spacedBy(Space.sm),
                 ) {
                     FilterChip(strings.allSources, !channelOnly) { onSelectFilter(false) }

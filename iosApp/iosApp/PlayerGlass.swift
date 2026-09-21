@@ -27,6 +27,16 @@ import ComposeApp
 struct PlayerGlass: View {
     let panes: [NativeGlassPane]
 
+    /// Which pane currently has a finger on it.
+    ///
+    /// The bloom belongs to the pane, not to the item inside it. `GlassPressStyle`
+    /// used to scale `configuration.label`, which is the glyph — the `.glassEffect()`
+    /// is applied to the enclosing stack, so the glass itself never moved.
+    /// Reported from the phone: *"Same với mấy cái buttons trên Media player,
+    /// phải zoom button thay vì icon"*. The Compose side learned the same rule
+    /// on the same day; `LocalPressHost` in `GlassPress.kt` is its half.
+    @State private var pressedPane: String?
+
     var body: some View {
         // A GeometryReader rather than a ZStack: the rectangles are in the
         // hosting view's coordinates, which is the whole screen, and `.position`
@@ -71,7 +81,7 @@ struct PlayerGlass: View {
                                 } label: {
                                     face(item)
                                 }
-                                .buttonStyle(GlassPressStyle(width: item.width, height: item.height))
+                                .buttonStyle(PaneTouchStyle(paneId: pane.id, pressed: $pressedPane))
                             } else {
                                 // The clock and the fullscreen title. A readout
                                 // in a Button would be a control that looks
@@ -97,6 +107,15 @@ struct PlayerGlass: View {
                 .frame(width: pane.width, height: pane.height)
                 .environment(\.colorScheme, .dark)
                 .glassEffect(.regular.tint(Self.tint), in: shape(pane))
+                // The pane blooms, because the pane is the button.
+                .scaleEffect(pressedPane == pane.id ? Self.bloom(pane) : 1)
+                .zIndex(pressedPane == pane.id ? 1 : 0)
+                .animation(
+                    pressedPane == pane.id
+                        ? .spring(response: 0.06, dampingFraction: 0.5)
+                        : .spring(response: 0.16, dampingFraction: 0.35),
+                    value: pressedPane
+                )
                 .position(x: pane.x + pane.width / 2, y: pane.y + pane.height / 2)
                 // Kotlin says when to start fading, not when it has finished.
                 //
@@ -202,6 +221,19 @@ struct PlayerGlass: View {
     /// bright frame an untinted pane goes nearly white and takes the white glyphs
     /// with it. This is the platform's `TINT_GLASS`.
     private static let tint = Color.black.opacity(0.55)
+
+    /// How far a pressed pane grows past each edge, as a scale.
+    ///
+    /// A distance rather than a ratio, for the reason `pressSquish` gives: 6dp
+    /// is a fifth of a small disc and a fiftieth of a wide pill, so small
+    /// controls feel springy and large ones barely move without anyone deciding
+    /// that they should. `PRESS_INSET` in Kotlin, and both copies say so.
+    private static func bloom(_ pane: NativeGlassPane) -> CGFloat {
+        let inset: CGFloat = 6
+        let byWidth = pane.width > 0 ? (pane.width + inset * 2) / pane.width : 1
+        let byHeight = pane.height > 0 ? (pane.height + inset * 2) / pane.height : 1
+        return min(byWidth, byHeight)
+    }
 }
 
 /// What Kotlin pushes, held where SwiftUI can watch it.
@@ -243,28 +275,18 @@ final class PlayerGlassModel {
 /// SwiftUI takes a response where Compose takes a stiffness, and a response is
 /// 2π/√k — 0.06s and 0.16s. That is two copies of one decision, which is the
 /// cost of a control the other side cannot reach; both say so.
-private struct GlassPressStyle: ButtonStyle {
-    let width: CGFloat
-    let height: CGFloat
-
-    /// How far a pressed control blooms past each edge. `PRESS_INSET` in Kotlin.
-    private static let inset: CGFloat = 6
+@available(iOS 26.0, *)
+private struct PaneTouchStyle: ButtonStyle {
+    let paneId: String
+    @Binding var pressed: String?
 
     func makeBody(configuration: Configuration) -> some View {
-        let byWidth = width > 0 ? (width + Self.inset * 2) / width : 1
-        let byHeight = height > 0 ? (height + Self.inset * 2) / height : 1
-        let bloom = min(byWidth, byHeight)
-
-        return configuration.label
-            .scaleEffect(configuration.isPressed ? bloom : 1)
-            // Over its neighbours while it is grown, or the pane beside it
-            // covers the part that has bloomed.
-            .zIndex(configuration.isPressed ? 1 : 0)
-            .animation(
-                configuration.isPressed
-                    ? .spring(response: 0.06, dampingFraction: 0.5)
-                    : .spring(response: 0.16, dampingFraction: 0.35),
-                value: configuration.isPressed
-            )
+        // Reports, and draws nothing of its own. Scaling the label here is what
+        // this used to do, and the label is the glyph — the glass is applied to
+        // the stack around it, so the pane never moved and only the mark grew.
+        configuration.label
+            .onChange(of: configuration.isPressed) { _, isPressed in
+                pressed = isPressed ? paneId : (pressed == paneId ? nil : pressed)
+            }
     }
 }

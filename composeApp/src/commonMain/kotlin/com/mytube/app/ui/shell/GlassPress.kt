@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -176,7 +177,7 @@ fun Modifier.pressSquish(press: GlassPress): Modifier = this
     }
 
 /** How far a pressed control blooms past each edge. */
-internal val PRESS_INSET = 6.dp
+val PRESS_INSET = 6.dp
 
 /**
  * How much deeper the glass refracts while it is held.
@@ -277,10 +278,12 @@ fun Modifier.pressable(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ): Modifier {
-    val source = remember { MutableInteractionSource() }
-    val press = rememberGlassPress(source)
-    return this
-        .pressSquish(press)
+    // A container above may have claimed the bloom — see [LocalPressHost].
+    val host = LocalPressHost.current
+    val own = remember { MutableInteractionSource() }
+    val press = rememberGlassPress(own)
+    val source = host ?: own
+    return (if (host == null) this.pressSquish(press) else this)
         .clickable(
             interactionSource = source,
             indication = null,
@@ -288,3 +291,45 @@ fun Modifier.pressable(
             onClick = onClick,
         )
 }
+
+/**
+ * The container that blooms instead of the control inside it, or null.
+ *
+ * # The rule this exists to enforce: what blooms is what is *painted*
+ *
+ * Every press in this app used to scale the node it was written on, and for a
+ * control that draws its own pane — a chip, an action pill, a card — that node
+ * *is* the pane, so the right thing happened. For a control whose pane is drawn
+ * by something above it, the node holds a glyph and nothing else, so all a
+ * press could ever move was the glyph.
+ *
+ * Reported from the phone in three places at once and they turned out to be one
+ * fault: *"bấm vào Like dislike thì icon zoom, nó phải zoom cái button cơ"*,
+ * the same for the player's controls, and *"bấm vào item thì ko zoom icon,
+ * phải zoom toàn bộ cái tabbar như media mini player"* — which is the same
+ * sentence said about the third place, and is the clearest statement of the
+ * rule: **the pill is the button, so the pill is what moves.**
+ *
+ * Measured on the emulator before any of it was changed, holding a touch with
+ * `input motionevent DOWN` and taking the bounding box of what moved: Like's
+ * box was 55×55 at (83,1171), which is the *icon's* own bounds to the pixel,
+ * while Share — which draws its own pane — measured 277×117.
+ *
+ * So a container declares itself the host, every [pressable] inside routes its
+ * interactions there instead of squashing itself, and the host wears the bloom
+ * for all of them. Nothing at the call sites changed: a control keeps asking
+ * for a press exactly as it did, and where it sits decides what grows.
+ */
+val LocalPressHost = compositionLocalOf<MutableInteractionSource?> { null }
+
+/**
+ * Claim the bloom for this node on behalf of everything drawn inside it.
+ *
+ * Two parts because a modifier cannot provide a composition local: put this on
+ * the node that paints the pane, and wrap its content in
+ * `CompositionLocalProvider(LocalPressHost provides source)` with the same
+ * source.
+ */
+@Composable
+fun Modifier.pressHost(source: MutableInteractionSource): Modifier =
+    this.pressSquish(rememberGlassPress(source))

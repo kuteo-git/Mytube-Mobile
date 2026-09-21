@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.GlassRadius
+import com.mytube.app.ui.shell.PRESS_INSET
 import com.mytube.app.ui.shell.pressableLiquidGlass
 import com.mytube.app.ui.theme.Tokens
 
@@ -51,7 +52,16 @@ fun ChipRow(
 
     LazyRow(
         modifier = modifier,
-        contentPadding = PaddingValues(horizontal = Space.md),
+        // Vertical room for the bloom, not decoration.
+        //
+        // A `LazyRow` clips to its viewport, and the viewport was exactly one
+        // chip tall — so a pressed chip grew and had its rounded top and bottom
+        // sliced flat. Measured on the emulator by holding a touch: the changed
+        // box reached the chip's own top and bottom edges and no further, while
+        // the sides had the 16dp of `contentPadding` to grow into and did.
+        // `PRESS_INSET` is the distance the press blooms by, so it is the
+        // distance that has to be there.
+        contentPadding = PaddingValues(horizontal = Space.md, vertical = PRESS_INSET),
         horizontalArrangement = Arrangement.spacedBy(Space.sm),
     ) {
         items(chips, key = { it.key }) { chip ->

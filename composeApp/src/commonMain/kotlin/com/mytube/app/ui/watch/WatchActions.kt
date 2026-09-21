@@ -2,6 +2,7 @@ package com.mytube.app.ui.watch
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +33,8 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.GlassPill
 import com.mytube.app.ui.shell.glassControl
+import com.mytube.app.ui.shell.LocalPressHost
+import com.mytube.app.ui.shell.pressHost
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.shell.pressableGlassControl
 import com.mytube.app.ui.theme.Tokens
@@ -78,11 +83,22 @@ fun WatchActions(
         // still on the page — under the title, beside the date — where facts
         // about the video live. What is left here is two thumbs, which is what
         // the control is for.
+        // The pill is the button, so the pill is what blooms.
+        //
+        // Each half draws a thumb and nothing else — this Row owns the pane and
+        // the rounding, which is what makes the two read as one control — so a
+        // press on a half could only ever move the glyph. Reported exactly
+        // that way, and measured on the emulator: the box that changed under a
+        // held finger was 55x55, the icon's own bounds to the pixel, against
+        // 277x117 for the Share pill beside it which draws its own pane.
+        val pillPress = remember { MutableInteractionSource() }
         Row(
             modifier = Modifier
+                .pressHost(pillPress)
                 .glassControl(RoundedCornerShape(percent = 50)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            CompositionLocalProvider(LocalPressHost provides pillPress) {
             PillHalf(
                 icon = if (video.reaction == Reaction.Like) ThumbFilledIcon else ThumbIcon,
                 label = strings.like,
@@ -100,6 +116,7 @@ fun WatchActions(
                 flipped = true,
                 onClick = { onReact(Reaction.Dislike) },
             )
+            }
         }
 
         ActionPill(

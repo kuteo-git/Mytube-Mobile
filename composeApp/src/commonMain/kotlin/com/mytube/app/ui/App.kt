@@ -95,6 +95,7 @@ import com.mytube.app.ui.shell.NativeGlassRegistry
 import com.mytube.app.ui.shell.Tab
 import com.mytube.app.ui.shell.dismissMenuOnOutsidePress
 import com.mytube.app.ui.shell.edgeBack
+import com.mytube.app.ui.shell.barTravel
 import com.mytube.app.ui.shell.rememberBarsVisible
 import com.mytube.app.ui.shell.rememberLandingKnock
 import com.mytube.app.ui.subscriptions.SubscriptionsScreen
@@ -422,11 +423,27 @@ fun App(
             // the drag that collapses it has to land where a whole bar is — the
             // landing point is computed from the same terms, so a bar that had
             // already narrowed would put the picture down beside itself.
-            val collapsing = watching?.minimised == true && !barsShowing
+            val travel = barTravel(
+                barsShowing = barsShowing,
+                playerRestsOnBar = watching?.minimised == true,
+            )
+            val collapsing = travel.bottomCollapsed
+            // **Two numbers, because the two bars answer different questions.**
+            //
+            // It was one, `if (barsShowing || collapsing) 0f else 1f`, handed to
+            // both — so anything playing pinned the top bar and the chip row as
+            // well, and neither ever left again. The bottom bar is the one the
+            // miniplayer rests on; the top bar has nothing on it. See
+            // [barTravel], which holds the rule where a test can read it.
             val barsHidden by animateFloatAsState(
-                targetValue = if (barsShowing || collapsing) 0f else 1f,
+                targetValue = if (travel.bottomHidden) 1f else 0f,
                 animationSpec = tween(220),
                 label = "bars",
+            )
+            val topHidden by animateFloatAsState(
+                targetValue = if (travel.topHidden) 1f else 0f,
+                animationSpec = tween(220),
+                label = "top-bar",
             )
             // A spring, where the slide is a tween.
             //
@@ -713,6 +730,7 @@ fun App(
                     AppShell(
                         current = tab,
                         barsHidden = barsHidden,
+                        topHidden = topHidden,
                         collapse = collapse,
                         // Only the Home tab has anything to pin under the bar.
                         // The others pass nothing and the bar is its ordinary
