@@ -66,3 +66,47 @@ fun barTravel(barsShowing: Boolean, playerRestsOnBar: Boolean): BarTravel = BarT
     // can ever set is a value somebody will one day wire up again.
     bottomCollapsed = !barsShowing && playerRestsOnBar,
 )
+
+/**
+ * What a press on a tab means.
+ *
+ * Three outcomes, because the same press means different things depending on
+ * what the bar is doing when it lands.
+ */
+enum class TabPress {
+    /** Open the bar, and move nothing. */
+    Reveal,
+
+    /** The tab already selected, pressed while the bar is whole. */
+    ScrollToTop,
+
+    /** A different tab. */
+    Switch,
+}
+
+/**
+ * Which of the three a press is.
+ *
+ * # Why a collapsed bar swallows the press
+ *
+ * Pressing the tab you are on goes back to the top, and that is right while the
+ * bar is whole: the only alternative is swiping until your thumb aches. But
+ * collapsed, the bar is a single circle and **that press is the one that opens
+ * it** — reaching for it is reaching for the bar, not for the top of the feed.
+ * Reported exactly that way: *"khi cái menu bị collapse lại, bấm Home → nó tự
+ * expand ra rồi scroll list lên top… chỉ expand ra, ko scroll lên top"*.
+ *
+ * # And the reveal has to be said out loud
+ *
+ * It used to be free, and that was an accident worth recording. Nothing in the
+ * bar answered a press at all: `rememberBarsVisible` returns
+ * `atTop || !hidden`, so the bar opened only because the scroll-to-top reached
+ * the top. Measured by taking the scroll away and leaving everything else — the
+ * list stayed put and the bar **stayed collapsed**, which is why [TabPress] has
+ * a `Reveal` rather than the fix being a deleted `if`.
+ */
+fun tabPress(barCollapsed: Boolean, pickedIsCurrent: Boolean): TabPress = when {
+    barCollapsed -> TabPress.Reveal
+    pickedIsCurrent -> TabPress.ScrollToTop
+    else -> TabPress.Switch
+}

@@ -49,6 +49,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -922,22 +923,13 @@ fun ChipRowSkeleton(modifier: Modifier = Modifier) {
  * drift never adds up to a flip and a decisive flick always does.
  */
 @Composable
-fun rememberBarsVisible(listState: LazyListState): Boolean {
+fun rememberBarsVisible(listState: LazyListState): BarsVisibility {
+    val bars = remember(listState) { BarsVisibility(listState) }
     val threshold = with(LocalDensity.current) { DIRECTION_THRESHOLD.toPx() }
-    // At the top the bars are always up, whatever the last movement was. Kept as
-    // `derivedStateOf` for the reason it always was: this is read on every frame
-    // of every fling, and without it the whole shell recomposes at 60fps to
-    // answer a boolean that changes twice a minute.
-    val atTop by remember(listState) {
-        derivedStateOf { !listState.canScrollBackward }
-    }
-    var hidden by remember(listState) { mutableStateOf(false) }
 
     LaunchedEffect(listState, threshold) {
         var previous = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
-        // How far the list has travelled in the current direction. Reset, not
-        // added to, when the direction changes.
-        var travelled = 0f
+        bars.travelled = 0f
 
         snapshotFlow {
             listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
@@ -957,18 +949,64 @@ fun rememberBarsVisible(listState: LazyListState): Boolean {
             }
             if (delta == 0f) return@collect
 
-            travelled = if (travelled == 0f || (travelled > 0f) == (delta > 0f)) {
-                travelled + delta
+            bars.travelled = if (
+                bars.travelled == 0f || (bars.travelled > 0f) == (delta > 0f)
+            ) {
+                bars.travelled + delta
             } else {
                 delta
             }
 
-            if (travelled >= threshold) hidden = true
-            if (travelled <= -threshold) hidden = false
+            if (bars.travelled >= threshold) bars.hidden = true
+            if (bars.travelled <= -threshold) bars.hidden = false
         }
     }
 
-    return atTop || !hidden
+    return bars
+}
+
+/**
+ * Whether the bars are up, and the one way to put them up without scrolling.
+ *
+ * # It used to be a `Boolean`, and that is what made a tab press ambiguous
+ *
+ * Nothing could tell this that the bars should come back: [showing] is
+ * `atTop || !hidden`, so the only two ways up were reaching the top of the list
+ * or scrolling 48dp against the grain. A tab press that opened the collapsed
+ * bar therefore did it **by scrolling the list to the top** — the open was a
+ * side effect of the journey, not a thing anybody asked for.
+ *
+ * Measured by taking the scroll away and changing nothing else: the list stayed
+ * where it was and the bar stayed collapsed. So [reveal] exists, and the press
+ * says what it means.
+ */
+@Stable
+class BarsVisibility internal constructor(listState: LazyListState) {
+    // Kept as `derivedStateOf` for the reason it always was: this is read on
+    // every frame of every fling, and without it the whole shell recomposes at
+    // 60fps to answer a boolean that changes twice a minute.
+    private val atTop by derivedStateOf { !listState.canScrollBackward }
+
+    internal var hidden by mutableStateOf(false)
+
+    /** How far the list has travelled in the current direction. */
+    internal var travelled = 0f
+
+    /** At the top the bars are always up, whatever the last movement was. */
+    val showing: Boolean get() = atTop || !hidden
+
+    /**
+     * Put the bars back without moving the list.
+     *
+     * The accumulator resets too. It is not a number about the past, it is how
+     * close the list is to flipping the bars — and after a reveal the answer is
+     * "not at all", or the next nudge downward would take them straight away
+     * again.
+     */
+    fun reveal() {
+        hidden = false
+        travelled = 0f
+    }
 }
 
 /**

@@ -1,6 +1,8 @@
 package com.mytube.app.ui
 
+import com.mytube.app.ui.shell.TabPress
 import com.mytube.app.ui.shell.barTravel
+import com.mytube.app.ui.shell.tabPress
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -60,5 +62,39 @@ class BarTravelTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `a press on a collapsed bar only opens it`() {
+        // The reported bug: it opened *and* threw the reader back to the top of
+        // a feed they had scrolled a long way down.
+        assertEquals(
+            TabPress.Reveal,
+            tabPress(barCollapsed = true, pickedIsCurrent = true),
+        )
+    }
+
+    @Test
+    fun `a collapsed bar swallows the press whichever tab it was`() {
+        assertEquals(
+            TabPress.Reveal,
+            tabPress(barCollapsed = true, pickedIsCurrent = false),
+        )
+    }
+
+    @Test
+    fun `the tab you are on scrolls to the top while the bar is whole`() {
+        assertEquals(
+            TabPress.ScrollToTop,
+            tabPress(barCollapsed = false, pickedIsCurrent = true),
+        )
+    }
+
+    @Test
+    fun `another tab is a switch and moves no list`() {
+        assertEquals(
+            TabPress.Switch,
+            tabPress(barCollapsed = false, pickedIsCurrent = false),
+        )
     }
 }

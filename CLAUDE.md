@@ -4061,3 +4061,35 @@ So the rule is two sentences and they are not the same sentence:
   catches a float handed to one consumer too many — both bars took a `Float`
   and both were happy. The test was red on exactly the reported case before the
   first fix, and its assertions changed with the second.
+
+
+### A press on the collapsed bar was opening it by accident (2026-09-21)
+
+Reported the day the bar learned to collapse: *"khi cái menu bị collapse lại,
+bấm Home → nó tự expand ra rồi scroll list lên top"*, and the wanted rule stated
+with it — open the bar, move nothing; scroll to the top only when the bar is
+already whole and the press lands on the tab already selected.
+
+The loop is Compose's semantics again, two nodes and no pixels: `text="Playlists"`
+exists only while the bar is whole, so its presence *is* "expanded"; and
+`text="Continue watching"` is the feed's first heading, so its return *is* the
+scroll-to-top. Red on the first run, twice in a row.
+
+**The interesting half is why the fix could not be a deleted `if`.**
+`rememberBarsVisible` returned `atTop || !hidden`, so the only two ways to put
+the bars back were reaching the top of the list or scrolling 48dp against the
+grain. **Nothing could simply tell them to come back.** So the press was opening
+the bar *by scrolling the list to the top* — the open was a side effect of the
+journey, not something anybody had written.
+
+Measured rather than assumed: with the scroll taken away and nothing else
+changed, the list stayed where it was and the bar **stayed collapsed**. That is
+the whole reason `BarsVisibility.reveal()` exists.
+
+- **The accumulator resets on a reveal.** `travelled` is not a number about the
+  past, it is how close the list is to flipping the bars — and after a reveal
+  the honest answer is "not at all", or the next nudge downward takes them
+  straight back off.
+- **`tabPress` is a named pure function**, like `barTravel` beside it: three
+  outcomes, one per state the bar can be in when the press lands. The test was
+  red on exactly the two reported cases before the rule changed.

@@ -95,7 +95,9 @@ import com.mytube.app.ui.shell.NativeGlassRegistry
 import com.mytube.app.ui.shell.Tab
 import com.mytube.app.ui.shell.dismissMenuOnOutsidePress
 import com.mytube.app.ui.shell.edgeBack
+import com.mytube.app.ui.shell.TabPress
 import com.mytube.app.ui.shell.barTravel
+import com.mytube.app.ui.shell.tabPress
 import com.mytube.app.ui.shell.rememberBarsVisible
 import com.mytube.app.ui.shell.rememberLandingKnock
 import com.mytube.app.ui.subscriptions.SubscriptionsScreen
@@ -405,7 +407,8 @@ fun App(
             //
             // 220ms: inside the 150–300ms band where motion reads as movement
             // rather than as a delay.
-            val barsShowing = rememberBarsVisible(tabScroll.getValue(tab))
+            val bars = rememberBarsVisible(tabScroll.getValue(tab))
+            val barsShowing = bars.showing
             // Two answers to "get out of the way", and which one applies is
             // decided by whether there is anything to keep on screen.
             //
@@ -748,16 +751,28 @@ fun App(
                             }
                         },
                         onSelect = { picked ->
-                            // Pressing the tab you are already on goes back to
-                            // the top. Every phone app does this, and without it
-                            // the only way back up a long feed is to swipe until
-                            // your thumb aches. Deliberately *not* a refresh:
-                            // pull-to-refresh already means that, and one
-                            // gesture must not mean two things.
-                            if (picked == tab) {
-                                scope.launch {
+                            // What a press means depends on what the bar is
+                            // doing when it lands — see [tabPress], which holds
+                            // the rule where a test can read it.
+                            when (tabPress(travel.bottomCollapsed, picked == tab)) {
+                                // Collapsed, the bar is a single circle and this
+                                // press is the one that opens it. Reaching for
+                                // it is reaching for the bar, not for the top of
+                                // the feed.
+                                TabPress.Reveal -> bars.reveal()
+
+                                // Pressing the tab you are already on goes back
+                                // to the top. Every phone app does this, and
+                                // without it the only way back up a long feed is
+                                // to swipe until your thumb aches. Deliberately
+                                // *not* a refresh: pull-to-refresh already means
+                                // that, and one gesture must not mean two
+                                // things.
+                                TabPress.ScrollToTop -> scope.launch {
                                     tabScroll.getValue(picked).animateScrollToItem(0)
                                 }
+
+                                TabPress.Switch -> Unit
                             }
                             tab = picked
                         },
