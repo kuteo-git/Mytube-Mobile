@@ -364,7 +364,12 @@ private fun BottomBar(
                 Modifier
                     .width(tabsWidth)
                     .height(Size.topBar)
-                    .clip(GLASS_SHAPE)
+                    // **No clip.** The pane is drawn to its own shape by
+                    // `BarBackdrop`, so this one existed only to keep the
+                    // contents inside — and the contents now bloom past their
+                    // own edges when pressed. Clipped, the outermost tab had a
+                    // bite taken out of it every time it was touched.
+                    //
                     // On each pane, not on the row. The gap between the two
                     // capsules is page, and a tap there belongs to the page.
                     .consumeTaps(),
