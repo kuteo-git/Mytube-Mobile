@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.mytube.app.domain.model.Playlist
+import com.mytube.app.ui.home.BadgeBackground
 import com.mytube.app.ui.home.Radius
 import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
@@ -50,12 +51,12 @@ import com.mytube.app.ui.shell.GlassTextField
 import com.mytube.app.ui.shell.ScreenTitle
 import com.mytube.app.ui.shell.TabScaffold
 import com.mytube.app.ui.shell.detailContentPadding
-import com.mytube.app.ui.shell.tabContentPadding
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.shell.glassSource
-import com.mytube.app.ui.home.BadgeBackground
-import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.shell.pressableGlassControl
+import com.mytube.app.ui.shell.tabContentPadding
+import com.mytube.app.ui.theme.Tokens
 
 /**
  * The collections this member keeps.
@@ -243,7 +244,7 @@ private fun PlaylistRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .pressable(onClick = onClick)
             .padding(horizontal = Space.lg, vertical = Space.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -27,6 +27,7 @@ import com.mytube.app.ui.home.formatDate
 import com.mytube.app.ui.home.formatViews
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.glassControl
+import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -86,7 +87,7 @@ fun DescriptionBox(
             // than opened.
             .animateContentSize(SECTION_SPRING)
             .glassControl(RoundedCornerShape(12.dp))
-            .then(if (expanded) Modifier else Modifier.clickable(onClick = onToggleExpanded))
+            .then(if (expanded) Modifier else Modifier.pressable(onClick = onToggleExpanded))
             .padding(Space.md),
     ) {
         Text(
@@ -125,7 +126,7 @@ fun DescriptionBox(
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
                     .heightIn(min = 48.dp)
-                    .clickable(role = Role.Button, onClick = onToggleExpanded)
+                    .pressable(onClick = onToggleExpanded)
                     .wrapContentHeight(Alignment.CenterVertically),
             )
         }

@@ -3,18 +3,26 @@ package com.mytube.app.ui.search
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,52 +33,44 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.getValue
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.VideoCard
 import com.mytube.app.ui.i18n.LocalStrings
-import com.mytube.app.ui.playlist.SaveTarget
 import com.mytube.app.ui.i18n.VietnameseStrings
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.ui.platform.LocalLayoutDirection
+import com.mytube.app.ui.playlist.SaveTarget
 import com.mytube.app.ui.shell.DetailBack
-import com.mytube.app.ui.shell.detailContentPadding
+import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.GLASS_MARGIN
 import com.mytube.app.ui.shell.GLASS_SHAPE
 import com.mytube.app.ui.shell.SearchIcon
+import com.mytube.app.ui.shell.detailContentPadding
 import com.mytube.app.ui.shell.glassSource
 import com.mytube.app.ui.shell.liquidGlass
-import com.mytube.app.ui.shell.EmptyState
+import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.text.font.FontWeight
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.ui.watch.CloseIcon
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jetbrains.compose.ui.tooling.preview.Preview
@@ -327,7 +327,7 @@ fun SearchContent(
                                         color = Tokens.brand,
                                         fontSize = 13.sp,
                                         modifier = Modifier
-                                            .clickable(onClick = onRetry)
+                                            .pressable(onClick = onRetry)
                                             .padding(vertical = Space.sm),
                                     )
                                 }
@@ -590,7 +590,7 @@ private fun SearchField(
                 imageVector = CloseIcon,
                 contentDescription = strings.close,
                 tint = Tokens.text2,
-                modifier = Modifier.size(20.dp).clickable(onClick = onClear),
+                modifier = Modifier.size(20.dp).pressable(onClick = onClear),
             )
         }
     }

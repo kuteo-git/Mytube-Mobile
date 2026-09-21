@@ -143,6 +143,7 @@ fun BoxScope.GlassSheet(
             Modifier
                 .fillMaxSize()
                 .background(scrim)
+                // press-guard: the scrim. The touch is swallowed to dismiss, not answered.
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },

@@ -258,3 +258,33 @@ fun Modifier.pressableGlassSurface(
             onClick = onClick,
         )
 }
+
+/**
+ * Anything that answers a finger and draws no pane of its own.
+ *
+ * A row in a menu, a card, a bare glyph, one half of a joined pill. They get
+ * the movement and nothing else — no surface, because they are content sitting
+ * on somebody else's pane, and lighting a second surface under them is the
+ * selected-state fault in a new place.
+ *
+ * It is safe to put on anything, and that is a property of [pressSquish] rather
+ * than of judgement: the bloom is a *distance*, so a full-width row grows by
+ * one per cent while a 40dp circle grows by a fifth. Large things barely move
+ * without anyone having to decide that they should.
+ */
+@Composable
+fun Modifier.pressable(
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+): Modifier {
+    val source = remember { MutableInteractionSource() }
+    val press = rememberGlassPress(source)
+    return this
+        .pressSquish(press)
+        .clickable(
+            interactionSource = source,
+            indication = null,
+            enabled = enabled,
+            onClick = onClick,
+        )
+}

@@ -47,9 +47,10 @@ import com.mytube.app.ui.home.formatViews
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.glassControl
+import com.mytube.app.ui.shell.pressable
+import com.mytube.app.ui.shell.pressableGlassControl
 import com.mytube.app.ui.shell.skeletonShade
 import com.mytube.app.ui.theme.Tokens
-import com.mytube.app.ui.shell.pressableGlassControl
 
 /** How recently ingested still counts as new. Two days, from the web app. */
 private const val NEW_WINDOW_DAYS = 2
@@ -262,7 +263,7 @@ private fun SuggestionRow(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .pressable(onClick = onClick)
             .padding(Space.xs),
     ) {
         Box(Modifier.width(168.dp).aspectRatio(16f / 9f)) {

@@ -30,8 +30,9 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.GlassPill
 import com.mytube.app.ui.shell.glassControl
-import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.shell.pressableGlassControl
+import com.mytube.app.ui.theme.Tokens
 
 /**
  * Like · Dislike · Save, under the video.
@@ -137,7 +138,10 @@ private fun PillHalf(
 ) {
     Row(
         modifier = Modifier
-            .clickable(onClick = onClick)
+            // The same movement every other control has. It was a bare
+            // `clickable` — one half of a joined pill, which has no pane of its
+            // own and so was never given the press the pill beside it had.
+            .pressable(onClick = onClick)
             // 16 rather than 14, now that there is only a glyph between them.
             // The padding *is* the target here: a 20dp thumb with 14dp either
             // side was a 48dp half only because the count was making up the

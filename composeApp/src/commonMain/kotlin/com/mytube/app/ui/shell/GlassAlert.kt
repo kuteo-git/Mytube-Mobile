@@ -91,6 +91,7 @@ fun BoxScope.GlassAlert(
             Modifier
                 .fillMaxSize()
                 .background(SCRIM)
+                // press-guard: the scrim. The touch is swallowed to dismiss, not answered.
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() },

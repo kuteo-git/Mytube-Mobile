@@ -5,8 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -101,7 +102,7 @@ private fun RailCard(
             // is what tells a thumb the row scrolls. A card that ends flush with
             // the screen looks like the end of the list.
             .width(240.dp)
-            .clickable(onClick = onClick),
+            .pressable(onClick = onClick),
     ) {
         Box(
             Modifier

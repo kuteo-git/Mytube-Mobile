@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,32 +26,35 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import com.mohamedrejeb.calf.ui.progress.AdaptiveCircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.mohamedrejeb.calf.ui.progress.AdaptiveCircularProgressIndicator
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.NarrationStatus
 import com.mytube.app.domain.model.Reaction
@@ -68,14 +69,12 @@ import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.home.todayISO
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
-import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.shell.LocalGlassVisible
 import com.mytube.app.ui.shell.WatchSkeleton
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+import com.mytube.app.ui.shell.pressable
+import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
+import kotlin.math.roundToInt
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
@@ -741,13 +740,13 @@ private fun ChannelRow(
             mediaBaseUrl = mediaBaseUrl,
             path = video.channel.avatarPath,
             size = 40.dp,
-            modifier = Modifier.clickable(onClick = onOpenChannel),
+            modifier = Modifier.pressable(onClick = onOpenChannel),
         )
         Spacer(Modifier.width(Space.md))
         // The name opens the channel too, which is what the web does and what a
         // thumb aiming at a 40dp circle needs — the avatar alone is a small
         // target for the one thing on this row that is not a button.
-        Column(Modifier.weight(1f).clickable(onClick = onOpenChannel)) {
+        Column(Modifier.weight(1f).pressable(onClick = onOpenChannel)) {
             Text(
                 text = video.channel.name,
                 color = Tokens.text,
@@ -805,7 +804,7 @@ private fun BackOnly(onBack: () -> Unit, label: String) {
                 .padding(Space.sm)
                 .size(48.dp)
                 .clip(CircleShape)
-                .clickable(onClick = onBack),
+                .pressable(onClick = onBack),
             contentAlignment = Alignment.Center,
         ) {
             androidx.compose.material3.Icon(

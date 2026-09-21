@@ -218,6 +218,9 @@ fun AppShell(
  * the floor of the bar.
  */
 @Composable
+// press-guard: the floor of a bar. It takes a touch in order to stop it
+// reaching the feed underneath, and a floor that bloomed would be the bar
+// breathing every time somebody missed a tab.
 private fun Modifier.consumeTaps(): Modifier = clickable(
     interactionSource = remember { MutableInteractionSource() },
     indication = null,

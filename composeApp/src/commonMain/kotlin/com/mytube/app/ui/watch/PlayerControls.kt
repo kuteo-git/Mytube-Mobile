@@ -11,30 +11,31 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,8 +47,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -57,13 +58,13 @@ import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.i18n.LocalStrings
-import androidx.compose.runtime.CompositionLocalProvider
-import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.GlassItem
-import com.mytube.app.ui.shell.LocalGlassVisible
 import com.mytube.app.ui.shell.GlassPane
 import com.mytube.app.ui.shell.GlassPaneShape
+import com.mytube.app.ui.shell.LocalGlassVisible
 import com.mytube.app.ui.shell.glassSurface
+import com.mytube.app.ui.shell.pressable
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -601,7 +602,7 @@ fun PlayerControls(
                                 modifier = if (atEdge) {
                                     Modifier
                                 } else {
-                                    Modifier.clickable(onClick = goLive)
+                                    Modifier.pressable(onClick = goLive)
                                 },
                             )
                             }
@@ -781,7 +782,7 @@ private fun DiscButton(
             Box(
                 Modifier
                     .size(size)
-                    .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+                    .then(if (enabled) Modifier.pressable(onClick = onClick) else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -1004,7 +1005,7 @@ private fun ControlButton(
         modifier
             .size(width = width, height = 48.dp)
             .clip(CircleShape)
-            .clickable(onClick = onClick),
+            .pressable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(size))
