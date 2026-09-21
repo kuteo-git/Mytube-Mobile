@@ -71,7 +71,7 @@ struct PlayerGlass: View {
                                 } label: {
                                     face(item)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(GlassPressStyle(width: item.width, height: item.height))
                             } else {
                                 // The clock and the fullscreen title. A readout
                                 // in a Button would be a control that looks
@@ -219,5 +219,52 @@ final class PlayerGlassModel {
         NativeGlassBridge.shared.onPanes = { [weak self] panes in
             self?.panes = panes
         }
+    }
+}
+
+/// The press, in the one place iOS draws these controls itself.
+///
+/// Everything else in this app blooms under a finger — `GlassPress.kt` does it
+/// for every control Compose draws, on both platforms. These seven do not go
+/// through it: on iOS 26 they are drawn here, above the whole Compose scene, so
+/// a `graphicsLayer` on the Kotlin side reaches a glyph that is no longer being
+/// rendered. Without this they were the only dead controls left in the app, and
+/// the only ones dead on one platform and alive on the other.
+///
+/// # The numbers are the same numbers, and they are written twice
+///
+/// A distance rather than a ratio, for the reason `pressSquish` gives: 6dp is a
+/// fifth of a small disc and a fiftieth of a wide pill, so small controls feel
+/// springy and large ones barely move without anyone deciding that they should.
+/// The smaller of the two axis ratios wins so the scale stays uniform.
+///
+/// The springs mirror Kotlin's: `StiffnessHigh` with `DampingRatioMediumBouncy`
+/// going down, `StiffnessMedium` with `DampingRatioLowBouncy` coming back.
+/// SwiftUI takes a response where Compose takes a stiffness, and a response is
+/// 2π/√k — 0.06s and 0.16s. That is two copies of one decision, which is the
+/// cost of a control the other side cannot reach; both say so.
+private struct GlassPressStyle: ButtonStyle {
+    let width: CGFloat
+    let height: CGFloat
+
+    /// How far a pressed control blooms past each edge. `PRESS_INSET` in Kotlin.
+    private static let inset: CGFloat = 6
+
+    func makeBody(configuration: Configuration) -> some View {
+        let byWidth = width > 0 ? (width + Self.inset * 2) / width : 1
+        let byHeight = height > 0 ? (height + Self.inset * 2) / height : 1
+        let bloom = min(byWidth, byHeight)
+
+        return configuration.label
+            .scaleEffect(configuration.isPressed ? bloom : 1)
+            // Over its neighbours while it is grown, or the pane beside it
+            // covers the part that has bloomed.
+            .zIndex(configuration.isPressed ? 1 : 0)
+            .animation(
+                configuration.isPressed
+                    ? .spring(response: 0.06, dampingFraction: 0.5)
+                    : .spring(response: 0.16, dampingFraction: 0.35),
+                value: configuration.isPressed
+            )
     }
 }
