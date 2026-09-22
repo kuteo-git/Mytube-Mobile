@@ -4665,3 +4665,52 @@ than a test that sometimes happens to run.
 Measured both ways on the phone's own release build: with the shipped
 contradiction, nothing over the picture in either state; with the fix, a caption
 in one and none in the other.
+
+## One margin under the player's clock and zoom (2026-09-22)
+
+Reported as the padding around the clock pill and the zoom button being too
+large. Measured from Compose's own coordinates before anything was changed —
+`Modifier.padding` is part of the row's own node, so its bounds *are* the box
+and all three gaps come off one probe each:
+
+| | |
+|---|---|
+| left | 8.0dp |
+| right | 8.0dp |
+| **under** | **24.0dp** |
+
+One edge three times deeper than the other two. It is `Space.sm` on all three
+sides now, and the two numbers it replaces were each answering something real
+that did not need this much room:
+
+- **34 cleared the seek bar's 32dp *target*.** The wrong thing to clear: this
+  pill takes no touches at all — no `clickable`, and on iOS it crosses as
+  `GlassItem(interactive = false)` because a readout is not a button — so it
+  cannot steal that target. What it has to clear is the 3dp line that is drawn.
+- **24 bought room at the other end**, where the transport discs are centred in
+  a picture whose height is `width × 9 / 16`: 27.7dp of gap on a 411dp emulator
+  against 13.3dp on a 360dp phone. Moving the row *down* is what opens that gap,
+  so 8 serves that argument better than 24 did.
+
+Fullscreen keeps its own arithmetic, computed from the same three terms the bar
+is placed with — there the bar is not the picture's bottom edge but a floating
+control inset from the screen.
+
+- **The loop measures the three gaps, not the fix.** Red at `left 8.0 right 8.0
+  under 24.0 — the gap under is 3.0x the gap at the sides`, green at 8/8/8, both
+  on the phone's own release build.
+- **Compose's coordinates answer both platforms at once.** The report was *"nó
+  xảy ra trên cả iOS + Android"*, and this is one layout with one set of
+  numbers — so a measurement on the emulator is a measurement of the iOS build's
+  arithmetic too. Pixels would not have been: on iOS 26 these two panes are
+  drawn by SwiftUI from rectangles Kotlin computed.
+
+### What it is not: the two panes are different heights, deliberately
+
+The same measurement showed the clock pill at 32.4dp against the zoom's 48.0,
+and that is not a fault to even out. The zoom is a **button** and 48dp of height
+is what keeps a near miss unlikely — the same rule the miniplayer's own buttons
+follow, and the reason `ControlButton` grew sideways rather than downward when
+the gear was reported as hard to hit. The clock is a readout and has no target
+to protect. Evening them would either shrink a control below the platforms'
+minimum or grow a readout into the picture.
