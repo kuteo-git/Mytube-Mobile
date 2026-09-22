@@ -4378,8 +4378,8 @@ reason this entry is mostly about Android.
   a channel draw, and on this screen it was in the wrong place: the thumb that
   opened search is at the bottom of the phone, the field is at the bottom of the
   phone, and the one control for leaving was at the top.
-- **The way out is an X in the row.** Its own circle, leading the row, and it
-  closes the **screen**; the mark inside the pill still empties the query. Two
+- **The way out is an X in the row**, on the right, where the reference puts
+  it. Its own circle, and it closes the **screen**; the mark inside the pill still empties the query. Two
   actions must not share a surface, so they do not share a circle either — and
   §7 made the difference explicit the moment it was needed: `strings.clear`
   had to be added beside `strings.close`, in both languages, or nothing

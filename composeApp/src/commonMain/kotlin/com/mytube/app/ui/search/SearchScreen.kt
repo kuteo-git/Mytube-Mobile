@@ -589,28 +589,6 @@ private fun SearchField(
             .padding(horizontal = GLASS_MARGIN, vertical = SEARCH_FIELD_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // **The way out, and it leads the row.**
-        //
-        // Its own circle rather than a glyph inside the field: this closes the
-        // screen, and the clear button inside the pill empties the query. Two
-        // marks that do different things must not share a surface — the Like
-        // button's lesson about states applies to actions too.
-        Box(
-            Modifier
-                .size(SEARCH_FIELD_HEIGHT)
-                .pressableLiquidGlass(GLASS_SHAPE, onClick = onClose),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = CloseIcon,
-                contentDescription = strings.close,
-                tint = Tokens.text,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-
-        Spacer(Modifier.width(Space.sm))
-
         Row(
             Modifier
                 .weight(1f)
@@ -671,6 +649,32 @@ private fun SearchField(
                 modifier = Modifier.size(20.dp).pressable(onClick = onClear),
             )
         }
+        }
+
+        Spacer(Modifier.width(Space.sm))
+
+        // **The way out, and it closes the row.**
+        //
+        // Its own circle rather than a glyph inside the field: this closes the
+        // screen, and the clear button inside the pill empties the query. Two
+        // marks that do different things must not share a surface — the Like
+        // button's lesson about states applies to actions too.
+        //
+        // On the **right**, where the reference puts it. It was written on the
+        // left first, following the request's own words over the screenshot
+        // attached to it, and the screenshot was the one that meant it.
+        Box(
+            Modifier
+                .size(SEARCH_FIELD_HEIGHT)
+                .pressableLiquidGlass(GLASS_SHAPE, onClick = onClose),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = CloseIcon,
+                contentDescription = strings.close,
+                tint = Tokens.text,
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
