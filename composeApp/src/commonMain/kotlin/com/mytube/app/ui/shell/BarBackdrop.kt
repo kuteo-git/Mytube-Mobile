@@ -256,12 +256,27 @@ val LocalBackdrop = compositionLocalOf<LayerBackdrop?> { null }
  * It is also cheaper by a whole `RuntimeShader`, which matters here for a
  * reason the panes do not have: this one is the width and height of the
  * screen and it is redrawn on every frame of the drag.
+ *
+ * # The tone is the sheet's, and there is no third number any more
+ *
+ * There was a `TINT_PAGE` at 0.86 for a day. It is gone: what was asked for is
+ * *"tăng cái tint lên hay gì đó cho màn watch như cái bottomsheet, tao muốn
+ * thấy mờ mờ như bottonsheet"* — the page should read like the sheet, and the
+ * sheet's tone is [TINT_MODAL]. A number named after the same look as another
+ * number, differing by four hundredths, is two places for one decision.
+ *
+ * It is worth saying why 0.95 is *more* see-through here than 0.90 sounded:
+ * the sheet reads as glass because of what is behind it, not because of its
+ * tint. It floats over the watch page, which is nearly black, so its own rows
+ * win easily and the shapes underneath still show. This ground floats over the
+ * *feed*, whose thumbnails are bright — and at 0.90 the two competed, which is
+ * a muddier picture than a darker one.
  */
 @Composable
 fun PageBackdrop(
     modifier: Modifier = Modifier,
     backdrop: Backdrop?,
-    tint: Float = TINT_PAGE,
+    tint: Float = TINT_MODAL,
     /**
      * How solid the ground is, read at **draw** time.
      *
@@ -350,27 +365,6 @@ const val TINT_GLASS = 0.75f
  */
 const val TINT_MODAL = 0.95f
 
-/**
- * And the tone a whole *page* of glass takes.
- *
- * The watch screen's ground, which is the only page in this app made of the
- * material rather than merely floating panes of it. It sits between the other
- * two on purpose, and neither of them is right for it:
- *
- * - [TINT_GLASS] is an edge content passes *under*, and at 0.75 across a whole
- *   screen the feed behind it is not a hint of a layer underneath, it is a
- *   second page competing with the title, the pills and the comments on top of
- *   it. Reported as wanting it darker, and that is what this answers.
- * - [TINT_MODAL] is a surface somebody stops at and answers, and at 0.95
- *   nothing shows through at all — which is a solid page with an expensive way
- *   of being black, and the opposite of what was asked for.
- *
- * So: dark enough that the page's own text owns the screen, light enough that
- * the tab underneath is still visibly there. A third number is what "one
- * number, and it has to stay one" was never about — that rule is for panes read
- * against each other along a shared edge, and this one shares none.
- */
-const val TINT_PAGE = 0.90f
 
 /**
  * How far the material blurs, everywhere it is used.

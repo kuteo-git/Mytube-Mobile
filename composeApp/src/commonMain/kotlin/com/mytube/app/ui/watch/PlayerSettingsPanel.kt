@@ -35,6 +35,7 @@ import com.mytube.app.ui.home.Space
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.unit.Dp
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.shell.PRESS_INSET
 import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.GlassSheet
 import com.kyant.backdrop.backdrops.LayerBackdrop
@@ -146,7 +147,15 @@ fun BoxScope.PlayerSettingsPanel(
                 )
                 Spacer(Modifier.height(Space.sm))
                 Row(
-                    Modifier.horizontalScroll(rememberScrollState()),
+                    // `horizontalScroll` clips at its viewport, and this row's
+                    // content began at x=0 — so "Off" bloomed straight into the
+                    // clip and came back with a slice off its left end.
+                    // Reported that way, and it is the third row in this app to
+                    // have it after `ChipRow` and the up-next rail; `ScrollRoom`
+                    // in the guard is what stops a fourth.
+                    Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = PRESS_INSET),
                     horizontalArrangement = Arrangement.spacedBy(Space.sm),
                 ) {
                     TrackChip(strings.off, subtitleLanguage.isEmpty()) { onSelectSubtitles("") }

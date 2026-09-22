@@ -4093,3 +4093,41 @@ the whole reason `BarsVisibility.reveal()` exists.
 - **`tabPress` is a named pure function**, like `barTravel` beside it: three
   outcomes, one per state the bar can be in when the press lands. The test was
   red on exactly the two reported cases before the rule changed.
+
+
+### The third row that clipped a bloom, and the guard that ends it (2026-09-22)
+
+*"2 chips Off | EN (auto) ở Player settings đang bị crop"* — on press, and the
+same fault as `ChipRow` and the up-next rail: `PlayerSettingsPanel`'s subtitle
+row is a `horizontalScroll` whose content began at x=0, so "Off" bloomed into
+the clip and came back with a slice off its left end.
+
+Three times is enough, so `ScrollRoomGuardTest` makes it a build failure: **a
+horizontally scrolling row in `ui/` carries `padding` or `contentPadding`,
+whatever is inside it.** Deliberately blunter than "…if it holds something
+pressable": a chip is its own composable defined elsewhere in the file, so no
+window around the row can see the press, and a guard that cannot see the thing
+it is about is a guard that passes for the wrong reason. Padding on a skeleton
+row costs nothing.
+
+**Proven to fail, and the first failure was the guard's own bug.** It flagged
+`ChipRow`, whose `contentPadding` sits eleven lines below the `LazyRow(` under a
+comment explaining what it is for. Comments are dropped from the window now, and
+the window counts lines of code.
+
+Measured after: holding "Off" changes a 157x125 box starting at x=68, outside
+the chip's own left edge of 84 — it grows outward instead of being cut.
+
+### And the page takes the sheet's tint (2026-09-22)
+
+*"tăng cái tint lên hay gì đó cho màn watch như cái bottomsheet, tao muốn thấy
+mờ mờ như bottonsheet"*. `TINT_PAGE` lasted one day and is gone: a number named
+after the same look as another number, four hundredths apart, is two places for
+one decision. The ground is [TINT_MODAL] now.
+
+Worth writing down because it sounds backwards — 0.95 shows *more* through than
+0.90 seemed to. The sheet reads as glass because of what is behind it, not
+because of its tint: it floats over the watch page, which is nearly black, so
+its own rows win easily and the shapes underneath still show. This ground floats
+over the **feed**, whose thumbnails are bright, and at 0.90 the two competed —
+which is a muddier picture than a darker one.
