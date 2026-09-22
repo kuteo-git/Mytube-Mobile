@@ -4318,6 +4318,25 @@ has targets *inside* it: "…more" opens it, "Show less" closes it, and the box
 itself takes clicks only while closed. `LocalPressHost` is provided around the
 content so whichever of the three is hit, the pane is what moves.
 
+**And then the pane bloomed into a clip, which I called a success.** The squash
+went *inside* `animateContentSize`, and that modifier reports an animated size
+and clips its content to it — so the pane grew into a box that would not let it
+out and its four rounded corners came back flat. It is outside it now.
+
+The finding is how that shipped. `press.sh` measures a **bounding box**, and a
+bounding box is the same whether the shape inside it is a rounded rectangle or
+one with its corners sliced off. It reported the pane growing, which was true,
+and I read that as correct. The person who found it was looking at the very
+screenshot I had attached to say it was fixed.
+
+A numeric check was attempted and abandoned rather than left half-working: a
+brightness threshold over the pane's corner is fighting a *textured* page —
+the glass ground samples the feed — and two attempts found the pane's top edge
+on the window's first row. **For a question about shape, the instrument is a
+magnified before-and-after crop**, and that is what settled it: at rest a
+rounded corner in both builds, and under a finger square in the old one and
+round in the new.
+
 **This is the fourth place the same seam has failed**, after the tab bar, the
 like pill and the player's controls — and the second time `pressableGlassControl`'s
 own comment turned out to be about it. That comment warned of a control getting

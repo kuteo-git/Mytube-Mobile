@@ -94,6 +94,16 @@ fun DescriptionBox(
             // Before the modifier the box jumped from two lines to twenty in a
             // single frame, which reads as the page having been replaced rather
             // than opened.
+            // **Outside `animateContentSize`, and that order is the fix.**
+            //
+            // Written inside it the bloom was **clipped**: that modifier reports
+            // an animated size and clips its content to it, so a squash beneath
+            // it grew the pane into a box that would not let it out and the four
+            // rounded corners came back flat. Reported off a screenshot in this
+            // very session, after I had looked at the same picture and called it
+            // a success — `press.sh` measures a bounding box, and a bounding box
+            // cannot see a missing corner.
+            .pressSquish(pressed)
             .animateContentSize(SECTION_SPRING)
             // **The squash goes outside the material, and the box hosts it.**
             //
@@ -109,7 +119,6 @@ fun DescriptionBox(
             // "Show less" closes it, and the box itself takes clicks only while
             // it is closed. Providing [LocalPressHost] below means whichever of
             // the three is hit, the pane is what moves.
-            .pressSquish(pressed)
             .glassControl(RoundedCornerShape(12.dp), press = pressed)
             .then(
                 if (expanded) {
