@@ -4210,25 +4210,23 @@ finger and not only its size — which, measured off the video, is the louder ha
 of what happens when a thumb lands.
 
 **And then the pill was too much glass to read.** Reported at once: *"cái pill
-cho nó đục đục tí đc ko? do ko nhìn rõ icon + text"*. Two things were wrong and
-only one of them was the tint:
-
-- **`vibrancy` had to go.** It multiplies saturation by 1.5, which is right for
-  a bar you look *through* — it is what stops a blurred thumbnail going grey —
-  and wrong for a small pane you read *on*. Over a bright frame it made the pill
-  the most colourful thing on screen and the word sitting on it lost.
-- **`TINT_MODAL`, not `TINT_GLASS`.** The charter's own rule says which: a bar
-  is an edge content passes under; a surface somebody *reads* takes the darker
-  tone so its own rows win. `TINT_GLASS` was tried first, on the reasonable
-  argument that the pill is a lighter patch of the capsule under it — and over a
-  bright thumbnail a quarter of the feed still came through.
+cho nó đục đục tí đc ko? do ko nhìn rõ icon + text"*.
 
 The pill samples the raw recording rather than the capsule's tinted result, so
-it needs its own tint whatever the capsule wears. Measured after: the rim still
-carries the refracted arc and a colour shift, and a red "Settings" over a filled
-gear reads cleanly. The trade is stated rather than hidden — the body is opaque
-enough to read and the glass is at the edge, which is where the reference's is
-loudest anyway.
+it needs a tint of its own whatever the capsule wears: `TINT_GLASS` under the
+wash, which knocks the sample back to the bar's own level and leaves the pane it
+always was with the refraction added.
+
+**Then it was taken too far, and the how is the lesson.** `TINT_MODAL` with
+`vibrancy` removed went in next — the darker tone a surface somebody *reads*
+takes, and on paper this pane qualifies, since it carries a glyph and a word. On
+screen it read as a hole punched in the bar: the glass was gone and only the rim
+was left. Shown side by side, the first one was chosen.
+
+**Two variables changed in one build**, so the first measurement could not say
+which of them had done what — and the answer turned out to be that neither
+needed doing as hard as both together. The two screenshots settled it in one
+message; the build that produced them could not.
 
 ### The bar tells accessibility which tab is on, which it never did
 

@@ -468,12 +468,7 @@ fun Modifier.selectionLens(
         backdrop = backdrop,
         shape = { shape },
         effects = {
-            // **No `vibrancy` here, and it is the reason the glyph was hard to
-            // read.** That effect multiplies saturation by 1.5, which is right
-            // for a bar you look *through* — it stops a blurred thumbnail going
-            // grey — and wrong for a small pane you read *on*. Over a bright
-            // frame it made the pill the most colourful thing on the screen,
-            // and the word sitting on it lost.
+            vibrancy()
             blur(GLASS_BLUR.toPx())
             // Read at draw time, which is what lets the press animate without
             // recomposing a row that is being dragged across.
@@ -494,16 +489,24 @@ fun Modifier.selectionLens(
         // sitting on top. Reported exactly that way: *"cái pill cho nó đục đục
         // tí đc ko? do ko nhìn rõ icon + text"*.
         //
-        // [TINT_MODAL], not the bars' [TINT_GLASS], and the charter's own rule
-        // says which: a bar is an edge content passes under, and a surface
-        // somebody *reads* takes the darker tone so its own rows win. This pane
-        // carries a glyph and a word. `TINT_GLASS` was tried first, on the
-        // argument that the pill is a lighter patch of the capsule under it —
-        // and over a bright thumbnail a quarter of the feed still came through
-        // and the word lost. The refraction reads at the rim either way, which
-        // is what keeps it glass.
+        // [TINT_GLASS], the tone the capsule under it already wears: knock the
+        // sample back to the bar's own level, then put the wash on top, and
+        // what is left is the pane it always was — with the refraction added
+        // rather than the legibility taken away.
+        //
+        // **`TINT_MODAL` with `vibrancy` removed was tried and was too far.**
+        // That is the darker tone a surface somebody *reads* takes, and on
+        // paper this pane qualifies: it carries a glyph and a word. Put on
+        // screen beside this one it read as a hole punched in the bar — the
+        // glass was gone and only the rim was left. Both were shown side by
+        // side and this is the one that was chosen.
+        //
+        // The honest note is about how it was done rather than which won: the
+        // tint and `vibrancy` were changed in the same build, so the first
+        // measurement could not say which of them had done what. Two variables,
+        // one step.
         onDrawSurface = {
-            drawRect(Tokens.bg.copy(alpha = TINT_MODAL))
+            drawRect(Tokens.bg.copy(alpha = TINT_GLASS))
             drawRect(Tokens.text.copy(alpha = PILL_WASH))
         },
     )
