@@ -1,7 +1,10 @@
 package com.mytube.app.ui
 
+import com.mytube.app.ui.shell.TabDragOutcome
 import com.mytube.app.ui.shell.TabPress
 import com.mytube.app.ui.shell.barTravel
+import com.mytube.app.ui.shell.dragOutcome
+import com.mytube.app.ui.shell.tabAt
 import com.mytube.app.ui.shell.tabPress
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -95,6 +98,56 @@ class BarTravelTest {
         assertEquals(
             TabPress.Switch,
             tabPress(barCollapsed = false, pickedIsCurrent = false),
+        )
+    }
+
+    @Test
+    fun `a finger divides the capsule into equal tabs`() {
+        // 300px across three tabs: 0..99, 100..199, 200..299.
+        assertEquals(0, tabAt(0f, 300f, 3))
+        assertEquals(0, tabAt(99f, 300f, 3))
+        assertEquals(1, tabAt(100f, 300f, 3))
+        assertEquals(1, tabAt(199f, 300f, 3))
+        assertEquals(2, tabAt(200f, 300f, 3))
+        assertEquals(2, tabAt(299f, 300f, 3))
+    }
+
+    @Test
+    fun `sliding off the capsule keeps the outermost tab`() {
+        // Asked for by name: releasing outside the capsule still commits to the
+        // tab the pill is on.
+        assertEquals(0, tabAt(-500f, 300f, 3))
+        assertEquals(2, tabAt(9000f, 300f, 3))
+    }
+
+    @Test
+    fun `an unmeasured capsule cannot be divided`() {
+        assertEquals(0, tabAt(50f, 0f, 3))
+    }
+
+    @Test
+    fun `landing on another tab goes there`() {
+        assertEquals(
+            TabDragOutcome.Switch,
+            dragOutcome(from = 0, landed = 2, leftItsTab = true),
+        )
+    }
+
+    @Test
+    fun `a wobble that never left its tab is still a press`() {
+        assertEquals(
+            TabDragOutcome.Press,
+            dragOutcome(from = 1, landed = 1, leftItsTab = false),
+        )
+    }
+
+    @Test
+    fun `going away and coming back is a cancel, not a press`() {
+        // The distinction the whole gesture turns on: both of these end where
+        // they started.
+        assertEquals(
+            TabDragOutcome.Cancel,
+            dragOutcome(from = 1, landed = 1, leftItsTab = true),
         )
     }
 }

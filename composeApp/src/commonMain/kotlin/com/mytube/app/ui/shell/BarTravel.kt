@@ -110,3 +110,66 @@ fun tabPress(barCollapsed: Boolean, pickedIsCurrent: Boolean): TabPress = when {
     pickedIsCurrent -> TabPress.ScrollToTop
     else -> TabPress.Switch
 }
+
+/**
+ * Which tab a finger at [x] is over.
+ *
+ * The capsule's three items share its width equally, so this is a division —
+ * and it is a named function for the reason its neighbours are: the answer is a
+ * judgement about where a finger is, and nothing in the type system catches an
+ * off-by-one in it. A drag that commits the tab *beside* the one under the thumb
+ * is a bug nobody can see in a screenshot.
+ *
+ * Clamped rather than null at the ends: a finger that slides off the capsule
+ * keeps the outermost tab, which is what was asked for — *release outside the
+ * capsule still commits to the tab the pill is on*.
+ *
+ * @param x from the capsule's left edge, in pixels.
+ * @param width the capsule's own width, in pixels.
+ */
+fun tabAt(x: Float, width: Float, count: Int): Int {
+    if (count <= 0) return 0
+    // A capsule that has not been measured yet cannot be divided. Zero is the
+    // honest answer rather than an infinity.
+    if (width <= 0f) return 0
+    val share = width / count
+    return (x / share).toInt().coerceIn(0, count - 1)
+}
+
+/** What lifting the finger at the end of a drag across the tab bar means. */
+enum class TabDragOutcome {
+    /** Land on a different tab: go there. */
+    Switch,
+
+    /**
+     * The pill never left the tab the finger started on.
+     *
+     * A thumb wobbles, and past the slop threshold Compose calls that a drag.
+     * It is still a press, and treating it otherwise would silently cost
+     * somebody the scroll-to-top they aimed at.
+     */
+    Press,
+
+    /**
+     * Went somewhere and came back.
+     *
+     * Not a press: changing your mind mid-drag is the way out of this gesture,
+     * and scrolling a feed to the top is not what "never mind" should do.
+     */
+    Cancel,
+}
+
+/**
+ * Which of the three a finished drag was.
+ *
+ * @param from the tab the drag began on.
+ * @param landed the tab the pill was standing on when the finger lifted.
+ * @param leftItsTab whether the pill was ever on any other tab during the drag.
+ *   This is what separates [Cancel] from [Press]: both end where they started,
+ *   and only one of them went anywhere.
+ */
+fun dragOutcome(from: Int, landed: Int, leftItsTab: Boolean): TabDragOutcome = when {
+    !leftItsTab -> TabDragOutcome.Press
+    landed != from -> TabDragOutcome.Switch
+    else -> TabDragOutcome.Cancel
+}

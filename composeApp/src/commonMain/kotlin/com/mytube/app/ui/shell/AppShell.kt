@@ -6,6 +6,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -43,6 +46,11 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -393,6 +401,22 @@ private fun BottomBar(
             // and the tabs inside draw a glyph and a word, so a press on a tab
             // could only ever move those. See [LocalPressHost].
             val barPress = remember { MutableInteractionSource() }
+            // One object, three readers: the capsule's squash, the capsule's
+            // own material and the travelling pill. Two `rememberGlassPress`
+            // calls on the same source would animate in step today and be two
+            // places to change tomorrow.
+            val barPressed = rememberGlassPress(barPress)
+
+            // Which tab the pill is standing on. Not the same as `current`
+            // while a finger is dragging across the bar: the pill is a picker
+            // that follows the thumb, and the screen only changes when the
+            // thumb lifts.
+            val currentIndex = Tab.entries.indexOf(current)
+            var dragFrom by remember { mutableStateOf<Int?>(null) }
+            var dragAt by remember { mutableStateOf(currentIndex) }
+            var leftItsTab by remember { mutableStateOf(false) }
+            val shownIndex = if (dragFrom != null) dragAt else currentIndex
+
             Box(
                 Modifier
                     .width(tabsWidth)
@@ -406,9 +430,85 @@ private fun BottomBar(
                     // On each pane, not on the row. The gap between the two
                     // capsules is page, and a tap there belongs to the page.
                     .consumeTaps()
-                    .pressHost(barPress),
+                    .pressSquish(barPressed)
+                    // **Drag across to pick a tab.**
+                    //
+                    // Keyed on the width because the arithmetic that turns an x
+                    // into a tab is a share of it, and on `collapse` because a
+                    // narrowed bar has nowhere to drag to — see the guard on the
+                    // first line.
+                    .pointerInput(tabsWidth, collapse, currentIndex) {
+                        // Collapsed, the capsule is one circle and the other two
+                        // tabs are zero wide. There is nothing to drag *to*, and
+                        // a press there means "open the bar" — `TabPress.Reveal`.
+                        if (collapse > 0f) return@pointerInput
+                        val widthPx = tabsWidth.toPx()
+                        var held: PressInteraction.Press? = null
+
+                        fun release() {
+                            held?.let { barPress.tryEmit(PressInteraction.Release(it)) }
+                            held = null
+                        }
+
+                        detectHorizontalDragGestures(
+                            onDragStart = { offset ->
+                                dragFrom = currentIndex
+                                dragAt = currentIndex
+                                leftItsTab = false
+                                // The capsule has to stay lit for the whole
+                                // drag, and it cannot get that from the tabs:
+                                // a tab's own `clickable` cancels its press the
+                                // moment this recogniser consumes a move. So the
+                                // press is emitted here, into the same source
+                                // the tabs feed, and the capsule cannot tell
+                                // which of them sent it.
+                                held = PressInteraction.Press(offset)
+                                    .also { barPress.tryEmit(it) }
+                            },
+                            onDragEnd = {
+                                release()
+                                val from = dragFrom ?: return@detectHorizontalDragGestures
+                                dragFrom = null
+                                when (dragOutcome(from, dragAt, leftItsTab)) {
+                                    // A different tab: go there.
+                                    TabDragOutcome.Switch -> onSelect(Tab.entries[dragAt])
+                                    // A thumb that wobbled past the slop
+                                    // threshold still meant to press. Routed
+                                    // through `onSelect` so it reaches
+                                    // `tabPress` and keeps its scroll-to-top.
+                                    TabDragOutcome.Press -> onSelect(Tab.entries[from])
+                                    // Went somewhere and came back. Changing
+                                    // your mind is the way out of this gesture.
+                                    TabDragOutcome.Cancel -> Unit
+                                }
+                            },
+                            onDragCancel = {
+                                release()
+                                dragFrom = null
+                            },
+                            onHorizontalDrag = { change, _ ->
+                                // The position, not the delta: the tab under the
+                                // thumb is a fact about where the thumb *is*, and
+                                // a sum of deltas drifts.
+                                val at = tabAt(change.position.x, widthPx, Tab.entries.size)
+                                if (at == dragAt) return@detectHorizontalDragGestures
+                                dragAt = at
+                                if (at != dragFrom) leftItsTab = true
+                                // One tick per crossing. `Haptics.kt` draws the
+                                // line: this is a value moving through
+                                // positions, which is what a tick is for, and
+                                // not something arriving, which is the knock.
+                                tick()
+                            },
+                        )
+                    },
             ) {
-                BarBackdrop(Modifier.matchParentSize(), fromTop = false, shape = GLASS_SHAPE)
+                BarBackdrop(
+                    Modifier.matchParentSize(),
+                    fromTop = false,
+                    shape = GLASS_SHAPE,
+                    press = barPressed,
+                )
 
                 // The lit pill, under the selected tab and travelling between
                 // them.
@@ -434,7 +534,14 @@ private fun BottomBar(
                 // right to left, the faster one is always the leading edge.
                 //
                 // At rest the two agree and the pill is one item wide again.
-                val target = Tab.entries.indexOf(current).toFloat()
+                // The pill follows the **thumb**, not the route.
+                //
+                // `shownIndex` is the dragged tab while a finger is across the
+                // bar and the selected one otherwise, so the two springs below
+                // and every `lit` derived from them come along for free — and
+                // that is what makes the glyph fill and the ink cross with the
+                // pill rather than waiting for the release.
+                val target = shownIndex.toFloat()
                 val lead by animateFloatAsState(
                     targetValue = target,
                     animationSpec = spring(
@@ -473,11 +580,11 @@ private fun BottomBar(
                         // read as a second ring nested in the first. The circle
                         // *is* the indicator by then.
                         .alpha(1f - collapse)
-                        // White rather than a second surface token: `surface`
-                        // and `surfaceHover` are six units apart, which is what
-                        // the design system uses for a pointer hovering and what
-                        // the Like button proved is invisible as a state.
-                        .background(Tokens.text.copy(alpha = 0.12f), GLASS_SHAPE),
+                        // Glass that refracts, not a lighter rectangle — see
+                        // [selectionLens]. It shares the capsule's press object,
+                        // so the bubble thickens under the same finger that
+                        // grows the bar.
+                        .selectionLens(GLASS_SHAPE, press = barPressed),
                 )
 
                 Row(
@@ -492,6 +599,7 @@ private fun BottomBar(
                         TabItem(
                             tab = tab,
                             label = strings(tab),
+                            isSelected = selected,
                             // How much of this item the pill is standing on.
                             //
                             // The ink follows the pane rather than the state, so
@@ -578,6 +686,20 @@ private fun TabItem(
     label: String,
     /** 0 for a tab the pill is nowhere near, 1 for the one it is standing on. */
     lit: Float,
+    /**
+     * Whether this is the tab the app is actually on.
+     *
+     * Not the same as [lit], and both are needed: `lit` is where the *pill* is,
+     * which follows a dragging thumb and crosses between two tabs while it
+     * travels, and this is where the app *is*. The ink and the glyph follow the
+     * pill because that is what a picker looks like; a screen reader has to be
+     * told the other thing.
+     *
+     * The bar said nothing about this until a driven test needed to know which
+     * tab was selected and found there was no way to ask — which is the same
+     * gap a person using TalkBack or VoiceOver had.
+     */
+    isSelected: Boolean,
     /** How far the bar has narrowed — see [BottomBar]'s `collapse`. */
     collapse: Float,
     /** The share of the capsule this item has at this point in the movement. */
@@ -595,6 +717,39 @@ private fun TabItem(
     val source = LocalPressHost.current ?: remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
+            // **The bar says which tab is on, which it did not before.**
+            //
+            // A tab is one thing a screen reader should land on and hear named
+            // — "Home, tab, selected" — and this app told it nothing at all
+            // until a driven test needed to know which tab was selected and
+            // found there was no way to ask. That is the same gap a person
+            // using TalkBack or VoiceOver had.
+            //
+            // Measured with `uiautomator dump` at each step, because none of
+            // this is visible:
+            //
+            //  * unmerged, `selected` reached the platform tree on **no node**;
+            //  * merged, it arrives — but Compose emits the flag and the name
+            //    on **two sibling nodes**, and moving this modifier to either
+            //    end of the chain does not join them. Recorded rather than
+            //    fought: what matters is that both facts are now in the tree.
+            .semantics(mergeDescendants = true) {
+                // `isSelected`, not `selected`: inside this lambda the name
+                // `selected` is the semantics property itself, so
+                // `this.selected = selected` reads the receiver rather than the
+                // parameter — and the flag came out false for the tab that was
+                // plainly on. Measured with `uiautomator dump`.
+                selected = isSelected
+                role = Role.Tab
+                // Named here as well as drawn.
+                //
+                // A merged node inherits no name from a `Text` inside it as far
+                // as the platform tree is concerned — measured, the node
+                // carrying `selected` came out with an empty label while the
+                // word sat on a separate node beside it. So the one element a
+                // reader lands on says which tab it is *and* whether it is on.
+                contentDescription = label
+            }
             // Measured, not intrinsic. The item's width is the caller's share of
             // a capsule that is itself moving, and an item that sized itself
             // would fight it — the glyph would drift as the pane closed rather

@@ -53,10 +53,34 @@ class PressGuardTest {
                 // press, beside one half of the like pill, which did not — and a
                 // file-level check saw the first and passed the second. Fourteen
                 // lines is the longest chain in this app plus room.
-                val from = (index - WINDOW).coerceAtLeast(0)
-                val to = (index + WINDOW).coerceAtMost(lines.lastIndex)
-                val chain = lines.subList(from, to + 1).joinToString("\n")
-                if (!PRESS.containsMatchIn(chain) && !EXEMPT.containsMatchIn(chain)) {
+                // **Comments dropped, and the window counts lines of code.**
+                //
+                // A paragraph explaining a modifier must not change the verdict,
+                // and it did: adding twenty lines of comment above a tab's
+                // `clickable` pushed its `LocalPressHost` out of the window and
+                // this guard failed on a control whose press was perfectly well
+                // hosted. `ScrollRoomGuardTest` was caught by the same thing on
+                // its own first run.
+                val code = lines.withIndex().filterNot { (_, l) ->
+                    val t = l.trim()
+                    t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")
+                }
+                val here = code.indexOfFirst { it.index == index }
+                val from = (here - WINDOW).coerceAtLeast(0)
+                val to = (here + WINDOW).coerceAtMost(code.lastIndex)
+                val chain = code.subList(from, to + 1).joinToString("\n") { it.value }
+                // **The exemption is read from the prose, not the code.**
+                //
+                // `press-guard:` is written in a comment on purpose — the way
+                // out belongs where the exception is. So it is looked for in the
+                // raw lines while the press is looked for in the code, and
+                // dropping comments from both was a fix that broke three
+                // surfaces which had said perfectly clearly why they do not
+                // move.
+                val rawFrom = (index - WINDOW * 2).coerceAtLeast(0)
+                val rawTo = (index + WINDOW * 2).coerceAtMost(lines.lastIndex)
+                val prose = lines.subList(rawFrom, rawTo + 1).joinToString("\n")
+                if (!PRESS.containsMatchIn(chain) && !EXEMPT.containsMatchIn(prose)) {
                     offenders += "${file.name}:${index + 1}  ${line.trim()}"
                 }
             }

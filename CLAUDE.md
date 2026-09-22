@@ -4131,3 +4131,119 @@ because of its tint: it floats over the watch page, which is nearly black, so
 its own rows win easily and the shapes underneath still show. This ground floats
 over the **feed**, whose thumbnails are bright, and at 0.90 the two competed —
 which is a muddier picture than a darker one.
+
+
+## Drag across the tab bar to pick a tab (2026-09-22)
+
+The third of three things asked for against iOS 26's own tab bar, and the only
+one that needed designing rather than fixing. Eleven decisions were settled
+before a line was written, and the one that mattered most was settled by a
+**screen recording of the real thing** — which arrived after the design was
+agreed and reversed part of it.
+
+### What the reference actually does
+
+The video is a 1170x324 strip of a real iOS 26 tab bar, 692 frames. Read frame
+by frame rather than described:
+
+| | |
+|---|---|
+| on touch | the capsule **grows and lights up**, with a prismatic fringe along its curve |
+| dragging | the selected pill is a **bubble**: its rim carries a full spectrum and the smear travels with it |
+| the glyph | **filled** while the pill is on it, **outline** the moment it leaves |
+
+Measured: the capsule's left edge moves 22px at 3x, which is **7.3pt** — close
+enough to this app's existing `PRESS_INSET` of 6dp that no second number was
+invented.
+
+### The rules, and where they live
+
+- **The pill follows the thumb; the screen waits for the release.** This app
+  holds one scroll position per tab and a tab switch rebuilds the content, so a
+  live switch would build Playlists, then Settings, then Playlists again inside
+  one gesture. `shownIndex` is the dragged tab while a finger is down and the
+  selected one otherwise, which is a one-line change: the two springs and every
+  `lit` derived from them come along, and *that* is what makes the glyph fill
+  and the ink cross with the pill rather than after it.
+- **`tabAt` and `dragOutcome` are named pure functions**, beside `barTravel`
+  and `tabPress` and for their reason: nothing in the type system catches an
+  off-by-one in "which tab is under this thumb", and a drag that commits the
+  tab *beside* the one under the finger is invisible in a screenshot. Both were
+  red before they were right — `tabAt` on a finger sliding off the end, and
+  `dragOutcome` on the case the whole gesture turns on.
+- **The three outcomes are not two.** Landing elsewhere is a switch. A thumb
+  that wobbled past the slop threshold and never left its tab is still a
+  **press**, and keeps its scroll-to-top — routed through `onSelect` so it
+  reaches `tabPress`. Going somewhere and coming back is a **cancel**, and
+  cancels nothing else: changing your mind must not scroll a feed to the top.
+  Both of the last two end where they started, and only one of them went
+  anywhere; `leftItsTab` is the whole difference.
+- **Collapsed, the drag does not exist.** The capsule is one circle and the
+  other two tabs are zero wide, so there is nowhere to drag *to* — and a press
+  there already means "open the bar". The recogniser returns before reading
+  anything.
+- **The capsule's press is emitted by the gesture, not inherited.** A tab's own
+  `clickable` cancels its press the moment this recogniser consumes a move, so
+  the bar would have deflated half way through the drag. `PressInteraction` is
+  emitted into the same source the tabs feed, and the capsule cannot tell which
+  of them sent it.
+- **One tick per crossing.** `Haptics.kt` draws that line: a value moving
+  through positions, which is a tick, against something arriving, which is the
+  knock.
+
+### `selectionLens`, and the one place the reference cannot be followed
+
+The pill was `background(Tokens.text at 0.12f)` — a flat wash that moved. It
+samples now, with the `chromaticAberration` the bars already carry and the
+chip's smaller refraction, keeping the wash because that is what says *lit*.
+
+**The glyph does not distort, and cannot.** In the recording it does: the pill
+is a lens over the whole bar. Here the pill samples the layer `AppShell`
+records — the page *behind* the bar — and the tabs are drawn over that, not into
+it. Refracting them would mean recording the bar's own contents and putting a
+consumer inside that recording, which is the Skia stack overflow this charter
+has paid for twice. So the pill bends the feed behind it and the glyph rides on
+top. Said before it was built rather than discovered after.
+
+`BarBackdrop` also takes a press now, so the capsule's *material* answers a
+finger and not only its size — which, measured off the video, is the louder half
+of what happens when a thumb lands.
+
+### The bar tells accessibility which tab is on, which it never did
+
+Found because the loop needed to know which tab was selected and there was no
+way to ask — the same gap a person using TalkBack or VoiceOver had. Measured
+with `uiautomator dump` at each step:
+
+- unmerged, `selected` reached the platform tree on **no node at all**;
+- merged, it arrives — but Compose puts the flag and the name on **two sibling
+  nodes**, and moving the modifier to either end of the chain does not join
+  them. Recorded rather than fought; both facts are in the tree now.
+- `isSelected`, not `selected`, as the parameter name: inside a `semantics`
+  lambda the bare name is the property itself, so `this.selected = selected`
+  reads the receiver rather than the argument.
+
+### Three loops went red for the wrong reason, and that is the lesson
+
+None of these were the app:
+
+1. **The screen-detector looked for `text="Server"`**, a string this app does
+   not contain, and reported "Home?" for a screen that was plainly Settings.
+2. **Content markers cannot answer while the feed is scrolled** — "Continue
+   watching" is off screen, so Home was unidentifiable in exactly the state the
+   cancel case needs. That is what sent me to the semantics above.
+3. **Adjacent tabs share an edge**, and a closed upper bound matched the tab
+   *before* the right one: the loop reported Playlists for a drag that had
+   landed on Settings. Half-open now. The app had been correct the whole time,
+   and one `println` of the drag's own arithmetic said so — `x=688 w=828 at=2`.
+
+And both guards learned the same thing in one sitting: **a comment must not
+change a verdict.** `ScrollRoomGuardTest` failed on `ChipRow`, whose
+`contentPadding` sat eleven lines below the `LazyRow(` under a comment
+explaining it; `PressGuardTest` then failed on a tab whose `LocalPressHost` had
+been pushed out of the window by twenty lines of comment added above it. Both
+count lines of code now — with one asymmetry worth stating: `PressGuardTest`
+reads the **press from the code and the exemption from the prose**, because
+`press-guard:` is deliberately written in a comment where the exception is.
+Dropping comments from both broke three surfaces that had said perfectly clearly
+why they do not move.

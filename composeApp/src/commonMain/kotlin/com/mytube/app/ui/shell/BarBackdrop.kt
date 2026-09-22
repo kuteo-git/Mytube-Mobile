@@ -102,8 +102,18 @@ fun BarBackdrop(
      * shape with nothing to refract.
      */
     shape: CornerBasedShape = RoundedCornerShape(0.dp),
+    /**
+     * How hard the pane is being pressed, or null for one nobody presses.
+     *
+     * The lens deepens with it, which is the half of a press a *sampled* pane
+     * can answer — `pressSquish` grows the node and this bends more of what is
+     * behind it. Measured off iOS 26's own tab bar: what reads loudest when a
+     * finger lands is not that the capsule got bigger, it is that the material
+     * lit up. See [GlassPress].
+     */
+    press: GlassPress? = null,
 ) {
-    GlassBackdrop(modifier, LocalBackdrop.current, fromTop, shape)
+    GlassBackdrop(modifier, LocalBackdrop.current, fromTop, shape, press = press)
 }
 
 /**
@@ -131,6 +141,8 @@ fun GlassBackdrop(
      * showing through them competes with their own rows for the eye.
      */
     tint: Float = TINT_GLASS,
+    /** See [BarBackdrop]'s own parameter. */
+    press: GlassPress? = null,
 ) {
     if (backdrop != null) {
         Box(
@@ -195,9 +207,12 @@ fun GlassBackdrop(
                     // it. 16 is inside a 56dp capsule's 28, and a chip's 8dp
                     // corner is why `liquidGlass` below carries smaller numbers
                     // rather than these.
+                    // Read at draw time, so a press costs a redraw and not a
+                    // recomposition of everything inside the bar.
+                    val pressed = press?.fraction ?: 0f
                     lens(
-                        refractionHeight = 16.dp.toPx(),
-                        refractionAmount = 32.dp.toPx(),
+                        refractionHeight = 16.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
+                        refractionAmount = 32.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
                         depthEffect = true,
                         chromaticAberration = true,
                     )
@@ -401,6 +416,73 @@ val GLASS_BLUR = 8.dp
  */
 val GLASS_MARGIN = 16.dp
 val GLASS_SHAPE = RoundedCornerShape(percent = 50)
+
+/**
+ * How light the selection pill's own wash is.
+ *
+ * White rather than a second surface token: `surface` and `surfaceHover` are
+ * six units apart, which is what the design system uses for a pointer hovering
+ * and what the Like button proved is invisible as a state.
+ */
+private const val PILL_WASH = 0.12f
+
+/**
+ * The travelling selection pill, as a lens.
+ *
+ * # Why the pill is not just a lighter rectangle
+ *
+ * It was `background(Tokens.text at 0.12f)` — a flat wash that moved. Beside
+ * iOS 26's own tab bar, which a screen recording supplied, that is the wrong
+ * material: there the pill is a **bubble**. Its rim carries a full spectrum and
+ * the smear travels with it, which is the thing named in the report —
+ * *"cái capsule nó sẽ phình to ra và có khuếch xạ ánh sáng xung quanh"*.
+ *
+ * So it samples, with the same `chromaticAberration` the bars carry and the
+ * chip's smaller refraction, because the pill is chip-sized rather than
+ * bar-sized. The wash stays: it is what says *lit*, and a lens alone over a
+ * dark feed says nothing.
+ *
+ * # Where the reference cannot be followed, and why
+ *
+ * In the recording the **glyph** distorts as the pill slides over it. It cannot
+ * here. This samples the layer `AppShell` records — the page behind the bar —
+ * and the tabs are drawn over that, not into it. Refracting them would mean
+ * recording the bar's own contents and putting a consumer inside that
+ * recording, which is the Skia stack overflow this charter has now paid for
+ * twice: `SkBlurImageFilter::onGetOutputLayerBounds`, a filter that contains
+ * itself. So the pill bends the feed behind it and the glyph rides on top,
+ * undistorted.
+ *
+ * @param press deepens the lens with the finger, [liquidGlass]'s own gain. The
+ *   capsule and the pill share one press object, so the two halves of one
+ *   movement cannot drift apart.
+ */
+@Composable
+fun Modifier.selectionLens(
+    shape: CornerBasedShape = GLASS_SHAPE,
+    press: GlassPress? = null,
+): Modifier {
+    val backdrop = LocalBackdrop.current
+        ?: return this.background(Tokens.text.copy(alpha = PILL_WASH), shape)
+    return this.drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            vibrancy()
+            blur(GLASS_BLUR.toPx())
+            // Read at draw time, which is what lets the press animate without
+            // recomposing a row that is being dragged across.
+            val pressed = press?.fraction ?: 0f
+            lens(
+                refractionHeight = 8.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
+                refractionAmount = 16.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
+                depthEffect = true,
+                chromaticAberration = true,
+            )
+        },
+        onDrawSurface = { drawRect(Tokens.text.copy(alpha = PILL_WASH)) },
+    )
+}
 
 /**
  * Record this screen, so the glass over it has something to sample.
