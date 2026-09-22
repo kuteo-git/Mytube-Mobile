@@ -4581,3 +4581,30 @@ lifted above it while the bar stays behind the keyboard — so "the lowest one"
 was the miniplayer's, and taking it closed the video and left the loop
 reporting that the query had not survived. The row's is the one sharing the
 field's band of the screen.
+
+
+## Four version numbers, none of them agreeing (2026-09-22)
+
+Found while cutting a tag. There are four places this project says which
+version it is, and they had drifted apart with nothing to notice:
+
+| | |
+|---|---|
+| newest git tag | `v0.1.1` |
+| `versionName` | `0.1.0` |
+| `versionCode` | `1`, never moved |
+| `CFBundleShortVersionString` / `CFBundleVersion` | `1.0` / `1`, never moved |
+
+**Nothing in the app shows the number**, which is why nothing caught it — and
+it had already cost something real earlier the same day: with the iOS string
+stuck at `1.0` there was no way to tell which build was on the phone, so a fix
+measured on the simulator was reported as still broken because the running
+binary was the previous one. The bundle *path* had to be used as a proxy.
+
+The rule now: **one number per release and all four say it.** `versionName` is
+the tag without its `v`; `versionCode` and `CFBundleVersion` are the release
+count, which has to rise for a platform to accept an install over the last one.
+
+Read back rather than assumed: `aapt2 dump badging` reports
+`versionCode='2' versionName='0.1.2'`, and `dumpsys package` agrees after the
+install.

@@ -120,8 +120,20 @@ android {
         applicationId = "com.mytube.app"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        // **One number per release, and all four say it.**
+        //
+        // These had drifted apart: the newest tag was `v0.1.1`, this said
+        // `0.1.0`, `versionCode` had never left 1, and the iOS plist said `1.0`
+        // and `1`. Nothing shows the number in the app, so nothing caught it —
+        // and it cost a round trip: with `CFBundleShortVersionString` stuck at
+        // 1.0 there was no way to tell which build was on the phone, and a fix
+        // measured on the simulator was reported as still broken because the
+        // running binary was the previous one.
+        //
+        // `versionCode` is the release count and has to rise for Android to
+        // accept an install; `versionName` is the tag without its `v`.
+        versionCode = 2
+        versionName = "0.1.2"
     }
 
     signingConfigs {
