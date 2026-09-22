@@ -427,6 +427,26 @@ fun App(
              * collapse a video, and three of them would have forgotten the
              * reveal. `openChannel` is here for that reason too.
              */
+            // **Changing screens puts the bars back.**
+            //
+            // The narrowed capsule exists to open a berth in the *tab bar* for
+            // the miniplayer to walk into, and there is no tab bar on a channel,
+            // a playlist or search. The player kept the narrowed geometry there
+            // anyway — it reads the same `collapse` — so it sat on those pages
+            // as a half-width bar with nothing beside it. Reported that way, with
+            // the second half of the request being the part that decides where
+            // this goes: *"nếu quay về lại home vẫn expand"*.
+            //
+            // So it is the **bars** that are put back rather than `collapse`
+            // being forced to zero off Home: forcing it would leave `hidden`
+            // still true underneath, and coming back to Home would snap the
+            // capsule shut again. Revealing means the state is genuinely open,
+            // and the next scroll is what closes it.
+            //
+            // Keyed on the route, so no call site has to remember — and four of
+            // them would have.
+            LaunchedEffect(route) { bars.reveal() }
+
             fun collapseWatch() {
                 val open = watching ?: return
                 bars.reveal()

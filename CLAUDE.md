@@ -4426,3 +4426,66 @@ sent me chasing a floating row that was a measurement artefact.
   on by a few grey levels. Recorded so nobody builds it a third time — for this
   screen the honest instruments are Compose's own coordinates and a marker
   colour.
+
+
+## Three about the search screen's bottom row (2026-09-22)
+
+Asked for after the row moved down there, and the first one is a reversal
+inside the same message: the miniplayer had been excluded from search
+altogether and then kept.
+
+### The miniplayer arrived narrowed on screens with no tab bar
+
+The narrowed capsule exists to open a berth **in the tab bar** for the player to
+walk into, and there is no tab bar on a channel, a playlist or search. The
+player read the same `collapse` anyway, so on those pages it sat as a
+half-width bar with nothing beside it.
+
+The fix is to put the **bars** back rather than force `collapse` to zero off
+Home, and the second half of the request is what decides that: *"nếu quay về
+lại home vẫn expand"*. Forcing the fraction would leave `hidden` still set
+underneath, so returning to Home would snap the capsule shut again. Revealing
+means the state is genuinely open and the next scroll is what closes it.
+`LaunchedEffect(route) { bars.reveal() }` — one place, where four call sites
+would each have had to remember.
+
+### The keyboard could not be dismissed before anything was typed
+
+It watched `results.isScrollInProgress`, which is a fact about the **results
+list** — and on the screen's opening state there is no list, so a drag did
+nothing. Reported with the miniplayer as the distinguishing detail; the
+miniplayer was a coincidence and the results were the difference.
+
+`hideKeyboardOnDrag` is an **observer on the root**: it reads the `Initial`
+pointer pass and consumes nothing, so the list underneath still gets every
+pixel. That is the shape the overflow menu's dismiss already established here —
+*one is a lid, the other a doorbell* — and it fires once per gesture, because
+what the caller needs to know is that a drag started.
+
+### The row is the miniplayer's height
+
+`Size.topBar`, not 48dp. The old number came with a good argument — this is the
+one control the screen exists for, and a chip's 40 is sized for a row of chips —
+and 56 serves that argument better. The real reason is the one the tab bar and
+the miniplayer already share: two floating panes stacked up the same edge of the
+same screen, and eight units between two of those is the seam this app has
+unified twice, once in tint and once in height.
+
+### Four detectors for one height, and the reason none worked
+
+Worth more than the change. The row's pill **is not clickable** — only the
+`BasicTextField` inside it is — so its height does not appear in the clickable
+tree at all, and four attempts went looking for it there:
+
+| | |
+|---|---|
+| two shell versions | returned an empty string; the loop went RED on its own arithmetic |
+| a python version | found a 126px square and called the row 48dp — that node was the **miniplayer's own X button**, which is 48dp square and sits above the row |
+| the same, filtered to "below the capsule" | found nothing |
+
+"The square one" was not a unique description until "below the capsule" was
+added, and by then the thing being described was not in the tree. The height is
+answered by a crop of the row, where the two capsules' edges are flush, and by
+both being laid out from one constant. **A check that keeps failing for its own
+reasons is worse than no check**, so it was removed from the loop and the reason
+written where it was.

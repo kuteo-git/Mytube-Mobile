@@ -43,6 +43,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -199,7 +202,33 @@ fun SearchContent(
         // never an inert box behind the one being typed into. The button is now
         // a capsule beside the tabs, and the field is where the thumb that
         // pressed it already is.
-        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                // **The keyboard leaves on any drag, not only on a list's.**
+                //
+                // It comes up on arrival — somebody who pressed a search box
+                // meant to type — and it has to leave on the first sign that
+                // typing is over. Dragging is that sign: half the screen is
+                // keyboard, and a reader pulling the page upward is reading.
+                //
+                // It used to watch `results.isScrollInProgress`, which is a
+                // fact about the **results list**, and before anybody has
+                // typed there is no list to scroll — so on the screen's opening
+                // state the keyboard could not be dismissed at all. Reported
+                // exactly that way, with the miniplayer as the distinguishing
+                // detail; the miniplayer was a coincidence, the results were
+                // the difference.
+                //
+                // An observer, not a gesture. It reads the **Initial** pass and
+                // consumes nothing, so the list underneath still scrolls — the
+                // charter's own words for this shape, learned from the overflow
+                // menu's dismiss: *one is a lid, the other a doorbell*.
+                .hideKeyboardOnDrag {
+                    keyboard?.hide()
+                    focus.clearFocus()
+                },
+        ) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -225,21 +254,6 @@ fun SearchContent(
             // passing behind the glass.
             val padding = searchContentPadding()
             val results = rememberLazyListState()
-
-            // The keyboard goes away the moment the list moves.
-            //
-            // It comes up on arrival — somebody who pressed a search box meant
-            // to type — and it has to leave on the first sign that typing is
-            // over. Scrolling is that sign: half the screen is keyboard, and a
-            // reader dragging results upward is reading, not typing. Dismissing
-            // on scroll rather than on a tap outside, because on this screen a
-            // tap outside is a tap on a result, which navigates away anyway.
-            LaunchedEffect(results.isScrollInProgress) {
-                if (results.isScrollInProgress) {
-                    keyboard?.hide()
-                    focus.clearFocus()
-                }
-            }
 
             // Asking for a larger upstream page as the bottom comes near.
             //
@@ -516,8 +530,20 @@ private fun searchContentPadding(): PaddingValues {
  * own padding, since a phone with buttons reports zero for it and a hard-coded
  * 34dp would be an iPhone's home indicator drawn on a phone that has none.
  */
-/** The pill and the close circle are both this tall. */
-private val SEARCH_FIELD_HEIGHT = 48.dp
+/**
+ * The pill and the close circle are both this tall.
+ *
+ * [Size.topBar], which is the miniplayer's height and the tab bar's — asked for
+ * by name, and the right answer for a reason those two already share: the bar
+ * and this row are two floating panes stacked up the same edge of the same
+ * screen, and eight units between two of those is the seam this app has
+ * unified twice before, once in tint and once in height.
+ *
+ * It was 48dp on the argument that this is the one control the screen exists
+ * for and a chip's 40 is sized for a row of chips. That argument is intact and
+ * 56 serves it better.
+ */
+private val SEARCH_FIELD_HEIGHT = Size.topBar
 
 /**
  * Air above the keyboard, and below the row when there is none.
@@ -592,10 +618,6 @@ private fun SearchField(
         Row(
             Modifier
                 .weight(1f)
-                // 48dp, not the 40dp a chip is. This is the one control the
-                // screen exists for and it is the last thing a thumb reaches on
-                // the way down the phone; a chip's height is sized for a row of
-                // them.
                 .height(SEARCH_FIELD_HEIGHT)
                 // The same material as the chips and the bars, and for the same
                 // reason: it floats over a page, outside the layer the screen
@@ -788,5 +810,37 @@ private fun SearchEmptyPreview() = preview(SearchState.Ready("zzz", emptyList())
 private fun SearchVietnamesePreview() {
     CompositionLocalProvider(LocalStrings provides VietnameseStrings) {
         preview(SearchState.Idle, "")
+    }
+}
+
+/**
+ * Report a drag that has passed the touch slop, and consume nothing.
+ *
+ * On the root of a screen this is how something can react to *any* scroll,
+ * including one on content that is not scrollable and therefore has no scroll
+ * state to watch. `awaitPointerEvent(PointerEventPass.Initial)` sees the event
+ * before the children do and leaves it untouched, so a list below still gets
+ * every pixel of it.
+ *
+ * One report per gesture: what the caller wants to know is that a drag has
+ * started, and firing on every move would hide a keyboard that is already
+ * hidden sixty times a second.
+ */
+private fun Modifier.hideKeyboardOnDrag(onDrag: () -> Unit): Modifier = this.pointerInput(Unit) {
+    val slop = viewConfiguration.touchSlop
+    awaitPointerEventScope {
+        while (true) {
+            awaitPointerEvent(PointerEventPass.Initial)
+            var travelled = 0f
+            var told = false
+            while (currentEvent.changes.any { it.pressed }) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                travelled += event.changes.sumOf { it.positionChange().y.toDouble() }.toFloat()
+                if (!told && kotlin.math.abs(travelled) > slop) {
+                    told = true
+                    onDrag()
+                }
+            }
+        }
     }
 }
