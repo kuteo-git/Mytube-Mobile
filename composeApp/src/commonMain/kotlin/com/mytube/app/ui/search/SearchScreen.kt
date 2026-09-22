@@ -1,6 +1,7 @@
 package com.mytube.app.ui.search
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -60,7 +61,6 @@ import com.mytube.app.ui.home.VideoCard
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.playlist.SaveTarget
-import com.mytube.app.ui.shell.DetailBack
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.GLASS_MARGIN
 import com.mytube.app.ui.shell.GLASS_SHAPE
@@ -68,6 +68,7 @@ import com.mytube.app.ui.shell.SearchIcon
 import com.mytube.app.ui.shell.detailContentPadding
 import com.mytube.app.ui.shell.glassSource
 import com.mytube.app.ui.shell.liquidGlass
+import com.mytube.app.ui.shell.pressableLiquidGlass
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
@@ -416,16 +417,24 @@ fun SearchContent(
             }
             }
 
-            // The arrow alone, exactly as the saved shelf draws it. No title
-            // beside it: the field at the bottom of this screen says what the
-            // page is, and a heading reading "Search" over a list of results is
-            // a word nobody needs twice.
-            DetailBack(onBack, strings.back)
-
+            // **No arrow at the top.** The way out is the X beside the field.
+            //
+            // It was `DetailBack`, the same chevron the saved shelf and a channel
+            // draw, and on this screen it is in the wrong place: the thumb that
+            // opened search is at the bottom of the phone, the field is at the
+            // bottom of the phone, and the one control for leaving was at the
+            // top. Asked for against a screenshot of Slack's search, where the
+            // close button sits in the row with the field.
+            //
+            // The charter's rule is still met, and it is the reason this cannot
+            // simply be deleted: Android's system back leaves the app and iOS
+            // has no system back at all, so **the way out has to be on the
+            // screen**. It moved; it did not go.
             SearchField(
                 query = query,
                 onType = onType,
                 onClear = onClear,
+                onClose = onBack,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
@@ -507,13 +516,39 @@ private fun searchContentPadding(): PaddingValues {
  * own padding, since a phone with buttons reports zero for it and a hard-coded
  * 34dp would be an iPhone's home indicator drawn on a phone that has none.
  */
-internal val SEARCH_FIELD_ROW = 48.dp
+/** The pill and the close circle are both this tall. */
+private val SEARCH_FIELD_HEIGHT = 48.dp
+
+/**
+ * Air above the keyboard, and below the row when there is none.
+ *
+ * Asked for against a screenshot: a row welded to the keyboard's edge reads as
+ * having slipped, where the same control inset from all four sides reads as
+ * floating like the app's other panes.
+ *
+ * [GLASS_MARGIN] rather than a number of its own, because it *is* the same
+ * margin — this row already keeps it at the sides, and the whole point is that
+ * the fourth edge stops being the exception. `Space.md` was tried first and
+ * measured 12dp against the sides' 16, which is the kind of four-unit
+ * difference nobody can name and everybody can see.
+ */
+private val SEARCH_FIELD_GAP = GLASS_MARGIN
+
+/**
+ * What the rest of the screen reserves at the bottom for the field.
+ *
+ * The row *and* its air, because that is what the field occupies — a list that
+ * reserved only the pill's own height would end underneath the gap.
+ */
+internal val SEARCH_FIELD_ROW = SEARCH_FIELD_HEIGHT + SEARCH_FIELD_GAP * 2
 
 @Composable
 private fun SearchField(
     query: String,
     onType: (String) -> Unit,
     onClear: () -> Unit,
+    /** Leave the screen. This is the only way out — see the call site. */
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -526,6 +561,7 @@ private fun SearchField(
     // to save them.
     LaunchedEffect(Unit) { focus.requestFocus() }
 
+
     Row(
         modifier
             .fillMaxWidth()
@@ -534,20 +570,62 @@ private fun SearchField(
             // Both, and in this order: the keyboard's inset already contains the
             // navigation one while it is up, and adding them the other way round
             // left a 34dp gap under the field on an iPhone.
+            //
+            // **This only works because the window does not resize.** It was
+            // doing both on Android — the manifest declared no
+            // `windowSoftInputMode`, so the window resized *and* the inset was
+            // dispatched, and the row ended up a few hundred pixels above the
+            // keyboard with the miniplayer in the gap. Measured by giving this
+            // node a red background: rows 834..1508 on a 2400px screen, with the
+            // keyboard's top at 1508 — the parent had already stopped there.
+            // `android:windowSoftInputMode="adjustNothing"` is the other half of
+            // this line, and neither is correct without the other.
             .imePadding()
             .navigationBarsPadding()
-            .padding(horizontal = GLASS_MARGIN)
-            // 48dp, not the 40dp a chip is. This is the one control the screen
-            // exists for and it is the last thing a thumb reaches on the way
-            // down the phone; a chip's height is sized for a row of them.
-            .height(SEARCH_FIELD_ROW)
-            // The same material as the chips and the bars, and for the same
-            // reason: it floats over a page, outside the layer the screen
-            // records, so it can sample rather than paint.
-            .liquidGlass(GLASS_SHAPE)
-            .padding(horizontal = Space.lg),
+            // Air between the row and the keyboard, asked for by name and drawn
+            // from the same margin the row already keeps at its sides — a
+            // control that is inset from three edges and welded to the fourth
+            // reads as having slipped.
+            .padding(horizontal = GLASS_MARGIN, vertical = SEARCH_FIELD_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // **The way out, and it leads the row.**
+        //
+        // Its own circle rather than a glyph inside the field: this closes the
+        // screen, and the clear button inside the pill empties the query. Two
+        // marks that do different things must not share a surface — the Like
+        // button's lesson about states applies to actions too.
+        Box(
+            Modifier
+                .size(SEARCH_FIELD_HEIGHT)
+                .pressableLiquidGlass(GLASS_SHAPE, onClick = onClose),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = CloseIcon,
+                contentDescription = strings.close,
+                tint = Tokens.text,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+
+        Spacer(Modifier.width(Space.sm))
+
+        Row(
+            Modifier
+                .weight(1f)
+                // 48dp, not the 40dp a chip is. This is the one control the
+                // screen exists for and it is the last thing a thumb reaches on
+                // the way down the phone; a chip's height is sized for a row of
+                // them.
+                .height(SEARCH_FIELD_HEIGHT)
+                // The same material as the chips and the bars, and for the same
+                // reason: it floats over a page, outside the layer the screen
+                // records, so it can sample rather than paint.
+                .liquidGlass(GLASS_SHAPE)
+                .padding(horizontal = Space.lg),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         Icon(
             imageVector = SearchIcon,
             contentDescription = null,
@@ -588,10 +666,11 @@ private fun SearchField(
             Spacer(Modifier.width(Space.sm))
             Icon(
                 imageVector = CloseIcon,
-                contentDescription = strings.close,
+                contentDescription = strings.clear,
                 tint = Tokens.text2,
                 modifier = Modifier.size(20.dp).pressable(onClick = onClear),
             )
+        }
         }
     }
 }

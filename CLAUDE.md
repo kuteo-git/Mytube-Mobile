@@ -4364,3 +4364,65 @@ The pattern in all of them is the same: **a signal that is absent in two
 different situations cannot tell them apart.** A missing label, a missing
 heading, a missing node — each time the fix was to assert the *other* half of
 the state as well.
+
+
+## The search row moves to the bottom, and Android was counting the keyboard twice (2026-09-22)
+
+Asked for as a layout change against a screenshot of Slack's search, with
+*"kiểm tra android version luôn nha"* attached — and that instruction is the
+reason this entry is mostly about Android.
+
+### What changed
+
+- **No chevron at the top.** `DetailBack` was the same arrow the saved shelf and
+  a channel draw, and on this screen it was in the wrong place: the thumb that
+  opened search is at the bottom of the phone, the field is at the bottom of the
+  phone, and the one control for leaving was at the top.
+- **The way out is an X in the row.** Its own circle, leading the row, and it
+  closes the **screen**; the mark inside the pill still empties the query. Two
+  actions must not share a surface, so they do not share a circle either — and
+  §7 made the difference explicit the moment it was needed: `strings.clear`
+  had to be added beside `strings.close`, in both languages, or nothing
+  compiled. The charter's rule that **the way out has to be on the screen** —
+  Android's system back leaves the app, iOS has none — is still met. It moved;
+  it did not go.
+- **Air above the keyboard**, `GLASS_MARGIN` rather than a number of its own,
+  because it is the same margin the row already keeps at its sides. `Space.md`
+  was tried first and measured 12dp against the sides' 16 — the kind of
+  four-unit difference nobody can name and everybody can see.
+
+### The Android fault: `adjustNothing` is the other half of `imePadding`
+
+On Android the row floated a few hundred pixels above the keyboard with the
+miniplayer in the gap, where on iOS it sat flush. Both wrong, differently.
+
+`AndroidManifest.xml` declared no `windowSoftInputMode`, so the window resized
+for the keyboard **and** `enableEdgeToEdge` dispatched the inset — the parent
+already stopped at the keyboard's top, and `imePadding()` then lifted the row by
+a keyboard again. `android:windowSoftInputMode="adjustNothing"` makes the window
+keep its size, which is what `imePadding()` assumes, and Android now matches iOS.
+
+**The measurement that settled it was a red background.** Every indirect reading
+disagreed with itself:
+
+| | |
+|---|---|
+| `uiautomator` hint bounds | y=685, then y=964 on the next dump |
+| `positionInRoot` on the row | `1391..2400` — a box whose top is below where the pill was drawn |
+| a red background on that node | rows **834..1508**, and 1508 is the keyboard's top |
+
+The last one is the only one that cannot be wrong about which node it is, and it
+says the parent had already stopped at the keyboard. Two of the three others
+sent me chasing a floating row that was a measurement artefact.
+
+- **`uiautomator` bounds of `[0,0][0,0]` do not mean "not drawn".** The back
+  chevron, the Idle title and its subtitle all reported zero bounds while a
+  screenshot showed all three on screen. I read that as three broken nodes and
+  it was three bad readings.
+- **A pixel-only detector for the pill was built twice and abandoned.** "The
+  first bright row above the keyboard" caught the keyboard's own top edge and
+  reported a 1px gap for a pill 300dp higher; looking for a band 48dp tall then
+  found nothing, because the pill is *glass* and differs from the page it floats
+  on by a few grey levels. Recorded so nobody builds it a third time — for this
+  screen the honest instruments are Compose's own coordinates and a marker
+  colour.

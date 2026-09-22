@@ -119,6 +119,15 @@ interface Strings {
     val upNext: String
     val close: String
 
+    /**
+     * Empty the search box, which is not the same as leaving the screen.
+     *
+     * Two marks on that row do different things — the circle beside the
+     * field closes the screen and this one clears the query — and a reader
+     * who cannot see them has only these words to tell them apart.
+     */
+    val clear: String
+
     // --- channel & search --------------------------------------------------
     /** "videos", after a count. */
     val videos: String
@@ -358,6 +367,7 @@ object EnglishStrings : Strings {
     override val subscribed = "Subscribed"
     override val upNext = "Up next"
     override val close = "Close"
+    override val clear = "Clear"
 
     override val videos = "videos"
     override val searchHint = "Search this library"
@@ -538,6 +548,7 @@ object VietnameseStrings : Strings {
     override val subscribed = "Đã đăng ký"
     override val upNext = "Xem tiếp"
     override val close = "Đóng"
+    override val clear = "Xoá"
 
     override val videos = "video"
     override val searchHint = "Tìm trong thư viện"
