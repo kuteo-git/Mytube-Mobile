@@ -565,8 +565,15 @@ private val SEARCH_FIELD_GAP = GLASS_MARGIN
  *
  * The row *and* its air, because that is what the field occupies — a list that
  * reserved only the pill's own height would end underneath the gap.
+ *
+ * It is also what the **miniplayer** rests on, and deliberately carries no gap
+ * of its own for that: the bar keeps `Size.miniGap` below itself from inside
+ * its own layout, so what this has to be is the distance to the row's *top*
+ * edge and nothing more. Measured before and after: 22dp of seam where the tab
+ * bar shows 6, because this term had 16dp of the row's own bottom margin in it
+ * twice over.
  */
-internal val SEARCH_FIELD_ROW = SEARCH_FIELD_HEIGHT + SEARCH_FIELD_GAP * 2
+internal val SEARCH_FIELD_ROW = SEARCH_FIELD_GAP + SEARCH_FIELD_HEIGHT
 
 @Composable
 private fun SearchField(
@@ -612,7 +619,16 @@ private fun SearchField(
             // from the same margin the row already keeps at its sides — a
             // control that is inset from three edges and welded to the fourth
             // reads as having slipped.
-            .padding(horizontal = GLASS_MARGIN, vertical = SEARCH_FIELD_GAP),
+            // Air below only. The air **above** belongs to the miniplayer.
+            //
+            // `MINI_GAP` is applied inside `MiniPlayer` itself, as part of its
+            // own bottom padding, so the six units between the bar and whatever
+            // is under it travel with the bar to every screen. Adding them here
+            // as well was tried and is a double count — the same shape as the
+            // keyboard being inset twice on this very screen, and caught before
+            // it shipped only because the constant was read rather than assumed.
+            .padding(horizontal = GLASS_MARGIN)
+            .padding(bottom = SEARCH_FIELD_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(

@@ -4522,3 +4522,23 @@ and `tabAt` reached, each after the same kind of drift.
 Measured by holding a drag at its end with `input motionevent` and looking at
 where the picture sits: inside the bar's round window on search, and inside it
 on Home, which is the regression that mattered.
+
+
+### The miniplayer's gap belongs to the miniplayer (2026-09-22)
+
+*"khoảng cách mini player vs search bar như khoảng cách nó với bottom bar luôn
+nha."* It was 22dp on search where the tab bar shows 6.
+
+`MINI_GAP` is applied **inside** `MiniPlayer`, as part of its own bottom
+padding, so the six units between the bar and whatever is under it travel with
+the bar to every screen. What the search row's reservation has to be is
+therefore the distance to the row's *top* edge and nothing more:
+`SEARCH_FIELD_GAP + SEARCH_FIELD_HEIGHT`. The row itself pads only downward,
+against the keyboard.
+
+**The first version added `Size.miniGap` to that sum and was a double count** —
+caught before it shipped, and only because the constant was read rather than
+assumed. That is the third double-counted inset on this one screen in a day,
+after the keyboard being both resized and inset, and the field row being in the
+padding but not the landing point. A number that is already applied somewhere
+is the hardest kind to see.
