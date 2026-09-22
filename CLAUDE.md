@@ -4542,3 +4542,42 @@ assumed. That is the third double-counted inset on this one screen in a day,
 after the keyboard being both resized and inset, and the field row being in the
 padding but not the landing point. A number that is already applied somewhere
 is the hardest kind to see.
+
+
+### The caret came back to the front of a surviving query (2026-09-22)
+
+*"bấm search gõ text, xong bấm close, rồi bấm search quay lại, cái dấu nháy nó
+trỏ ở đầu text search thay vì sau text."*
+
+A `String`-valued `BasicTextField` focuses at position **zero**. The query
+survives the close — the ViewModel holds it — so reopening put the cursor in
+front of it and the next letter landed at the front.
+
+**This charter already recorded the same fault, in the rename alert**, where
+"test" became "xtest", and the fix there was a `TextFieldValue` overload on
+`GlassTextField`. The lesson was encoded in the design system's field, and this
+row does not use it: it is a pill with a magnifier and a clear button in it, so
+it drives `BasicTextField` directly. That is how a lesson gets paid for twice —
+and the general form is worth keeping: **a fix that lives in a component is only
+as wide as that component's callers.**
+
+- **The caller still owns the text; the row owns the caret.** Synced from a
+  `LaunchedEffect` rather than during composition, and only when the two differ
+  — typing updates the local value first and the query follows, so the common
+  case does nothing.
+- **Not `remember(query)`.** That is the obvious one-liner and it drags the
+  caret to the end on every keystroke, which makes it impossible to type in the
+  middle of a word. Checked rather than argued: tapping between the `o` and the
+  `n` of "iphone" and typing produced `iphoZne`.
+
+The loop reads a **typed character's position**, not the caret's pixels: type
+one letter and read the field back, where the start gives `xiphone` and the end
+gives `iphonex`. A cursor is a few pixels wide and blinks; the text it produces
+is unambiguous.
+
+Its own first version tapped the wrong X. Both the search row's close and the
+miniplayer's carry `content-desc="Close"`, and with the keyboard up the row is
+lifted above it while the bar stays behind the keyboard — so "the lowest one"
+was the miniplayer's, and taking it closed the video and left the loop
+reporting that the query had not survived. The row's is the one sharing the
+field's band of the screen.

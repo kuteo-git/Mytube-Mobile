@@ -35,6 +35,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -594,6 +598,30 @@ private fun SearchField(
     // to save them.
     LaunchedEffect(Unit) { focus.requestFocus() }
 
+    // **The caret goes to the end of a query that is already there.**
+    //
+    // A `String`-valued `BasicTextField` focuses at position **zero**, so
+    // reopening search over a surviving query put the cursor in front of it and
+    // the next letter landed at the front: measured, "iphone" became "xiphone".
+    //
+    // This charter already recorded the same fault, in the rename alert —
+    // *"'test' became 'xtest'"* — and the fix there was a `TextFieldValue`
+    // overload on `GlassTextField`. The lesson was encoded in the design
+    // system's field and this screen does not use it: the row is a pill with a
+    // magnifier and a clear button in it, so it drives `BasicTextField`
+    // directly. Which is how a lesson gets paid for twice.
+    //
+    // The caller still owns the *text*; this owns where the caret is. Synced
+    // from an effect rather than during composition, and only when the two
+    // differ — typing updates this first and the query follows, so the common
+    // case does nothing. Keyed on the query rather than `remember(query)`,
+    // which would drag the caret to the end on every keystroke and make it
+    // impossible to type in the middle of a word.
+    var value by remember { mutableStateOf(TextFieldValue(query, TextRange(query.length))) }
+    LaunchedEffect(query) {
+        if (query != value.text) value = TextFieldValue(query, TextRange(query.length))
+    }
+
 
     Row(
         modifier
@@ -655,8 +683,11 @@ private fun SearchField(
                 // a container, a label slot and an indicator line that would all
                 // have to be switched off.
                 BasicTextField(
-                    value = query,
-                    onValueChange = onType,
+                    value = value,
+                    onValueChange = {
+                        value = it
+                        onType(it.text)
+                    },
                     singleLine = true,
                     textStyle = TextStyle(color = Tokens.text, fontSize = 14.sp),
                     cursorBrush = SolidColor(Tokens.brand),
