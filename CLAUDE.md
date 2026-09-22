@@ -4209,6 +4209,27 @@ top. Said before it was built rather than discovered after.
 finger and not only its size — which, measured off the video, is the louder half
 of what happens when a thumb lands.
 
+**And then the pill was too much glass to read.** Reported at once: *"cái pill
+cho nó đục đục tí đc ko? do ko nhìn rõ icon + text"*. Two things were wrong and
+only one of them was the tint:
+
+- **`vibrancy` had to go.** It multiplies saturation by 1.5, which is right for
+  a bar you look *through* — it is what stops a blurred thumbnail going grey —
+  and wrong for a small pane you read *on*. Over a bright frame it made the pill
+  the most colourful thing on screen and the word sitting on it lost.
+- **`TINT_MODAL`, not `TINT_GLASS`.** The charter's own rule says which: a bar
+  is an edge content passes under; a surface somebody *reads* takes the darker
+  tone so its own rows win. `TINT_GLASS` was tried first, on the reasonable
+  argument that the pill is a lighter patch of the capsule under it — and over a
+  bright thumbnail a quarter of the feed still came through.
+
+The pill samples the raw recording rather than the capsule's tinted result, so
+it needs its own tint whatever the capsule wears. Measured after: the rim still
+carries the refracted arc and a colour shift, and a red "Settings" over a filled
+gear reads cleanly. The trade is stated rather than hidden — the body is opaque
+enough to read and the glass is at the edge, which is where the reference's is
+loudest anyway.
+
 ### The bar tells accessibility which tab is on, which it never did
 
 Found because the loop needed to know which tab was selected and there was no

@@ -468,7 +468,12 @@ fun Modifier.selectionLens(
         backdrop = backdrop,
         shape = { shape },
         effects = {
-            vibrancy()
+            // **No `vibrancy` here, and it is the reason the glyph was hard to
+            // read.** That effect multiplies saturation by 1.5, which is right
+            // for a bar you look *through* — it stops a blurred thumbnail going
+            // grey — and wrong for a small pane you read *on*. Over a bright
+            // frame it made the pill the most colourful thing on the screen,
+            // and the word sitting on it lost.
             blur(GLASS_BLUR.toPx())
             // Read at draw time, which is what lets the press animate without
             // recomposing a row that is being dragged across.
@@ -480,7 +485,27 @@ fun Modifier.selectionLens(
                 chromaticAberration = true,
             )
         },
-        onDrawSurface = { drawRect(Tokens.text.copy(alpha = PILL_WASH)) },
+        // Two rects, and the order is the whole point.
+        //
+        // The pill is a lighter patch **of the bar**, not a window cut through
+        // it. It samples the same recording the capsule does, which is the raw
+        // feed — so without the first rect the thumbnails passing underneath
+        // arrive at full brightness and compete with the glyph and the word
+        // sitting on top. Reported exactly that way: *"cái pill cho nó đục đục
+        // tí đc ko? do ko nhìn rõ icon + text"*.
+        //
+        // [TINT_MODAL], not the bars' [TINT_GLASS], and the charter's own rule
+        // says which: a bar is an edge content passes under, and a surface
+        // somebody *reads* takes the darker tone so its own rows win. This pane
+        // carries a glyph and a word. `TINT_GLASS` was tried first, on the
+        // argument that the pill is a lighter patch of the capsule under it —
+        // and over a bright thumbnail a quarter of the feed still came through
+        // and the word lost. The refraction reads at the rim either way, which
+        // is what keeps it glass.
+        onDrawSurface = {
+            drawRect(Tokens.bg.copy(alpha = TINT_MODAL))
+            drawRect(Tokens.text.copy(alpha = PILL_WASH))
+        },
     )
 }
 
