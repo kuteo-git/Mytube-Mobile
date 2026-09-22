@@ -4266,3 +4266,82 @@ reads the **press from the code and the exemption from the prose**, because
 `press-guard:` is deliberately written in a comment where the exception is.
 Dropping comments from both broke three surfaces that had said perfectly clearly
 why they do not move.
+
+
+## Three from one round, and two loops that lied (2026-09-22)
+
+### The chip row stays, which it has now been asked both ways
+
+*"cái chips ở màn home mày chặn ko cho nó hide khi scroll nhé"* — and a day
+earlier the opposite, as a bug report that they were **not** hiding. Both are
+reasonable and this is the one that survives contact: on Home the top bar *is*
+the chip row, and the chips are the feed's filter. This charter already records
+why they were pinned into the bar in the first place — *"a filter that scrolls
+away means changing your mind costs a journey back to the top"* — which is an
+argument against hiding them that was sitting there the whole time.
+
+`barTravel.topHidden` is `false` now. **Kept as a field rather than deleted**,
+unlike `bottomHidden`: a rule that has been asked for in both directions inside
+two days is worth being able to state either way, and the test says which way it
+is.
+
+### Collapsing the watch screen reveals the bars
+
+*"ở màn watch bấm hide thì ban đầu nó sẽ nằm lên trên sau đó auto move xuống
+tabbar"* — the miniplayer lands on a whole bar and then the capsule shuts
+underneath it on its own.
+
+The cause is an ordering, not a number. `collapsing` is
+`!barsShowing && playerRestsOnBar`, and while the video is expanded the second
+term is false — so `collapse` is pinned at 0 however far the feed was scrolled.
+Press hide and both terms turn true in the same frame, so the spring runs 0 → 1
+against a picture that has only just arrived. The drag has the same problem one
+level worse: `landingFromBottomPx` is computed from a **whole** bar, so a bar
+that narrows on arrival puts the picture down beside itself.
+
+`collapseWatch()` is the one way to put an open video on the bar, and it
+reveals the bars first. A function rather than four `copy(minimised = true)`
+calls — the back gesture, the chevron, the drag and opening a channel all
+collapse a video, and three of them would have forgotten the reveal.
+`openChannel` exists for that reason too.
+
+### The description grew its text instead of its box
+
+`.glassControl(shape).then(pressable(…))`. Written in that order the squash sits
+**inside** the node that paints the pane, so a press grew the writing and left
+the box where it was. Measured by holding a touch: the changed box was 540x258 —
+the text block — inside a pane 996 wide. Afterwards it starts at the pane's own
+left edge and is 380 tall.
+
+It is `pressableGlassControl` taken apart rather than called, because this box
+has targets *inside* it: "…more" opens it, "Show less" closes it, and the box
+itself takes clicks only while closed. `LocalPressHost` is provided around the
+content so whichever of the three is hit, the pane is what moves.
+
+**This is the fourth place the same seam has failed**, after the tab bar, the
+like pill and the player's controls — and the second time `pressableGlassControl`'s
+own comment turned out to be about it. That comment warned of a control getting
+the material and *no* press; this is the material and the press landing on
+different nodes.
+
+### Both new loops went red while the app was right
+
+Worth more than the fixes.
+
+- **`labels=0` is ambiguous.** The watch layer covers the tab bar, so a chevron
+  tap that missed looks exactly like a bar that collapsed. The loop said RED
+  twice on a build whose own log said `showing=false → true`, which is the
+  reveal working. It proves it left the watch screen now — `content-desc="Like"`
+  gone — and retries the chevron up to three times, finding it in the tree each
+  time rather than assuming a position, because a tap on the picture only
+  *reveals* the controls and they fade.
+- **A fresh launch does not mean nothing is playing.** The playback service
+  survives `am force-stop`, so a miniplayer from the previous run was still on
+  the bar and every scroll collapsed the capsule — which fired the loop's own
+  setup check on a state that was correct. It closes any stale miniplayer first.
+
+That is three loops in two days that were green or red for the wrong reason.
+The pattern in all of them is the same: **a signal that is absent in two
+different situations cannot tell them apart.** A missing label, a missing
+heading, a missing node — each time the fix was to assert the *other* half of
+the state as well.

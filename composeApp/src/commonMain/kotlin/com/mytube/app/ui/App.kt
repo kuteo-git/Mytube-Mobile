@@ -409,6 +409,29 @@ fun App(
             // rather than as a delay.
             val bars = rememberBarsVisible(tabScroll.getValue(tab))
             val barsShowing = bars.showing
+
+            /**
+             * The one way to put an open video down on the bar.
+             *
+             * **It reveals the bars first, and that is the whole function.**
+             * Without it the player lands on a bar that is still hidden-by-
+             * scroll, so `collapsing` turns true in the same frame and the
+             * capsule springs shut *underneath* the picture that has just
+             * arrived — reported as *"ban đầu nó sẽ nằm lên trên sau đó auto
+             * move xuống tabbar"*. The drag's landing point is computed from a
+             * whole bar as well (see `landingFromBottomPx`), so a bar that
+             * narrows on arrival puts the picture down beside itself.
+             *
+             * A function rather than four `copy(minimised = true)` calls: the
+             * back gesture, the chevron, the drag and opening a channel all
+             * collapse a video, and three of them would have forgotten the
+             * reveal. `openChannel` is here for that reason too.
+             */
+            fun collapseWatch() {
+                val open = watching ?: return
+                bars.reveal()
+                watching = open.copy(minimised = true)
+            }
             // Two answers to "get out of the way", and which one applies is
             // decided by whether there is anything to keep on screen.
             //
@@ -605,8 +628,7 @@ fun App(
                 when {
                     // Expanded video: collapse it rather than close it. The
                     // sound carries on, which is what the drag down does too.
-                    session != null && !session.minimised ->
-                        watching = session.copy(minimised = true)
+                    session != null && !session.minimised -> collapseWatch()
 
                     // A channel, which is reached from five different places.
                     route is Route.Channel -> route = channelFrom
@@ -1331,7 +1353,7 @@ fun App(
                             // and opening a channel also collapse the video, and
                             // neither is a thing landing anywhere.
                             knock()
-                            watching = session.copy(minimised = true)
+                            collapseWatch()
                         },
                         // Exactly where the miniplayer's own bar will be — the
                         // same three terms its padding and its translation are
@@ -1347,7 +1369,7 @@ fun App(
                         WatchScreen(
                             viewModel = watch,
                             mediaBaseUrl = baseUrl,
-                            onBack = { watching = session.copy(minimised = true) },
+                            onBack = { collapseWatch() },
                             // Picked from the rail: the same sitting, resumed
                             // rather than restarted.
                             onOpenVideo = {
@@ -1389,7 +1411,7 @@ fun App(
                                 // The video keeps playing, collapsed, so opening
                                 // a channel from the watch screen does not end
                                 // what somebody was listening to.
-                                watching = session.copy(minimised = true)
+                                collapseWatch()
                                 openChannel(it)
                             },
                             onSaveToPlaylist = { saved ->

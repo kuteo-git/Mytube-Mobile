@@ -30,6 +30,15 @@ class BarTravelTest {
     }
 
     @Test
+    fun `the chip row never leaves, whatever the scroll says`() {
+        for (showing in listOf(true, false)) {
+            for (resting in listOf(true, false)) {
+                assertFalse(barTravel(showing, resting).topHidden, "showing=$showing resting=$resting")
+            }
+        }
+    }
+
+    @Test
     fun `at the top nothing moves even with a player on the bar`() {
         assertEquals(
             barTravel(barsShowing = true, playerRestsOnBar = false),
@@ -38,18 +47,19 @@ class BarTravelTest {
     }
 
     @Test
-    fun `scrolling down with nothing playing takes the chips and leaves the tab bar`() {
+    fun `scrolling down with nothing playing moves neither bar`() {
         val t = barTravel(barsShowing = false, playerRestsOnBar = false)
-        assertTrue(t.topHidden)
-        // The tab bar is how somebody leaves the page, so it stays whole.
+        // The chip row is the feed's filter and stays put; the tab bar is how
+        // somebody leaves the page and stays whole.
+        assertFalse(t.topHidden)
         assertFalse(t.bottomCollapsed)
     }
 
     @Test
-    fun `scrolling down with a player on the bar still takes the top bar away`() {
+    fun `scrolling down with a player on the bar narrows only the tab bar`() {
         val t = barTravel(barsShowing = false, playerRestsOnBar = true)
-        // The regression. Nothing rests on the top bar, so nothing keeps it.
-        assertTrue(t.topHidden)
+        // The chips stay whatever else happens.
+        assertFalse(t.topHidden)
         // And the bottom one narrows to make room for the player.
         assertTrue(t.bottomCollapsed)
     }

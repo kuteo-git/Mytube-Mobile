@@ -4,6 +4,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +31,9 @@ import com.mytube.app.ui.home.formatViews
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.shell.pressable
+import com.mytube.app.ui.shell.rememberGlassPress
+import com.mytube.app.ui.shell.pressSquish
+import com.mytube.app.ui.shell.LocalPressHost
 import com.mytube.app.ui.theme.Tokens
 
 /**
@@ -66,6 +72,9 @@ fun DescriptionBox(
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
+    // One press for the pane and everything inside it.
+    val boxPress = remember { MutableInteractionSource() }
+    val pressed = rememberGlassPress(boxPress)
 
     Column(
         modifier
@@ -86,10 +95,36 @@ fun DescriptionBox(
             // single frame, which reads as the page having been replaced rather
             // than opened.
             .animateContentSize(SECTION_SPRING)
-            .glassControl(RoundedCornerShape(12.dp))
-            .then(if (expanded) Modifier else Modifier.pressable(onClick = onToggleExpanded))
+            // **The squash goes outside the material, and the box hosts it.**
+            //
+            // It was `.glassControl(shape).then(pressable(…))`, and in that
+            // order the squash sits *inside* the node that paints the pane — so
+            // a press grew the writing and left the box exactly where it was.
+            // Reported as the text getting bigger instead of the whole
+            // description. Measured by holding a touch: the changed box was
+            // 540x258, the text block, inside a pane 996 wide.
+            //
+            // This is `pressableGlassControl` taken apart rather than called,
+            // because the box has a target *inside* it: "…more" opens it and
+            // "Show less" closes it, and the box itself takes clicks only while
+            // it is closed. Providing [LocalPressHost] below means whichever of
+            // the three is hit, the pane is what moves.
+            .pressSquish(pressed)
+            .glassControl(RoundedCornerShape(12.dp), press = pressed)
+            .then(
+                if (expanded) {
+                    Modifier
+                } else {
+                    Modifier.clickable(
+                        interactionSource = boxPress,
+                        indication = null,
+                        onClick = onToggleExpanded,
+                    )
+                },
+            )
             .padding(Space.md),
     ) {
+        CompositionLocalProvider(LocalPressHost provides boxPress) {
         Text(
             text = listOfNotNull(
                 formatViews(video.viewCount, strings).takeIf { video.viewCount > 0 },
@@ -126,9 +161,13 @@ fun DescriptionBox(
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
                     .heightIn(min = 48.dp)
+                    // Routed to the box's own press by
+                    // [LocalPressHost], so the pane moves rather
+                    // than this word.
                     .pressable(onClick = onToggleExpanded)
                     .wrapContentHeight(Alignment.CenterVertically),
             )
+        }
         }
     }
 }

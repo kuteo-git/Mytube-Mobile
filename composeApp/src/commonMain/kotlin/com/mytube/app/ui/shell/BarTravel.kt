@@ -48,9 +48,22 @@ data class BarTravel(
  *   lands where a *whole* bar is.
  */
 fun barTravel(barsShowing: Boolean, playerRestsOnBar: Boolean): BarTravel = BarTravel(
-    // The top bar has nothing resting on it and nothing to navigate with, so it
-    // leaves the moment a reader is moving down a feed.
-    topHidden = !barsShowing,
+    // **The top bar stays, and this field has now been both ways.**
+    //
+    // It was `!barsShowing`: nothing rests on the top bar, so nothing kept it,
+    // and it left the moment a reader moved down a feed. Reversed on request —
+    // *"cái chips ở màn home mày chặn ko cho nó hide khi scroll nhé"* — and the
+    // reason it reads wrong is the same one that pinned the tab bar a day
+    // earlier: on Home this bar *is* the chip row, and the chips are the feed's
+    // filter. A filter that scrolls away makes changing your mind cost a
+    // journey back to the top, which is written in this charter as the reason
+    // the row was pinned to the bar in the first place.
+    //
+    // Kept as a field rather than deleted, unlike `bottomHidden`: this one has
+    // been asked for in both directions inside two days, and a tested rule that
+    // can say either is worth more than one that can only say the one asked for
+    // last.
+    topHidden = false,
     // **The tab bar never leaves.** It narrows or it stays whole.
     //
     // It used to slide off the bottom whenever nothing was playing, and that
