@@ -97,6 +97,7 @@ import com.mytube.app.ui.shell.dismissMenuOnOutsidePress
 import com.mytube.app.ui.shell.edgeBack
 import com.mytube.app.ui.shell.TabPress
 import com.mytube.app.ui.shell.barTravel
+import com.mytube.app.ui.shell.miniPlayerBottomInset
 import com.mytube.app.ui.shell.tabPress
 import com.mytube.app.ui.shell.rememberBarsVisible
 import com.mytube.app.ui.shell.rememberLandingKnock
@@ -1105,6 +1106,22 @@ fun App(
             val tabBarReserved =
                 if (route is Route.Home) lerp(Size.topBar, 0.dp, collapse) else 0.dp
             val tabBarReservedPx = with(density) { tabBarReserved.toPx() }
+
+            // Where the miniplayer's row begins, measured up from the bottom.
+            //
+            // The search screen's field owns its bottom edge the way the tab bar
+            // owns Home's, so the term differs by route — and both the bar's
+            // padding and the drag's landing point are built from this one
+            // value. See [miniPlayerBottomInset].
+            val fieldRow = if (route is Route.Search) SEARCH_FIELD_ROW else 0.dp
+            val miniBottomInset = with(density) {
+                miniPlayerBottomInset(
+                    navigationInset = navigationInsetPx,
+                    tabBarReserved = tabBarReservedPx,
+                    fieldRow = fieldRow.toPx(),
+                ).toDp()
+            }
+            val miniBottomInsetPx = with(density) { miniBottomInset.toPx() }
             // What the bar leaves either side of the player once it has
             // narrowed: the tab circle on the left, the search circle on the
             // right, each with the row's own gap beside it.
@@ -1260,17 +1277,10 @@ fun App(
                     // player walks into the berth `BottomBar` opens for it,
                     // rather than appearing there.
                     .padding(start = miniSideInset, end = miniSideInset)
-                    .padding(
-                        bottom = navigationInset + when {
-                            route is Route.Home -> tabBarReserved
-                            // The search screen's field now owns the bottom of
-                            // that screen, the same way the tab bar owns Home's.
-                            // Without this the bar rests across the one control
-                            // that screen exists for.
-                            route is Route.Search -> SEARCH_FIELD_ROW
-                            else -> 0.dp
-                        },
-                    )
+                    // One term, and the drag's landing point reads the same
+                    // one — see [miniPlayerBottomInset] for what it cost when
+                    // only this half knew about the search screen.
+                    .padding(bottom = miniBottomInset)
 
                 if (session.minimised) {
                     MiniPlayer(
@@ -1379,10 +1389,10 @@ fun App(
                         // same three terms its padding and its translation are
                         // built from, so the picture arrives at the bar rather
                         // than past it.
-                        landingFromBottomPx =
-                            (navigationInsetPx + tabBarReservedPx) * (1f - barsHidden) +
-                                miniPlayerPx +
-                                navigationInsetPx * barsHidden,
+                        // The same inset the bar's own padding uses, plus the
+                        // bar's height — which is what makes the picture arrive
+                        // *in* the round window rather than near it.
+                        landingFromBottomPx = miniBottomInsetPx + miniPlayerPx,
                         topInsetPx = statusInsetPx,
                         onDragProgress = { dragProgress = it },
                     ) {

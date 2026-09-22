@@ -4,6 +4,7 @@ import com.mytube.app.ui.shell.TabDragOutcome
 import com.mytube.app.ui.shell.TabPress
 import com.mytube.app.ui.shell.barTravel
 import com.mytube.app.ui.shell.dragOutcome
+import com.mytube.app.ui.shell.miniPlayerBottomInset
 import com.mytube.app.ui.shell.tabAt
 import com.mytube.app.ui.shell.tabPress
 import kotlin.test.Test
@@ -158,6 +159,33 @@ class BarTravelTest {
         assertEquals(
             TabDragOutcome.Cancel,
             dragOutcome(from = 1, landed = 1, leftItsTab = true),
+        )
+    }
+
+    @Test
+    fun `on Home the player rests on the navigation inset and the tab bar`() {
+        assertEquals(
+            63f + 147f,
+            miniPlayerBottomInset(navigationInset = 63f, tabBarReserved = 147f, fieldRow = 0f),
+        )
+    }
+
+    @Test
+    fun `on search the field row takes the tab bar's place`() {
+        // The reported bug: the drag aimed at Home's arithmetic on a screen
+        // whose bottom belongs to the search field, so the picture came down a
+        // whole field row below the bar.
+        assertEquals(
+            63f + 231f,
+            miniPlayerBottomInset(navigationInset = 63f, tabBarReserved = 0f, fieldRow = 231f),
+        )
+    }
+
+    @Test
+    fun `elsewhere it is the navigation inset alone`() {
+        assertEquals(
+            63f,
+            miniPlayerBottomInset(navigationInset = 63f, tabBarReserved = 0f, fieldRow = 0f),
         )
     }
 }

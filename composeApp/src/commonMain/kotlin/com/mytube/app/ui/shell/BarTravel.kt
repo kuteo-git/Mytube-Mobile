@@ -186,3 +186,33 @@ fun dragOutcome(from: Int, landed: Int, leftItsTab: Boolean): TabDragOutcome = w
     landed != from -> TabDragOutcome.Switch
     else -> TabDragOutcome.Cancel
 }
+
+/**
+ * How far up from the bottom of the screen the miniplayer's row starts.
+ *
+ * # Why this is a function and not two expressions
+ *
+ * Two things have to agree about it to the pixel: the **padding** that places
+ * the bar, and the **landing point** the watch layer's drag aims the shrinking
+ * picture at. This charter already said so once — *"they have to land on the
+ * same pixel, because `landingFromBottomPx` is built from those same three
+ * terms"* — and then they drifted anyway, because only one of them learned that
+ * the search screen has no tab bar and a field row instead.
+ *
+ * What that looks like: on search the picture was aimed a whole field row below
+ * the bar and came down straddling the gap between the two. Reported as *"khi
+ * kéo video xuống, video ko rơi đúng vào chỗ mini player"*, and it got worse
+ * the day the field row grew from 48dp to 56 plus its margins.
+ *
+ * @param tabBarReserved how much of the tab bar the player still rests on —
+ *   which goes to nothing as the bar narrows, because by then the player has
+ *   moved down into the row beside the tab circle. Zero where there is no tab
+ *   bar to rest on.
+ * @param fieldRow the search screen's own bottom row, or zero elsewhere. That
+ *   screen's field owns its bottom edge the way the tab bar owns Home's.
+ */
+fun miniPlayerBottomInset(
+    navigationInset: Float,
+    tabBarReserved: Float,
+    fieldRow: Float,
+): Float = navigationInset + tabBarReserved + fieldRow

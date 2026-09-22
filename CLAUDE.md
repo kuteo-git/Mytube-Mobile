@@ -4489,3 +4489,36 @@ answered by a crop of the row, where the two capsules' edges are flush, and by
 both being laid out from one constant. **A check that keeps failing for its own
 reasons is worse than no check**, so it was removed from the loop and the reason
 written where it was.
+
+
+## The drag aimed at Home's arithmetic on a screen with no tab bar (2026-09-22)
+
+*"khi kéo video xuống, video ko rơi đúng vào chỗ mini player"*, recorded on the
+**search** screen: the shrinking picture came down straddling the gap between
+the miniplayer and the search row instead of arriving in the bar's round window.
+
+Two expressions have to agree about one number to the pixel — the **padding**
+that places the bar, and the **landing point** the watch layer aims the picture
+at. This charter said so the day the drag was written: *"they have to land on
+the same pixel, because `landingFromBottomPx` is built from those same three
+terms."* They drifted anyway, because only one of them ever learned that the
+search screen has no tab bar and a field row instead:
+
+| | the bar's padding | the drag's landing |
+|---|---|---|
+| Home | nav inset + tab bar | nav inset + tab bar + bar height |
+| search | nav inset + **field row** | nav inset + bar height |
+
+So on search the picture was aimed a whole field row low — and it got worse the
+same day, when that row grew from 48dp to `Size.topBar` plus its margins, from
+48 to 88dp of error.
+
+`miniPlayerBottomInset` is the one term now, with both call sites reading it and
+a test for its three answers. The rule the comment carried was right and a
+comment was not enough to keep it: **when two places must agree about a number,
+the number is a function.** That is the same conclusion `barTravel`, `tabPress`
+and `tabAt` reached, each after the same kind of drift.
+
+Measured by holding a drag at its end with `input motionevent` and looking at
+where the picture sits: inside the bar's round window on search, and inside it
+on Home, which is the regression that mattered.
