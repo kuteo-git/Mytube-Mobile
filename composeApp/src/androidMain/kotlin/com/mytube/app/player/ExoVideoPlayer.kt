@@ -283,8 +283,27 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
         controller = null
     }
 
-    /** ExoPlayer is given the .vtt files at load and draws the cues itself. */
-    override val rendersSubtitles: Boolean = true
+    /**
+     * **False, although ExoPlayer could.**
+     *
+     * It is given the .vtt files at load and would draw them — and its
+     * `SubtitleView` is switched off in `VideoSurface.android.kt`, because it
+     * and this app's own `SubtitleOverlay` disagreed about where a line breaks
+     * and every cue was drawn twice, stacked.
+     *
+     * Those two changes were made on different days and each was right on its
+     * own. Together they removed **both** ways of putting a caption on screen:
+     * the view that would draw them is hidden, and `loadCues` skips fetching
+     * the file because this said the player had it covered. Reported as
+     * subtitles not appearing at all on Android; measured with the track
+     * selected and the sheet offering it, sixteen seconds with nothing new on
+     * screen.
+     *
+     * So the app draws them on both platforms now, from one Compose overlay,
+     * which is what hiding the view was for. `SubtitleGuardTest` holds the two
+     * files to each other.
+     */
+    override val rendersSubtitles: Boolean = false
 
     override fun showSubtitles(language: String) {
         val player = controller ?: return

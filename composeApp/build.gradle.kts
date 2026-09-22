@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.gradle.api.tasks.PathSensitivity
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -110,6 +111,26 @@ kotlin {
 val keystoreProperties = Properties().apply {
     val file = rootProject.file("keystore.properties")
     if (file.exists()) file.inputStream().use { load(it) }
+}
+
+// The guards read source files at **run** time, so Gradle cannot see what they
+// depend on.
+//
+// `ArchitectureGuardTest`, `UntranslatedGuardTest`, `PressGuardTest`,
+// `ScrollRoomGuardTest` and `SubtitleGuardTest` all scan the tree with
+// `File(...).readText()`. None of that is a declared input, so a change to a
+// file the guard is *about* leaves the test task up to date and the guard does
+// not run — measured: flipping `rendersSubtitles` back to the value that shipped
+// the bug left `jvmTest` reporting success, and the same check failed the moment
+// it was forced to rerun.
+//
+// This is worse for `androidMain`, which `jvmTest` does not compile, so nothing
+// else invalidates the task either. Declaring the source tree as an input is
+// what makes a guard a guard rather than a test that sometimes happens to run.
+tasks.withType<Test>().configureEach {
+    inputs.dir(layout.projectDirectory.dir("src"))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("guardedSources")
 }
 
 android {

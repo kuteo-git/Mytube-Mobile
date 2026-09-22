@@ -4608,3 +4608,60 @@ count, which has to rise for a platform to accept an install over the last one.
 Read back rather than assumed: `aapt2 dump badging` reports
 `versionCode='2' versionName='0.1.2'`, and `dumpsys package` agrees after the
 install.
+
+## Two right changes that together drew no captions at all (2026-09-22)
+
+Reported in one sentence: *"trên Android bật sub thì nó ko hiện"*. The track was
+there, the sheet offered **Off / VI (auto)**, the menu showed it chosen, and the
+picture carried nothing.
+
+Neither change that caused it was wrong, and they were made on different days:
+
+| | |
+|---|---|
+| `VideoSurface.android.kt` | hides Media3's `SubtitleView` — it and `SubtitleOverlay` disagreed about line breaks and drew every cue twice, stacked |
+| `ExoVideoPlayer.rendersSubtitles` | `true`, and `WatchViewModel.loadCues` reads that as *"the player has this covered"* and never fetches the .vtt |
+
+So the view that would draw a caption was hidden, and the code that would fetch
+one was told not to bother. **Both ways of putting words on the screen were
+removed by two changes that each fixed something.** Android draws them from the
+Compose overlay now, which is what hiding the view was for, and
+`SubtitleGuardTest` holds the two files to each other: *if the view is hidden,
+the flag is false*.
+
+- **No unit seam, and the reason is the shape of the fault.** It is a
+  contradiction between two files; a ViewModel test is green throughout, because
+  its fake player answers `false` — which is the case that works.
+
+### A guard that reads source at run time is a task Gradle thinks is up to date
+
+The guard was written, proved to fail, and then **did not run**: `jvmTest`
+reported success on a tree whose `rendersSubtitles` had been flipped back to the
+value that shipped the bug. All five guards here — architecture, untranslated,
+press, scroll-room and this one — scan the tree with `File(...).readText()`, and
+none of that is a declared input. It is worst for `androidMain`, which `jvmTest`
+does not compile, so nothing else invalidates the task either.
+
+`tasks.withType<Test> { inputs.dir(src) }` is what makes a guard a guard rather
+than a test that sometimes happens to run.
+
+### The loop lied three times, and each lie is a fact about this app
+
+- **The clock is text.** `0:14 / 25:26` ticks every second, so a plain
+  before/after diff of the semantics tree calls it new — the first run reported
+  GREEN and what it had found was the player's clock.
+- **A remembered preference means a toggle has no known direction.** Subtitles
+  are a per-device preference, so the app opens with them *on*; the loop's one
+  tap turned them off and reported RED on a build that draws them perfectly
+  well. A one-sided check cannot tell *"turning it on did nothing"* from *"it was
+  already on and I turned it off"* — so both states are read, and the run is
+  green only when the words are in one and gone in the other.
+- **The watch screen is a layer, so the feed is in the tree behind it.** Reading
+  prose inside the player's rectangle picked up a Home card's meta line at those
+  very coordinates. What is behind does not change when CC is pressed, so the
+  loop takes what is in *every* sample of both states as the background and
+  subtracts it.
+
+Measured both ways on the phone's own release build: with the shipped
+contradiction, nothing over the picture in either state; with the fix, a caption
+in one and none in the other.
