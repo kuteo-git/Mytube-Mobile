@@ -3,6 +3,7 @@ package com.mytube.app.ui.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -10,13 +11,17 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -100,12 +105,47 @@ fun ServerSetupContent(
 
     Surface(color = Tokens.bg, modifier = Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
+        // **The keyboard covers this screen, and nothing here moved out of its
+        // way.**
+        //
+        // Reported from the phone: open the address field and the keyboard
+        // lands on top of the form. Measured on a 1080x2400 emulator with the
+        // keyboard up — its top edge at y=1517, the Save button at 1575..1638,
+        // which is the one control the screen exists to reach sitting entirely
+        // underneath it and unreachable, because there was nothing to scroll
+        // either.
+        //
+        // Two halves, and neither is correct alone:
+        //
+        //  * **`imePadding`.** The manifest declares `adjustNothing`, so the
+        //    window keeps its size and the inset is dispatched to be applied
+        //    here — the search row's own comment records what happens when both
+        //    are done, which is the keyboard counted twice. This is the other
+        //    side of that same coin: neither done at all.
+        //  * **The scroll.** Even lifted, a phone shorter than this one has
+        //    less room above the keyboard than the form needs, and a form that
+        //    cannot be scrolled is a form with a button nobody can press.
+        //
+        // `BoxWithConstraints` plus `heightIn(min = maxHeight)` is what keeps
+        // both. A `verticalScroll` measures its content against an unbounded
+        // height, so `Arrangement.Center` inside one has nothing to centre in
+        // and the form would sit at the top of a fresh install — which is the
+        // look this screen was given deliberately. The minimum puts the
+        // viewport's own height back, so the content centres while it fits and
+        // scrolls the moment it does not.
+        BoxWithConstraints(
+            Modifier
                 .fillMaxSize()
                 // Same reason as the feed: draw edge to edge, but keep the
                 // content out from under the system bars.
                 .windowInsetsPadding(WindowInsets.systemBars)
+                .imePadding(),
+        ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
                 .padding(24.dp),
             verticalArrangement = Arrangement.Center,
         ) {
@@ -171,6 +211,7 @@ fun ServerSetupContent(
                 primary = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
         }
 
         // Drawn over the form, the same as the saved shelf's and the channel

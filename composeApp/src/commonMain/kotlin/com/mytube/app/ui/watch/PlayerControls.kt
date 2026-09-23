@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
@@ -288,6 +289,23 @@ fun PlayerControls(
         ) {
         AnimatedVisibility(
             visible && !scrubbing && !(fullscreen && settingsOpen),
+            // **Above the seek bar, for touches as much as for paint.**
+            //
+            // The bar is written after this block, so without a `zIndex` it is
+            // hit-tested first — and its target is 32dp tall while the line in
+            // it is 3. The zoom button is 48dp and sits 8dp above that line, so
+            // 24dp of it — its whole lower half — lay inside the bar's target
+            // and answered nothing. Measured on the emulator before this line
+            // existed: a tap at the button's own centre did nothing at all and
+            // one 35px higher entered fullscreen.
+            //
+            // Nothing is painted over: the bar's line is below every pane here,
+            // and the knob only exists while `scrubbing`, which is one of the
+            // conditions that takes this block off the screen. What this buys
+            // is that the two panes in the bottom row keep their targets while
+            // the bar keeps everything between and around them — a `Box` and a
+            // `Row` with no `clickable` consume nothing on their own.
+            modifier = Modifier.zIndex(1f),
             enter = fadeIn(tween(CONTROLS_FADE_MILLIS)),
             exit = fadeOut(tween(CONTROLS_FADE_MILLIS)),
         ) {
@@ -521,10 +539,22 @@ fun PlayerControls(
                 //    13.3dp on a 360dp phone. Moving the row *down* is what
                 //    opens that gap, so 8 is better for it than 24 was.
                 //
-                // Fullscreen keeps its own arithmetic. There the bar is not
-                // the picture's bottom edge but a floating control inset from
-                // the screen, so the row clears the same three terms the bar
-                // is placed with rather than a constant remembered twice.
+                // **And fullscreen now keeps the same 8dp**, which it did
+                // not. It cleared the whole of the bar — `navigationInset +
+                // Space.lg + SEEK_TARGET + Space.sm` — and `SEEK_TARGET` is
+                // the bar's 32dp *touch target*, while the line is drawn along
+                // that target's **bottom** edge. So the gap a viewer sees was
+                // the target plus the margin. Measured through Compose's own
+                // coordinates on a landscape emulator: row bottom 933px, line
+                // 1038px, **40.0dp** against the 8.0dp the same row keeps
+                // windowed. Reported as the gap being too tall in zoom mode.
+                //
+                // What fullscreen still owns is where the *line* is: there the
+                // bar is not the picture's bottom edge but a floating control,
+                // inset by the navigation inset and `Space.lg`. So the row
+                // clears those two terms and then the one margin, and the
+                // difference between the modes is down to what it should have
+                // been all along — where the bottom of the picture is.
                 Row(
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -532,11 +562,7 @@ fun PlayerControls(
                         .padding(
                             start = Space.sm + safeStart,
                             end = Space.sm + safeEnd,
-                            bottom = if (fullscreen) {
-                                navigationInset + Space.lg + SEEK_TARGET + Space.sm
-                            } else {
-                                Space.sm
-                            },
+                            bottom = controlRowBottom(fullscreen, navigationInset),
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -695,7 +721,7 @@ fun PlayerControls(
                         Modifier.padding(
                             start = Space.lg + safeStart,
                             end = Space.lg + safeEnd,
-                            bottom = Space.lg + navigationInset,
+                            bottom = seekLineFromBottom(navigationInset),
                         )
                     } else {
                         Modifier
@@ -967,10 +993,47 @@ private fun SeekBar(
 }
 
 /**
+ * Where the seek line is drawn in fullscreen, as a distance up from the bottom
+ * of the screen.
+ *
+ * # Why this is a function rather than the same sum written twice
+ *
+ * Two things have to agree about it: the **bar**, which is padded by it, and the
+ * **row above the bar**, which keeps one margin clear of it. They were two
+ * expressions and they drifted — the row subtracted [SEEK_TARGET] as well, on
+ * the reading that it had to clear the bar's 32dp *touch target* rather than the
+ * 3dp line that is drawn inside it, so the gap a viewer saw in fullscreen was
+ * 40dp against the 8dp the same row keeps windowed. Reported as the clock and
+ * the zoom button sitting too far above the slider in zoom mode.
+ *
+ * This is the conclusion `miniPlayerBottomInset`, `barTravel` and `tabAt` each
+ * reached after the same kind of drift: **when two places must agree about a
+ * number, the number is a function.** A comment saying so was already here and
+ * was not enough.
+ *
+ * `navigationInset` is the real one — 34dp on an iPhone with a home indicator, 0
+ * on a phone with buttons — because a constant is wrong on exactly one of them.
+ */
+internal fun seekLineFromBottom(navigationInset: Dp): Dp = navigationInset + Space.lg
+
+/**
+ * The bottom padding under the clock pill and the zoom button.
+ *
+ * One margin in both modes, and the only difference is what the line it clears
+ * is measured from: the bottom of the **picture** outside fullscreen, where the
+ * bar *is* the picture's bottom edge, and the bottom of the **screen** inside
+ * it, where the bar is a floating control inset by [seekLineFromBottom].
+ */
+internal fun controlRowBottom(fullscreen: Boolean, navigationInset: Dp): Dp =
+    if (fullscreen) seekLineFromBottom(navigationInset) + Space.sm else Space.sm
+
+/**
  * How tall the bar's touch target is — the line itself is [TRACK_RESTING].
  *
- * Read in two places: by the bar, and by the row above it, which must not
- * overlap it.
+ * Read by the bar alone now. The row above it used to subtract this in
+ * fullscreen, on the reading that it had to stay clear of the *target*; what it
+ * has to stay clear of is the line that is drawn, and the controls win the
+ * overlap through their `zIndex` rather than by standing 32dp off.
  */
 private val SEEK_TARGET = 32.dp
 

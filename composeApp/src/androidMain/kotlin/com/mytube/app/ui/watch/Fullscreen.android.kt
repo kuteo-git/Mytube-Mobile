@@ -52,7 +52,7 @@ actual fun ApplyFullscreen(enabled: Boolean) {
  * rather than casting means a preview — which has no Activity at all — draws
  * instead of crashing.
  */
-private fun android.content.Context.findActivity(): Activity? {
+internal fun android.content.Context.findActivity(): Activity? {
     var context = this
     while (context is ContextWrapper) {
         if (context is Activity) return context

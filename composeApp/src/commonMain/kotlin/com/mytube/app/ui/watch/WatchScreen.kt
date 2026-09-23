@@ -282,6 +282,14 @@ fun WatchContent(
     // fullscreen must not leave the phone sideways with no system bars.
     ApplyFullscreen(fullscreen)
 
+    // A video nobody is touching is still being watched.
+    //
+    // Neither platform can tell that the picture is moving, so the display
+    // timeout fires over a film somebody is half an hour into. Playing rather
+    // than open, and only here rather than under the miniplayer too — the
+    // reasons are on [KeepScreenOn], where somebody changing this would look.
+    KeepScreenOn((state as? WatchState.Playing)?.playback?.isPlaying == true)
+
     // What the settings sheet blurs.
     //
     // Its own state, not the shell's `LocalHaze`. That one is registered on the

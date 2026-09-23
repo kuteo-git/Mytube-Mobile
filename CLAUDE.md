@@ -4714,3 +4714,160 @@ follow, and the reason `ControlButton` grew sideways rather than downward when
 the gear was reported as hard to hit. The clock is a readout and has no target
 to protect. Evening them would either shrink a control below the platforms'
 minimum or grow a readout into the picture.
+
+## Four from one round, and three of them were a hole (2026-09-23)
+
+Reported together, and three of the four are the same shape: **something was
+drawn and nothing underneath it was claimed.** A screen that needs the display
+awake and never asks; a form that needs room and never takes it; a pill that
+looks like a field and answers nowhere but the line of text inside it.
+
+### The screen slept on top of a playing video
+
+*"trên android khi bật video, để lâu màn hình vẫn tự động tắt"*, in both modes.
+Nothing in this app has ever asked for the display —
+`grep -r 'keepScreenOn\|idleTimer' composeApp/src iosApp` came back empty.
+
+The trap is that something *is* holding a lock, and it is the wrong one.
+Measured with a video playing:
+
+```
+Wake Locks: size=2
+  PARTIAL_WAKE_LOCK  'ExoPlayer:WakeLockManager'
+  PARTIAL_WAKE_LOCK  'AudioMix'
+fl=LAYOUT_IN_SCREEN LAYOUT_INSET_DECOR SPLIT_TOUCH HARDWARE_ACCELERATED …
+```
+
+Media3's lock keeps the **CPU** awake so the sound survives the screen going
+off, which is §1 of this project's entire reason for existing. It says nothing
+about the display, and the window's flags carried no `KEEP_SCREEN_ON` at all.
+Neither platform can tell that the picture is moving: no touch arrives for
+twenty minutes of a film, so the display timeout fires over somebody watching.
+
+- **`KeepScreenOn` is `expect/actual`**, beside `ApplyFullscreen` and for its
+  reason: no object with methods, only a call into whatever owns the platform's
+  window. A composable because finding that owner is the work, and the **state**
+  rather than an event, so a screen torn down mid-video cannot leave a display
+  pinned on — `ApplyFullscreen`'s lesson about being left sideways, in a form
+  nobody would see until the battery was gone.
+- **The window flag, not a wake lock of this app's own.** The system releases a
+  window flag the moment the app stops being what is on screen; a
+  `SCREEN_BRIGHT_WAKE_LOCK` needs a permission and has to be released by hand
+  from every path out, and the path that gets forgotten leaves a phone lit in a
+  pocket. iOS's `idleTimerDisabled` is process-wide, so it is set from the state
+  and put back on dispose for the same reason.
+- **Playing, not open.** A paused video is a still frame and somebody who paused
+  to read the comments has left the phone to its own timeout. Measured both
+  ways: pause and the flag goes, press play and it comes back.
+- **The expanded player, not the miniplayer.** The bar plays on across tabs and
+  with the screen off — that is the feature — so holding the display awake for
+  it would be this app spending battery on the one case it exists to make cheap.
+- The loop reads the window's flags, and its first version read *ExoPlayer's*
+  wake lock as "is it playing". That lock is held while paused too, so the loop
+  could not tell a fault from the correct answer. It reads the player's own
+  Play/Pause button now.
+
+### The clock and the zoom button cleared the wrong thing in fullscreen
+
+*"ở mode zoom nó có khoảng cách với timer slider dưới hơi cao"* — 40.0dp against
+the 8.0dp the same row keeps windowed, measured through Compose's own
+coordinates on a landscape emulator: row bottom 933px, seek line 1038px.
+
+The sum was `navigationInset + Space.lg + SEEK_TARGET + Space.sm`, and
+`SEEK_TARGET` is the bar's 32dp **touch target** while the line is drawn along
+that target's **bottom** edge. So the row stood off the whole target and the
+viewer saw the target as empty space. The same mistake the windowed number made
+twice before — *"what it has to clear is the line that is drawn"* — in the one
+place that had not been corrected.
+
+- **Two places had to agree about one number and drifted**, so the number is a
+  function: `seekLineFromBottom(navigationInset)` is read by the bar's padding
+  and by `controlRowBottom`, and `PlayerControlRowTest` asserts the invariant
+  the bug broke — *the gap above the line is the same margin in both modes*. It
+  was red on exactly `Space.sm + SEEK_TARGET` before the change. This is the
+  conclusion `miniPlayerBottomInset`, `barTravel` and `tabAt` each reached after
+  the same drift, and a comment already saying so was not enough.
+- **Compose's coordinates answer both platforms at once**, which is what the
+  report needed — *"xảy ra cả Android + ios"* — since on iOS 26 these two panes
+  are drawn by SwiftUI from rectangles Kotlin computed.
+
+#### And lowering the row uncovered a dead half nobody had reported
+
+With the row 8dp above the line, the 48dp zoom button overlaps the bar's 32dp
+target by 24. The bar is written after the controls, so it was hit-tested first
+and **won** — which was already true windowed, and measured: a tap at the zoom
+button's own centre did nothing at all while one 35px higher entered fullscreen.
+Half of that button had never worked.
+
+`zIndex(1f)` on the controls block puts them above the bar for touches as well
+as paint. Nothing is painted over — the line is below every pane, and the knob
+only exists while `scrubbing`, which is one of the conditions that takes the
+block off the screen — and a `Box` and a `Row` with no `clickable` consume
+nothing, so the bar keeps everything between and around the two panes.
+
+### The server-address form had no room and nowhere to go
+
+*"ko có scroll lên trên Android, keyboard nó đè luôn input text, nghi ngờ ios
+cũng thế"* — and it is one screen, so the suspicion was right.
+
+Measured on a 1080x2400 emulator with the keyboard up, its top edge at y=1517:
+Save at **1575..1638**, the one control the screen exists to reach, entirely
+underneath it. The form had neither `imePadding` nor a scroll.
+
+**Two halves and neither is correct alone.** The manifest declares
+`adjustNothing`, so the window keeps its size and the inset is dispatched to be
+applied in the layout — the search row's own comment records what happens when
+both are done, which is the keyboard counted twice. This was the other side of
+that coin: neither done at all. And even lifted, a short phone has less room
+above a keyboard than this form needs.
+
+`BoxWithConstraints` plus `heightIn(min = maxHeight)` keeps both. A
+`verticalScroll` measures its content against an unbounded height, so
+`Arrangement.Center` inside one has nothing to centre in and the form would sit
+at the top of a fresh install — which is the look this screen was given on
+purpose. The minimum puts the viewport's height back: centred while it fits,
+scrolling the moment it does not. Verified at 680dpi, where it genuinely
+overflows: `scrollable=true`, and Save reachable at 1056..1158 under a keyboard
+whose top is 1180.
+
+### The search pill was a hole in the shape of a field
+
+*"ở màn search, bấm vào search field thì cái item dưới nhận action"*, and it did.
+
+Only the `BasicTextField` answered. A single-line one is as tall as a line plus
+the platform's minimum target and as wide as the box it is given, so inside a
+56dp pill with a magnifier at its left, the icon, the pill's padding and a strip
+above and below the text belonged to nothing — and neither did the gap before
+the close circle or the margins at both edges of the floating row. Driven and
+measured: a tap 50px left of the field's own node opened the video that happened
+to be under the pill.
+
+- **The pill is the field**, all of it, focusing it and asking for the keyboard.
+  `press-guard:` rather than a bloom — what answers the finger is the caret
+  arriving, and a pill that grew under a thumb placing a cursor is the wrong
+  acknowledgement for the gesture.
+- **The row is the floor of a bar**, exactly as `AppShell` draws one and for the
+  same reason. It had every reason to have been written that way the day the row
+  was moved to the bottom, and the charter's own note from that day records the
+  clue nobody read: *"the row's pill is not clickable — only the
+  `BasicTextField` inside it is — so its height does not appear in the clickable
+  tree at all"*, written down as an obstacle to measuring rather than as the
+  fault it was.
+
+### Driving Android found three of its own
+
+None of these were the app, and each cost a wrong verdict first.
+
+- **Gboard's clipboard panel is not in the app's window.** `uiautomator dump`
+  showed the Save button present and clickable while a screenshot showed a
+  clipboard suggestion card covering the bottom half of the screen. Four taps
+  went nowhere and were read as a broken button. **When a control that is in the
+  tree does not respond, take a screenshot before reading any code.**
+- **A video that has ended is not one that is paused, and not one that is
+  playing.** A loop opened an 8-second video, pressed play, and reported RED on
+  a build that was correct — the flag had been cleared because the video
+  finished between the two readings.
+- **Disabling the IME does not retract its inset.** `ime disable` plus a
+  force-stop left `mInputShown=true` and an 883px inset still being dispatched,
+  so the search row floated mid-screen and every coordinate taken from it was
+  about a keyboard that was not there.

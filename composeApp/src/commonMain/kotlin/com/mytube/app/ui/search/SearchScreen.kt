@@ -1,6 +1,7 @@
 package com.mytube.app.ui.search
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -626,6 +627,28 @@ private fun SearchField(
     Row(
         modifier
             .fillMaxWidth()
+            // **The row takes every touch that lands on it.**
+            //
+            // It floats over the results, and it used to consume nothing at
+            // all: only the `BasicTextField` inside the pill answered, so the
+            // magnifier, the pill's own padding, the gap before the close
+            // circle and the margins at both edges were holes straight through
+            // to the list behind. Reported as *"bấm vào search field thì cái
+            // item dưới nhận action"*, and measured by driving it — a tap
+            // 50px left of the field's own node opened the video that happened
+            // to be under the pill.
+            //
+            // The floor of a bar, exactly as `AppShell` draws one, and for the
+            // same reason. `indication = null`: this is not a button.
+            // press-guard: the floor of a bar. It takes a touch in order to
+            // stop it reaching the results underneath, and a floor that bloomed
+            // would be the whole row breathing every time somebody missed the
+            // pill.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {},
+            )
             // imePadding before the navigation inset, so the field rides up on
             // the keyboard and rests on the home indicator when there is none.
             // Both, and in this order: the keyboard's inset already contains the
@@ -667,6 +690,30 @@ private fun SearchField(
                 // reason: it floats over a page, outside the layer the screen
                 // records, so it can sample rather than paint.
                 .liquidGlass(GLASS_SHAPE)
+                // **All of the pill is the field, not the 48dp of it that
+                // holds the text.**
+                //
+                // A single-line `BasicTextField` is as tall as one line plus
+                // the platform's minimum target, and as wide as the box it is
+                // given — so inside a 56dp pill with a magnifier at its left,
+                // the icon, the padding and a strip above and below the text
+                // all belonged to nothing. Aiming at a search box and having
+                // the caret not appear is the same complaint as an avatar that
+                // opens the video: something did happen, and it was not what
+                // was aimed at.
+                //
+                // press-guard: a text field is not a button. What answers the
+                // finger is the caret arriving and the keyboard coming up, and
+                // a pill that bloomed under a thumb placing a cursor would be
+                // the wrong acknowledgement for the wrong gesture.
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {
+                        focus.requestFocus()
+                        keyboard?.show()
+                    },
+                )
                 .padding(horizontal = Space.lg),
             verticalAlignment = Alignment.CenterVertically,
         ) {
