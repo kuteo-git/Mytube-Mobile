@@ -5033,3 +5033,45 @@ everywhere else. API 36 takes no new code path and measured unchanged.
   doing its job; what is missing is the blur that destroys the letterforms.
   Recorded rather than fixed: it is the documented fallback, and the household's
   phones are newer.
+
+## The AltStore install is guided rather than automated (2026-09-23)
+
+The entry above ends *"The first install is still a GUI flow on the Mac with the
+phone plugged in — AltServer's 'Install AltStore', the Apple ID, Wi-Fi sync,
+trusting the profile, Developer Mode. Recorded as not automatable rather than
+forgotten."* That is still true of the clicking and it was never the whole
+story: the parts around it are checkable, and checking them is most of what
+makes the flow survivable.
+
+`tools/altstore-setup.sh` walks the seven steps. What it does *not* do is the
+one thing that matters most: **the Apple ID password is typed into AltServer's
+own dialog and the script never asks for it.** It says so on the screen where
+somebody might otherwise offer it.
+
+What it does instead is answer, from the Mac, the questions a person would
+otherwise have to guess at:
+
+- whether the IPA is older than the source — `versionName` against the built
+  `CFBundleShortVersionString`, with an offer to rebuild, because AltStore
+  spends seven days on whatever it is handed
+- whether the Mac can see the phone, after the Finder step
+- whether AltServer is running, and starting it if not — it has no window and
+  no Dock icon, which is the first thing that confuses anybody
+- **whether AltStore actually arrived**, by polling
+  `devicectl device info apps` for `com.rileytestut.AltStore` rather than
+  asking. A wizard that asks what it could check is one that believes a tired
+  yes.
+- whether the app is on the phone afterwards, and what version
+- and it offers to add AltServer to Login Items, which is what makes the weekly
+  refresh happen without anybody thinking about it
+
+Three faults were fixed by reading it rather than running it, and all three are
+the same kind — a shell that exits or lies where nobody would look:
+
+- `[[ -f pid ]] && { kill … }` as a stage's last command **exits the script**
+  under `set -e` when the file is not there, which is the ordinary case.
+- `( cd X && python3 -m http.server & echo $! )` records the *subshell's* pid,
+  not the server's, because `&` binds to the whole AND-list. The little server
+  would then have outlived the wizard.
+- `open_url "x-apple-finder://"` is a scheme nobody verified. `open -a Finder`
+  is the one that exists.
