@@ -4931,3 +4931,51 @@ glyph from the picture behind the glass**:
 
 The window is given per image now and kept inside the glass, where the ground is
 flat. Red on the reporter's own screenshot, green on the simulator after.
+
+## The tab bar borrowed the system's inset and kept no margin of its own (2026-09-23)
+
+Asked as a question from an Android phone — *"hình như Android cái bottom
+tabbar ko có padding đúng ko?"* — and the answer is half yes. It cleared the
+navigation inset, which is right for a row of touch targets, and added nothing
+on top of it. So the frame around the one bar that is always on screen was
+whatever the phone happened to say:
+
+| | sides | bottom |
+|---|---|---|
+| Android, gesture navigation | 16dp | **24dp** |
+| Android, three buttons | 16dp | **48dp** |
+| iPhone 16e | 16pt | **34pt** |
+
+Measured through the tab bar's own semantics rather than from pixels, and the
+overlay switch (`cmd overlay enable …navbar.threebutton`) is what made the
+middle row measurable without a second device.
+
+**On gesture navigation the inset is exactly the strip the gesture pill is drawn
+in**, so the capsule was resting straight on top of it with nothing between —
+which is what "no padding" looks like. And on a device reporting no inset at all
+the bar would sit on the screen's edge.
+
+This is the fault `GlassSheet` was corrected for, and the tab bar was the last
+floating pane still carrying it. That note says it already: *"It used to be
+GLASS_MARGIN at the sides and the navigation inset below… beside the platform's
+sheet that produced 34dp below against 16 at the sides, and an uneven frame is
+what the eye actually reads."*
+
+- **`Size.miniGap`, not a new constant.** The miniplayer keeps exactly this gap
+  between itself and whatever is under it, the two bars rest on each other, and
+  one number is what stops them drifting — the lesson this charter has now
+  recorded for a bar's height, its tint, and the space around it.
+- **Three places had to move together**, because three read "the tab bar's
+  bottom is the navigation inset": the bar's own padding, `tabContentPadding`
+  (a list that stops at the bar's pane stops six units low, and the last row of
+  a feed is the one nobody can reach), and `miniPlayerBottomInset`, which is
+  both where the bar is drawn and where the drag aims the shrinking picture.
+- **The gap does not lerp away with `collapse`.** The term beside it does — the
+  player moves into the row next to the tab circle — but a narrowed bar is still
+  a bar at the same height, and dropping its margin would put the player 6dp
+  low, resting on the thing it floats above. `BarTravelTest` holds that case
+  separately.
+
+Measured after, on the emulator: 16dp at both sides, **30.1dp** below; the
+miniplayer 5.9dp above the bar with no overlap; and a drag held at its end puts
+the picture inside the bar's round window.

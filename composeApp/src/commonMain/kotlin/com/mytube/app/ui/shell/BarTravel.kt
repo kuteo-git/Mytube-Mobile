@@ -204,6 +204,11 @@ fun dragOutcome(from: Int, landed: Int, leftItsTab: Boolean): TabDragOutcome = w
  * kéo video xuống, video ko rơi đúng vào chỗ mini player"*, and it got worse
  * the day the field row grew from 48dp to 56 plus its margins.
  *
+ * @param tabBarGap the margin the tab bar keeps below **itself**, on top of
+ *   what the system asks for — `Size.miniGap`, where there is a tab bar at all.
+ *   It does *not* go to zero as the bar collapses: a narrowed bar is still a
+ *   bar, sitting at the same height, and the player moves into the row beside
+ *   it rather than under it.
  * @param tabBarReserved how much of the tab bar the player still rests on —
  *   which goes to nothing as the bar narrows, because by then the player has
  *   moved down into the row beside the tab circle. Zero where there is no tab
@@ -213,6 +218,7 @@ fun dragOutcome(from: Int, landed: Int, leftItsTab: Boolean): TabDragOutcome = w
  */
 fun miniPlayerBottomInset(
     navigationInset: Float,
+    tabBarGap: Float,
     tabBarReserved: Float,
     fieldRow: Float,
-): Float = navigationInset + tabBarReserved + fieldRow
+): Float = navigationInset + tabBarGap + tabBarReserved + fieldRow

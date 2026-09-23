@@ -349,7 +349,8 @@ private fun BottomBar(
     modifier: Modifier = Modifier,
 ) {
     val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val height = with(LocalDensity.current) { (navBar + Size.topBar).toPx() }
+    val bottom = navBar + Size.miniGap
+    val height = with(LocalDensity.current) { (bottom + Size.topBar).toPx() }
     // One generator for the whole bar. Four controls that all mean "go
     // somewhere" should feel identical, and four `remember`s would be four
     // Taptic generators warming up for the same row.
@@ -363,10 +364,29 @@ private fun BottomBar(
             // one of them: a floating capsule keeps its shape and moves, where
             // the full-width band it replaces stretched down to the screen's
             // edge.
+            //
+            // **The inset is what the system needs; [Size.miniGap] is this
+            // bar's own.** It used to be the inset alone, and that made the
+            // bottom margin whatever the phone happened to say — measured,
+            // 24dp against 16 at the sides on a gesture-navigation emulator,
+            // 48 with three buttons, 34 on an iPhone — and nothing at all on a
+            // device that reports no inset, where the capsule would sit on the
+            // screen's edge. Reported from an Android phone as the bar having
+            // no padding, and on gesture navigation that is what it looks like:
+            // the inset is exactly the strip the gesture pill is drawn in, so
+            // the capsule was resting straight on top of it.
+            //
+            // This is the fault `GlassSheet` was corrected for and the last
+            // floating pane still carrying it — its note says *"that produced
+            // 34dp below against 16 at the sides, and an uneven frame is what
+            // the eye actually reads"*. The six units are the miniplayer's own
+            // constant rather than a new one: that bar keeps exactly this gap
+            // between itself and whatever is under it, the two rest on each
+            // other, and one number is what stops them drifting.
             .padding(
                 start = GLASS_MARGIN,
                 end = GLASS_MARGIN,
-                bottom = navBar,
+                bottom = bottom,
             ),
     ) {
         // Two panes with page between them, not one bar with a button in it.

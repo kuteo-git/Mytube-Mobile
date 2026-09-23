@@ -197,8 +197,13 @@ private fun tabContentPadding(miniPlayer: Boolean): PaddingValues = PaddingValue
     // the last row of a feed is the one nobody can scroll past to reach. It is
     // a padding rather than a margin on the bar for the reason every list here
     // uses one: the content scrolls *under* the bar and stops clear of it.
+    //
+    // `Size.miniGap` is the bar's own margin under itself, and it is here for
+    // the same reason the bar's height is: a list that stops at the bar's
+    // *pane* stops six units too low, and the last row of a feed is the one
+    // nobody can scroll past to reach.
     bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
-        Size.topBar + (if (miniPlayer) Size.miniPlayer else 0.dp),
+        Size.miniGap + Size.topBar + (if (miniPlayer) Size.miniPlayer else 0.dp),
 )
 
 /** A heading over a tab's list, at the size the design system gives a section. */

@@ -163,10 +163,32 @@ class BarTravelTest {
     }
 
     @Test
-    fun `on Home the player rests on the navigation inset and the tab bar`() {
+    fun `on Home the player rests on the inset, the bar's own gap and the bar`() {
         assertEquals(
-            63f + 147f,
-            miniPlayerBottomInset(navigationInset = 63f, tabBarReserved = 147f, fieldRow = 0f),
+            63f + 16f + 147f,
+            miniPlayerBottomInset(
+                navigationInset = 63f,
+                tabBarGap = 16f,
+                tabBarReserved = 147f,
+                fieldRow = 0f,
+            ),
+        )
+    }
+
+    @Test
+    fun `the bar's own gap survives the bar collapsing`() {
+        // The term above it lerps to nothing, because the player moves into the
+        // row beside the tab circle. This one does not: a narrowed bar is still
+        // a bar at the same height, and dropping its margin would put the
+        // player 6dp low, resting on the thing it floats above.
+        assertEquals(
+            63f + 16f,
+            miniPlayerBottomInset(
+                navigationInset = 63f,
+                tabBarGap = 16f,
+                tabBarReserved = 0f,
+                fieldRow = 0f,
+            ),
         )
     }
 
@@ -174,10 +196,16 @@ class BarTravelTest {
     fun `on search the field row takes the tab bar's place`() {
         // The reported bug: the drag aimed at Home's arithmetic on a screen
         // whose bottom belongs to the search field, so the picture came down a
-        // whole field row below the bar.
+        // whole field row below the bar. There is no tab bar there, so there is
+        // no tab bar's margin either — the field row carries its own.
         assertEquals(
             63f + 231f,
-            miniPlayerBottomInset(navigationInset = 63f, tabBarReserved = 0f, fieldRow = 231f),
+            miniPlayerBottomInset(
+                navigationInset = 63f,
+                tabBarGap = 0f,
+                tabBarReserved = 0f,
+                fieldRow = 231f,
+            ),
         )
     }
 
@@ -185,7 +213,12 @@ class BarTravelTest {
     fun `elsewhere it is the navigation inset alone`() {
         assertEquals(
             63f,
-            miniPlayerBottomInset(navigationInset = 63f, tabBarReserved = 0f, fieldRow = 0f),
+            miniPlayerBottomInset(
+                navigationInset = 63f,
+                tabBarGap = 0f,
+                tabBarReserved = 0f,
+                fieldRow = 0f,
+            ),
         )
     }
 }

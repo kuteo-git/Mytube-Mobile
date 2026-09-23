@@ -1106,6 +1106,15 @@ fun App(
             val tabBarReserved =
                 if (route is Route.Home) lerp(Size.topBar, 0.dp, collapse) else 0.dp
             val tabBarReservedPx = with(density) { tabBarReserved.toPx() }
+            // The margin the tab bar keeps under itself, where there is one.
+            //
+            // Unlike the term above it does not lerp away: the bar narrows, it
+            // does not descend, so the six units below it are there whatever
+            // `collapse` says. Without this the player would land 6dp low and
+            // sit on the bar it is supposed to rest above.
+            val tabBarGapPx = with(density) {
+                (if (route is Route.Home) Size.miniGap else 0.dp).toPx()
+            }
 
             // Where the miniplayer's row begins, measured up from the bottom.
             //
@@ -1117,6 +1126,7 @@ fun App(
             val miniBottomInset = with(density) {
                 miniPlayerBottomInset(
                     navigationInset = navigationInsetPx,
+                    tabBarGap = tabBarGapPx,
                     tabBarReserved = tabBarReservedPx,
                     fieldRow = fieldRow.toPx(),
                 ).toDp()
