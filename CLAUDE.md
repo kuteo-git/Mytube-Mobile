@@ -4979,3 +4979,57 @@ what the eye actually reads."*
 Measured after, on the emulator: 16dp at both sides, **30.1dp** below; the
 miniplayer 5.9dp above the bar with no overlap; and a drag held at its end puts
 the picture inside the bar's round window.
+
+## Below Android 11 nothing at all answered the keyboard (2026-09-23)
+
+Reported after an Android 10 phone was tried, and the version is the whole
+finding: *"tao test thì bị lỗi keyboard trên mỗi Android 10 thôi, vào search bấm
+vào search thì keyboard hiện ra và che luôn search, tương tự server address"*.
+
+Both screens, and only those two, because both are the only ones that move for a
+keyboard. Measured on an API 29 emulator — the same element positions with the
+keyboard up as with it down, to the pixel:
+
+| | no keyboard | keyboard up |
+|---|---|---|
+| Server address | y 979 | y 979 |
+| Check | y 1368 | y 1368 |
+| Save | y 1515 | y 1515 |
+
+`mInputShown=true` throughout, and the keyboard's top edge at ~1550. **Nothing
+moved.** On API 36 the same form shifts up by a keyboard.
+
+**Two mechanisms, and this app had neither on Android 10.** `WindowInsets.ime`
+arrived in **API 30**; below it the platform reports no such inset, so
+`imePadding()` adds zero. And the manifest declares `adjustNothing`, which is
+right from 30 up — the search row's own note records what happens when the
+window resizes *and* the inset is applied, which is the keyboard counted twice.
+Under 30 that leaves the window not resizing and nothing to apply.
+
+So `MainActivity` asks for `SOFT_INPUT_ADJUST_RESIZE` when `SDK_INT < R`, which
+is the mechanism that predates the inset. The two cannot double-count, because
+the inset that would be the second term is exactly the one that does not exist
+there. Measured after, same emulator: the form rises 371px and Save lands at
+1144..1207, clear of the keyboard; the search row sits on it the way it does
+everywhere else. API 36 takes no new code path and measured unchanged.
+
+- **`adjustNothing` in the manifest, overridden in code.** The manifest cannot
+  say "it depends on the version", and the value that belongs there is the one
+  that is right for every phone the household will buy next.
+- **The charter's earlier entry was true and incomplete.** It said
+  *"`android:windowSoftInputMode="adjustNothing"` makes the window keep its
+  size, which is what `imePadding()` assumes, and neither is correct without the
+  other"* — correct, and it never asked which Android versions have the other.
+
+### Two things about driving old emulators
+
+- **`-gpu swiftshader_indirect` dies on rotation.** Entering fullscreen killed
+  both emulators mid-run with `Failed to find ColorBuffer`. `-gpu host` survives
+  it.
+- **The glass is not glass below Android 12.** `blur` needs API 31 and `lens`
+  needs 33, so on Android 10 the bars and the watch page's ground are a flat
+  tint with the content behind them perfectly sharp — measured, the feed's
+  headline reads through the page at 54 against a ground of 43. The tint is
+  doing its job; what is missing is the blur that destroys the letterforms.
+  Recorded rather than fixed: it is the documented fallback, and the household's
+  phones are newer.

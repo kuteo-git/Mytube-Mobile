@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
@@ -52,6 +53,25 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
+        // **Below Android 11 the keyboard's inset is never dispatched.**
+        //
+        // `WindowInsets.ime` arrived in API 30. Under it the platform reports
+        // nothing, and this app's manifest says `adjustNothing` — which is
+        // correct from 30 up, where `imePadding()` does the moving. Together
+        // the two mean that on Android 10 *nothing at all* answers the
+        // keyboard: measured on an API 29 emulator, every element of the
+        // server-address form sat at the same y with the keyboard up as with
+        // it down, and the Save button was underneath it. Reported as the
+        // search row and this form both being covered, and only there.
+        //
+        // So on those versions the window is asked to resize instead, which is
+        // the mechanism that predates the inset. `imePadding()` then adds zero,
+        // because the inset it reads is still empty — the two cannot
+        // double-count, which is the fault the search row's own note records
+        // from the other direction.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
         askForNotifications()
         val container = MytubeApp.container(applicationContext)
         setContent { App(container) }
