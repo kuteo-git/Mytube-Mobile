@@ -4871,3 +4871,63 @@ None of these were the app, and each cost a wrong verdict first.
   force-stop left `mInputShown=true` and an 883px inset still being dispatched,
   so the search row floated mid-screen and every coordinate taken from it was
   about a keyboard that was not there.
+
+## The fullscreen title and its channel did not share a left edge (2026-09-23)
+
+Reported from the phone with a screenshot: *"cái title và cái description trên
+màn zoom mode nó ko đều kìa"*. Measured off that screenshot — title at x=398,
+channel at x=365, **33px, 11pt apart** on an iPhone 16e at 3x.
+
+Nothing was misplaced. A probe printing what Kotlin publishes to the platform
+settled it in one line:
+
+```
+[DEBUG] title         x=119.0  w=413.0
+[DEBUG] title-channel x=119.0  w=104.0
+```
+
+**The same edge, to the point.** So the gap opened while SwiftUI drew text
+inside a rectangle Compose had measured — `GlassPane`'s whole contract is that
+Compose owns the layout and the platform owns the paint, and this is the seam
+between them failing in the only way it can.
+
+`.frame(width:height:)` centres by default, and the rectangle is Compose's
+measurement in **Compose's** font metrics. SwiftUI renders the same string
+narrower — unambiguous on the clock, where a 74pt frame held 65.3pt of text and
+the words sat 4.3pt in, half the 8.7pt surplus to the tenth. Every line
+therefore drifts right by half a difference that **grows with its own length**,
+which is nothing on `CNN` and 12pt on a seventy-character headline.
+
+- **It hid because a long title truncates.** A truncated line fills its frame and
+  lines up perfectly; only a title that *fits* has a surplus to be centred in.
+  Four videos in a row on the simulator truncated, and each one measured green.
+- **Leading everywhere was the first fix and it is wrong for the clock.** That
+  pill would have gone from 14.4pt of padding on each side to 10 and 18.7 —
+  trading an invisible fault for a visible one. So the choice crosses as
+  `alignStart`, decided by the caller, because the caller is the one that knows
+  whether anything is stacked beside it. Two call sites set it: the fullscreen
+  title and the channel under it.
+- **A symbol ignores it.** Compose centres those already — an icon lives in a
+  box the size of its *button*, not of its glyph.
+
+Measured after, on a title that fits: title 360px, channel 361px, both ~1pt into
+a frame at 357 — which is the glyphs' own left side bearing. The clock's text
+still sits 4.0pt in, unchanged.
+
+### The loop, and what it took to make it honest
+
+`panealign.py` reads the two left edges out of a screenshot and compares them.
+Three things had to be fixed in the instrument before it told the truth, all of
+them the same lesson in different clothes — **a fixed threshold cannot tell a
+glyph from the picture behind the glass**:
+
+- Its window reached past the pane, where the video is often brighter than the
+  text, and it reported the title starting left of its own frame.
+- The pane's rim is a bright diagonal a few pixels wide that reaches further
+  left than any glyph, so the leftmost lit pixel in a row was the rim.
+- `CNN` is short enough that a minimum run length written for the title threw
+  the channel's band away entirely, and the script then said "one band" on an
+  image with two lines plainly in it.
+
+The window is given per image now and kept inside the glass, where the ground is
+flat. Red on the reporter's own screenshot, green on the simulator after.

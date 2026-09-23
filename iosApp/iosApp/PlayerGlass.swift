@@ -186,7 +186,35 @@ struct PlayerGlass: View {
                 .padding(.bottom, 8)
             }
         }
-        .frame(width: item.width, height: item.height)
+        // **Where the surplus goes, and Kotlin decides.**
+        //
+        // The rectangle is the one Compose measured, in Compose's metrics, and
+        // SwiftUI renders the same string narrower — measured on the clock, a
+        // 74pt frame holding 65.3pt of text. `.frame(width:height:)` centres by
+        // default, so every line drifts right by half of a surplus that grows
+        // with its own length.
+        //
+        // That is invisible until two lines are stacked. Reported from the
+        // phone: in fullscreen the title and the channel under it did not share
+        // a left edge — measured on that screenshot, 398px against 365px, the
+        // title 13.7pt into its frame against the channel's 2.7. A title long
+        // enough to be *truncated* fills its frame and lines up perfectly,
+        // which is why this hid for so long.
+        //
+        // The probe that settled it printed what Kotlin publishes: `title
+        // x=119.0` and `title-channel x=119.0`, the same edge to the point. So
+        // nothing was misplaced; each line was centred in a surplus of its own.
+        //
+        // Leading everywhere was the first fix and it is wrong for the clock,
+        // whose pill would go from 14.4pt of padding each side to 10 and 18.7.
+        // So the choice crosses as `alignStart` — see its note on the Kotlin
+        // side — and a symbol or a dot ignores it, because Compose centres
+        // those already.
+        .frame(
+            width: item.width,
+            height: item.height,
+            alignment: item.alignStart ? .leading : .center
+        )
         .contentShape(Rectangle())
     }
 

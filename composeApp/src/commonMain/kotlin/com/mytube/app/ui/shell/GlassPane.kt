@@ -189,6 +189,14 @@ fun GlassItem(
     opacity: Double = 1.0,
     /** A filled circle rather than a glyph — the live badge. */
     dot: Boolean = false,
+    /**
+     * Draw the words from the left of their rectangle instead of the middle.
+     *
+     * For text stacked on more text, where a shared left edge is the thing the
+     * eye checks. See [NativeGlassItem.alignStart] for what the choice is
+     * between and why it cannot be made on the far side.
+     */
+    alignStart: Boolean = false,
     /** `0xAARRGGBB`, or 0 for white. */
     tintArgb: Long = 0L,
     content: @Composable () -> Unit,
@@ -223,6 +231,7 @@ fun GlassItem(
                 opacity = opacity,
                 interactive = onPress != null,
                 dot = dot,
+                alignStart = alignStart,
                 tintArgb = tintArgb,
             )
         },
@@ -316,5 +325,6 @@ private val EMPTY_ITEM = NativeGlassItem(
     opacity = 1.0,
     interactive = false,
     dot = false,
+    alignStart = false,
     tintArgb = 0L,
 )

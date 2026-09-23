@@ -375,11 +375,19 @@ fun PlayerControls(
                             modifier = Modifier.weight(1f).padding(horizontal = Space.sm),
                         ) {
                         Column(Modifier.padding(horizontal = Space.md, vertical = 6.dp)) {
+                            // Stacked on the channel below it, so the two
+                            // have to start at the same x. See
+                            // `NativeGlassItem.alignStart`: on iOS the pane is
+                            // drawn by SwiftUI inside the rectangle measured
+                            // here, and a line centred in its own surplus
+                            // drifts right by half of it — which is a different
+                            // amount for a title and for a channel name.
                             GlassItem(
                                 id = "title",
                                 text = title,
                                 pointSize = 15.0,
                                 bold = true,
+                                alignStart = true,
                             ) {
                             Text(
                                 text = title,
@@ -395,6 +403,7 @@ fun PlayerControls(
                                 text = channel,
                                 pointSize = 13.0,
                                 opacity = 0.7,
+                                alignStart = true,
                             ) {
                             Text(
                                 text = channel,

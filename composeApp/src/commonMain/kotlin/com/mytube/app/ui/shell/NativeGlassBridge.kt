@@ -117,6 +117,30 @@ data class NativeGlassItem(
     /** A filled circle instead of a glyph: the live badge, and nothing else. */
     val dot: Boolean,
     /**
+     * Put this text at the **left** of its rectangle rather than the middle.
+     *
+     * The rectangle is the one Compose measured, in Compose's font metrics, and
+     * the platform renders the same string a little narrower — about 12% on a
+     * 13pt clock, measured: a 74pt frame holding 65.3pt of text. There are only
+     * two places that surplus can go, and neither is free:
+     *
+     *  * **Split in two**, which is the default and reads right on a pane that
+     *    was sized around one line. The clock pill would otherwise carry 10pt
+     *    of padding on its left and 18.7 on its right.
+     *  * **Left at the end**, which is the only way two lines *stacked* on each
+     *    other can share a left edge — and that is a thing the eye checks. The
+     *    fullscreen title and the channel under it were reported as uneven, and
+     *    measured on the reporter's screenshot the title sat 13.7pt into its
+     *    frame against the channel's 2.7, because each line was centred in a
+     *    surplus of its own length.
+     *
+     * So the caller says which, because the caller is the one that knows
+     * whether anything is stacked beside it. Ignored for a symbol or a dot:
+     * Compose centres those already — an icon lives in a box the size of its
+     * button, not of its glyph.
+     */
+    val alignStart: Boolean,
+    /**
      * The colour, as `0xAARRGGBB`, or 0 for white.
      *
      * Sent rather than named so the brand red exists once, in `Tokens`. A Swift
