@@ -4,7 +4,7 @@
 > this file, update this file rather than quietly going another way.
 >
 > The server this app talks to is a separate repository — Local Mytube, at
-> `~/Documents/git/Youtube`. Its own `CLAUDE.md` is the authority on everything
+> `/Volumes/Data2/git/Youtube`. Its own `CLAUDE.md` is the authority on everything
 > behind the API, and it is referred to below as **the server charter**.
 
 ## 1. What this is
