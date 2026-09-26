@@ -5075,3 +5075,87 @@ the same kind — a shell that exits or lies where nobody would look:
   would then have outlived the wizard.
 - `open_url "x-apple-finder://"` is a scheme nobody verified. `open -a Finder`
   is the one that exists.
+
+## Pinch to fill the screen, and the crop that was never asked for (2026-09-26)
+
+Reported from the phone: in fullscreen, a two-finger pan makes the video cover
+the whole device — *"nhưng khi thả ra thì nó trở về original size"*.
+
+The first finding is that **the app has no pinch gesture at all**. Nothing in
+`composeApp/src` or `iosApp` calls `detectTransformGestures`, and there is no
+`UIPinchGestureRecognizer` on the iOS side. So whatever was filling the screen
+was not a zoom, and the number of fingers was incidental — a *one*-finger drag
+did exactly the same thing.
+
+`WatchScreen` drew the picture as `fill = drag > 0f`. That expression is right
+everywhere it was written for: outside fullscreen the picture is travelling into
+the miniplayer's round window, and a 16:9 frame fitted inside a circle is a
+stripe with two black caps, so it crops from the first pixel of the gesture. In
+fullscreen there is no journey — the box is `fillMaxSize` and never shrinks — so
+the same expression meant *any* drag cropped the picture to the whole screen,
+and the spring back to zero handed it straight back.
+
+Measured on the emulator, as the width of the letterbox at each side of a
+2400x1080 screen:
+
+| | |
+|---|---|
+| at rest | **240px** — a 16:9 picture on a 20:9 screen |
+| while the finger was down | **0** |
+| two seconds after it lifted | **240** again |
+
+- **Two questions, and one number was answering both.** `fill` is now
+  `if (fullscreen) zoomedToFill else drag > 0f`. The drag keeps the crop it was
+  written for and fullscreen gets a state of its own, because covering the
+  screen there is something somebody asks for and expects to keep.
+- **It is a fact about this sitting, not a device preference.** Subtitles,
+  narration and autoplay are answers meant for every video; this one is about
+  *this* film on a phone held sideways, and a 2.39:1 film cropped to a handset
+  loses a third of every shot. Remembering it would mean a choice made for one
+  video quietly cutting the edges off the next. It is given back on the way out
+  of fullscreen from **one** place — a `LaunchedEffect(fullscreen)` — because
+  two call sites leave fullscreen and the second one is the one that forgets.
+- **`detectTransformGestures` could not be used**, and the reason is the whole
+  design of this screen. That detector reports a pan for a *single* finger too
+  and consumes what it reads, so it would have taken away the one-finger drag
+  that collapses the video into the miniplayer — and the two are indistinguishable
+  from the outside: the video would simply stop being draggable in fullscreen.
+  `pinchToFill` waits for a **second** pointer before it consumes anything, which
+  leaves the drag, the tap that shows the controls and the double tap that seeks
+  exactly as they were. Once two fingers are down it consumes every change, and
+  that is what stops the collapse drag running underneath a pinch: the fingers'
+  centroid moves as they open.
+- **The accumulator starts where the picture already is.** `calculateZoom`
+  reports the change since the previous event, so the gesture keeps its own
+  total; starting that total at 1 would make undoing a fill cost 11% when asking
+  for it cost 12%, while the same reversal *within* one gesture costs the whole
+  26%. Starting it at the threshold the current state sits on makes both the same
+  movement, and leaves the clamp as the only thing holding the memory.
+- **`fillFromPinch` is a named pure function with a test**, for the reason
+  `wholeSeconds`, `barTravel` and `shouldRecoverStall` are ones: both directions
+  compile, and a threshold the wrong way round shows up as a gesture that feels
+  sticky rather than as anything that fails.
+
+### Two fingers on an emulator
+
+`adb shell input` is one pointer — `motionevent` has no second — so the pinch is
+written straight at the panel's multi-touch protocol with `sendevent`, which
+needs `adb root`. Two things cost time and are worth keeping:
+
+- **This panel declares no `BTN_TOUCH`.** `getevent -pl` lists only
+  `BTN_TOOL_RUBBER` and `BTN_STYLUS` under KEY, with `ABS_MT_PRESSURE` under
+  ABS — so pressure is what says a finger is down, and the `BTN_TOUCH` every
+  tutorial sends is silently dropped.
+- **The rotation to use is not the rotation reported.** The panel stays portrait
+  while the app is landscape, and Android reported `ROTATION_90` while the
+  mapping that actually lands is the other one. Found by injecting a tap at the
+  exit-fullscreen button's own coordinates and checking whether the app left
+  fullscreen — a landmark with an unambiguous answer, rather than a derivation.
+- **`getevent` buffers when its output is redirected**, so a partial capture
+  read a moment later looks like events being dropped by the kernel. It was the
+  file, not the input core.
+
+Measured after: pinch out and the bars go to 0 and **stay** 0 two seconds after
+the fingers lift; pinch in and 240px comes back; a one-finger drag in fullscreen
+leaves 240px throughout; and a drag past the threshold still collapses the video
+into the miniplayer.

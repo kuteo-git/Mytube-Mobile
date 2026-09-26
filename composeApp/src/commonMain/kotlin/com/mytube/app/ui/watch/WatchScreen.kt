@@ -200,6 +200,22 @@ fun WatchContent(
     // pure function. Read once per composition rather than per row.
     val today = remember { todayISO() }
     var fullscreen by remember { mutableStateOf(false) }
+    // Whether the picture has been pinched out to cover the whole screen.
+    //
+    // A fact about this sitting rather than a device preference. The three that
+    // are preferences — subtitles, narration, autoplay — are answers somebody
+    // gives once and means for every video; this one is about *this* film on
+    // *this* phone held sideways, and a 2.39:1 film cropped to a handset throws
+    // away a third of every shot. Remembering it would mean a choice made for
+    // one video quietly cutting the edges off the next.
+    var zoomedToFill by remember { mutableStateOf(false) }
+    // And it is given back on the way out of fullscreen, in one place.
+    //
+    // Two call sites leave fullscreen — the chevron and the back arrow — and
+    // resetting at each is the shape of fault this charter has paid for
+    // repeatedly: the second one forgets. Keyed on the state itself, so
+    // whatever turns fullscreen off, this follows.
+    LaunchedEffect(fullscreen) { if (!fullscreen) zoomedToFill = false }
     var settingsOpen by remember { mutableStateOf(false) }
     val videoId = (state as? WatchState.Playing)?.video?.id.orEmpty()
 
@@ -366,7 +382,20 @@ fun WatchContent(
         ) {
         Box(
             if (fullscreen) {
-                Modifier.fillMaxSize().background(Color.Black)
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    // On the picture's own box rather than on the layer: this is
+                    // a gesture about the video, and the layer wraps the whole
+                    // page. It is also a descendant of the layer, which is what
+                    // lets it take the pinch — the main pointer pass runs from
+                    // the innermost node outward, so consuming here is what
+                    // stops the collapse drag reading the same fingers.
+                    .pinchToFill(
+                        enabled = true,
+                        filled = zoomedToFill,
+                        onFilled = { zoomedToFill = it },
+                    )
             } else {
                 Modifier
                     .align(Alignment.TopStart)
@@ -413,7 +442,32 @@ fun WatchContent(
         ) {
             when (state) {
                 is WatchState.Playing -> if (player != null) {
-                    VideoSurface(player, Modifier.fillMaxSize(), fill = drag > 0f)
+                    // Two different questions, and reading one number for both
+                    // is what shipped a fault.
+                    //
+                    // Outside fullscreen the crop belongs to the *journey*: the
+                    // picture is travelling into a round window, and a 16:9
+                    // frame fitted inside a circle is a stripe with two black
+                    // caps. So `drag > 0f` is exactly right there.
+                    //
+                    // In fullscreen there is no journey — the box is
+                    // `fillMaxSize` and never shrinks — so the same expression
+                    // meant *any* drag cropped the picture to the whole screen,
+                    // and the spring back to zero handed it straight back.
+                    // Reported as the video filling the device under a pan and
+                    // returning to its original size the moment the finger
+                    // lifted, and measured on the emulator: 240px of letterbox
+                    // at each side, 0 while the finger was down, 240 again two
+                    // seconds after it lifted.
+                    //
+                    // Filling the screen there is a thing somebody asks for and
+                    // expects to keep, so it is its own state and its own
+                    // gesture. See `pinchToFill`.
+                    VideoSurface(
+                        player,
+                        Modifier.fillMaxSize(),
+                        fill = if (fullscreen) zoomedToFill else drag > 0f,
+                    )
 
                     // Everything drawn *on* the picture goes as soon as the drag
                     // starts, and quickly — gone by a sixth of the journey.
