@@ -47,6 +47,17 @@ app=$archive/Products/Applications/Mytube.app
 echo "==> packaging"
 mkdir -p "$work/Payload"
 cp -R "$app" "$work/Payload/"
+# The signature the archive put on goes with it, and the profile especially.
+#
+# AltStore re-signs whatever it is handed — that is the whole reason the export
+# step above is skipped — so both of these are thrown away on install. Leaving
+# them in is not merely dead weight: `embedded.mobileprovision` carries the
+# **UDID of every registered device**, the team id and the account holder's
+# name, in plain text. This IPA is attached to a release on a public
+# repository, and publishing a household's phone id there is not something the
+# build should do quietly on the way past.
+rm -rf "$work/Payload/Mytube.app/embedded.mobileprovision" \
+       "$work/Payload/Mytube.app/_CodeSignature"
 # `cd` into the staging directory so the zip holds `Payload/…` and not the
 # whole path from the root of the disk — an IPA with a deeper tree in it is one
 # no installer will open.
