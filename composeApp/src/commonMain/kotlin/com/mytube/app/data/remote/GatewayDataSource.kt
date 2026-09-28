@@ -17,6 +17,7 @@ import com.mytube.app.data.remote.dto.PlaylistPageDto
 import com.mytube.app.data.remote.dto.PlaylistsDto
 import com.mytube.app.data.remote.dto.ProfilesDto
 import com.mytube.app.data.remote.dto.ResolveChannelDto
+import com.mytube.app.data.remote.dto.StoryboardDto
 import com.mytube.app.data.remote.dto.StreamDto
 import com.mytube.app.data.remote.dto.TopicsDto
 import com.mytube.app.data.remote.dto.TtsConfigDto
@@ -200,6 +201,23 @@ class GatewayDataSource(private val client: HttpClient) {
      */
     suspend fun stream(baseUrl: String, userId: String, videoId: String): StreamDto =
         client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/stream") {
+            identify(userId)
+        }.orThrow().body()
+
+    /**
+     * The scrub-preview sheets for a video.
+     *
+     * The gateway answers **404** for a video with no ladder, which is most of
+     * this library, so the caller turns a [GatewayException] into "no preview"
+     * rather than a failure. It is not an error path being used for control flow:
+     * "this video has no sheets" is genuinely what a 404 on this route means, and
+     * a 200 carrying an empty list would be the route claiming to have answered.
+     *
+     * The first ask is slow — the server copies the sheets from YouTube — and
+     * every ask after it is answered off the disk in milliseconds.
+     */
+    suspend fun storyboard(baseUrl: String, userId: String, videoId: String): StoryboardDto =
+        client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/storyboard") {
             identify(userId)
         }.orThrow().body()
 

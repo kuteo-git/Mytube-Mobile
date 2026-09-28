@@ -5,11 +5,13 @@ import com.mytube.app.data.remote.GatewayDataSource
 import com.mytube.app.data.repository.NarrationRepositoryImpl
 import com.mytube.app.data.repository.PreferencesRepositoryImpl
 import com.mytube.app.data.repository.ServerRepositoryImpl
+import com.mytube.app.data.repository.StoryboardRepositoryImpl
 import com.mytube.app.data.repository.StreamRepositoryImpl
 import com.mytube.app.data.repository.VideoRepositoryImpl
 import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.PreferencesRepository
 import com.mytube.app.domain.repository.ServerRepository
+import com.mytube.app.domain.repository.StoryboardRepository
 import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayerFactory
 import com.mytube.app.domain.repository.VideoRepository
@@ -89,6 +91,9 @@ class AppContainer(
     val videoRepository: VideoRepository = VideoRepositoryImpl(gateway, serverRepository)
 
     val streamRepository: StreamRepository = StreamRepositoryImpl(gateway, serverRepository)
+
+    val storyboardRepository: StoryboardRepository =
+        StoryboardRepositoryImpl(gateway, serverRepository)
 
     val preferencesRepository: PreferencesRepository = PreferencesRepositoryImpl(settings)
 

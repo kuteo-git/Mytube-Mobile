@@ -11,6 +11,7 @@ import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Stream
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Topic
+import com.mytube.app.domain.model.StoryboardState
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.ChannelPage
 import com.mytube.app.domain.repository.FeedMix
@@ -20,6 +21,7 @@ import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.PlaylistPage
 import com.mytube.app.domain.repository.PreferencesRepository
+import com.mytube.app.domain.repository.StoryboardRepository
 import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
@@ -260,6 +262,7 @@ class WatchQueueTest {
         videos: FakeVideos,
         queue: List<QueueItem>,
         streams: StreamRepository = FakeStreams,
+        storyboards: StoryboardRepository = FakeStoryboards,
         videoId: String = "first",
     ): WatchViewModel {
         val model = WatchViewModel(
@@ -270,6 +273,7 @@ class WatchQueueTest {
             mediaBaseUrl = "http://mac:8180",
             videos = videos,
             streams = streams,
+            storyboards = storyboards,
             narration = FakeNarration,
             preferences = FakePreferences,
             openedFrom = queue,
@@ -403,6 +407,17 @@ class WatchQueueTest {
             containsVideo = false,
             thumbnailPaths = emptyList(),
         )
+    }
+
+    /**
+     * No preview, which is what most of this library answers.
+     *
+     * Neither of these tests is about storyboards, so the honest stub is the
+     * answer a video with no ladder really gets — a test that accidentally
+     * reaches this takes the path a Short takes rather than one nothing takes.
+     */
+    private object FakeStoryboards : StoryboardRepository {
+        override suspend fun storyboard(videoId: String) = StoryboardState.None
     }
 
     private object FakeStreams : StreamRepository {

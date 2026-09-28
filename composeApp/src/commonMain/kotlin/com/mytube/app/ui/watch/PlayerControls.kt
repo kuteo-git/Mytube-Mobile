@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -44,7 +45,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -55,9 +61,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import coil3.compose.rememberAsyncImagePainter
+import com.mytube.app.domain.model.StoryboardState
+import com.mytube.app.domain.model.frameAt
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
+import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.GlassItem
 import com.mytube.app.ui.shell.GlassPane
@@ -67,6 +77,8 @@ import com.mytube.app.ui.shell.glassSurface
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.theme.Tokens
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * How long the controls stay up after a touch, in milliseconds.
@@ -126,6 +138,30 @@ fun PlayerControls(
      */
     isLive: Boolean,
     fullscreen: Boolean,
+    /**
+     * The stills to draw while a finger is on the bar.
+     *
+     * Passed in rather than fetched here: this is a composable that is rebuilt on
+     * every frame of a drag, and the sheets are one answer per video that the
+     * ViewModel already holds.
+     */
+    storyboard: StoryboardState,
+    /**
+     * Whether the picture has been pinched out to cover the screen.
+     *
+     * Only ever true in fullscreen — outside it the picture is a band at the top
+     * of a page and there is nothing to fill. The scrub preview reads it so that
+     * it is cropped exactly as the video is.
+     */
+    zoomedToFill: Boolean,
+    /**
+     * Where the library is, for turning a sheet's path into something loadable.
+     *
+     * The sheets are copied under the media root by the server, so they arrive as
+     * paths relative to it — the same kind of reference as a thumbnail's, and
+     * resolved by the same function.
+     */
+    mediaBaseUrl: String,
     /**
      * The video's title and channel, drawn **only in fullscreen**.
      *
@@ -754,22 +790,51 @@ fun PlayerControls(
             }
         }
 
-        // The time being aimed at, in the middle of the picture.
+        // The still being aimed at, over the whole picture, with the time on it.
         //
-        // In the middle because that is where the eye already is — the corner
-        // pill is a readout of where playback *is*, and while a finger is on the
-        // bar the question is where it is going. Only while scrubbing: two
-        // clocks disagreeing by a minute is the state this replaces.
+        // It covers the player rather than floating in a box on it, which is what
+        // YouTube's own phone player does and what was asked for by name. The
+        // first version drew a 90dp card in the middle and it reads as a
+        // thumbnail *about* the video rather than as the video moving: the thing
+        // somebody scrubbing is looking for is a scene, and a scene is easier to
+        // recognise at the size the scene is normally watched.
+        //
+        // Only while a finger is down, because a phone has no hover. The picture
+        // underneath keeps playing and is simply hidden — the sound carries on,
+        // which is what makes letting go feel like arriving rather than starting.
+        //
         if (scrubbing) {
+            val aimedAt = scrub * playback.durationSeconds
+            ScrubPreview(
+                storyboard = storyboard,
+                seconds = aimedAt,
+                mediaBaseUrl = mediaBaseUrl,
+                fill = zoomedToFill,
+                // Under the bar, which is written *before* this block and would
+                // otherwise be covered by a still that fills the picture. The
+                // bar is the one control that must survive its own gesture: it
+                // is what says where the finger is, and hiding it under the
+                // answer would leave nothing to aim with.
+                modifier = Modifier.matchParentSize().zIndex(-1f),
+            )
+            // The number at the foot of the picture, not in the middle of it.
+            //
+            // Centred was right while the middle was empty — the charter's own
+            // reason, that it is where the eye already is. It is not empty any
+            // more: the middle is now the still, and a pill over the middle of a
+            // frame hides the subject of the one picture somebody is reading.
+            // The same clearance as the control row, so the readout sits where
+            // the corner clock sits and the two never disagree about the line.
             Box(
                 Modifier
-                    .align(Alignment.Center)
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = controlRowBottom(fullscreen, navigationInset))
                     .clip(RoundedCornerShape(percent = 50))
                     .background(Color.Black.copy(alpha = 0.72f))
                     .padding(horizontal = Space.lg, vertical = Space.sm),
             ) {
                 Text(
-                    text = formatDuration((scrub * playback.durationSeconds).toInt()),
+                    text = formatDuration(aimedAt.toInt()),
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Medium,
@@ -777,6 +842,144 @@ fun PlayerControls(
             }
         }
     }
+}
+
+/**
+ * One still from a sprite sheet, drawn while a finger is on the bar.
+ *
+ * ## How a grid becomes one frame, without touching a bitmap
+ *
+ * The sheet is a single image holding `rows x columns` stills and what has to
+ * appear is one cell of it. So the sheet is drawn at full size inside a box the
+ * size of one cell, shifted by a negative offset, and the box clips the rest —
+ * the same trick a browser does with a background position, and the reason this
+ * needs no access to the decoded bitmap. Cropping properly would mean an
+ * `ImageBitmap` and `drawImage` with a source rectangle, which means getting a
+ * bitmap out of an async loader, which means a second loading state on a control
+ * that is already being dragged.
+ *
+ * It also means the loader holds **one** decoded sheet however many stills come
+ * off it, so moving a thumb across the bar costs no fetch and no decode after the
+ * first. Twenty-five stills per sheet, at the rung the server prefers.
+ *
+ * ## Why nothing is drawn rather than a placeholder
+ *
+ * Most of this library has no storyboard, and a grey rectangle over the picture
+ * for every one of those videos would be worse than the bar as it was — it says
+ * a picture is coming when none is. The clock under this is drawn either way, so
+ * the gesture is always answered.
+ */
+@Composable
+private fun ScrubPreview(
+    storyboard: StoryboardState,
+    seconds: Double,
+    mediaBaseUrl: String,
+    /**
+     * Whether the viewer has asked the picture to cover the screen.
+     *
+     * Passed in rather than decided here, because it is not a fact about the
+     * still: it is the state of the *video* this is standing in for, and the
+     * whole job of a preview is to be the same shape as what it replaced.
+     */
+    fill: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val board = (storyboard as? StoryboardState.Ready)?.board ?: return
+    val frame = board.frameAt(seconds) ?: return
+    val painter = rememberAsyncImagePainter(imageModel(mediaBaseUrl, frame.sprite))
+
+    Box(
+        modifier
+            // Opaque, because this replaces the picture rather than sitting on
+            // it. A translucent still over a moving video is two frames of the
+            // same film at once, which is unreadable in exactly the moment it
+            // has to be read.
+            .background(Color.Black)
+            // The crop is a drawing instruction, not a layout.
+            //
+            // The obvious construction — the sheet as a child sized to the whole
+            // grid, shifted by a negative offset, the way a browser moves a
+            // background — was built first and measured, and it fails past a
+            // distance: a one-tile shift drew the right still, and a five-tile
+            // shift a moment later in the same video drew **black**, with the
+            // node measured at its full size and the image reporting Success.
+            // Whatever culls it lives below Compose, and a preview that works
+            // for the first column of every sheet is worse than none.
+            //
+            // Translating inside a `DrawScope` has no such limit: there is no
+            // layer to place and nothing to cull. It is also the cheaper of the
+            // two for what this does — the still changes on every frame of a
+            // drag, and this costs a redraw where a modifier carrying a new
+            // offset costs a relayout.
+            .drawBehind {
+                // Whatever the video was asked to do, this does too.
+                val scale = scrubPreviewScale(
+                    boxWidth = size.width,
+                    boxHeight = size.height,
+                    tileWidth = board.tileWidth,
+                    tileHeight = board.tileHeight,
+                    fill = fill,
+                )
+                val width = board.tileWidth * scale
+                val height = board.tileHeight * scale
+                val left = (size.width - width) / 2f
+                val top = (size.height - height) / 2f
+
+                // The cell, and never past the picture's own edges.
+                //
+                // Two bounds in one rectangle, because the two cases need
+                // opposite halves of it: fitted, the cell is smaller than the
+                // box and the clip stops the tiles around it bleeding into the
+                // letterbox; filled, the cell is larger and the clip stops it
+                // spilling over the page below.
+                clipRect(
+                    left = max(left, 0f),
+                    top = max(top, 0f),
+                    right = min(left + width, size.width),
+                    bottom = min(top + height, size.height),
+                ) {
+                    translate(left = left - frame.x * scale, top = top - frame.y * scale) {
+                        with(painter) {
+                            draw(
+                                Size(
+                                    width = board.columns * board.tileWidth * scale,
+                                    height = board.rows * board.tileHeight * scale,
+                                ),
+                            )
+                        }
+                    }
+                }
+            },
+    )
+}
+
+
+/**
+ * How much to enlarge a still so it sits in the picture's box the way the video
+ * does.
+ *
+ * Two answers, and which one is right is not a fact about the still: it is
+ * whatever the viewer has asked the *video* to do. Fitted, both are letterboxed
+ * to the same shape; filled, both are cropped to the same edges. A preview that
+ * picks for itself is a preview that disagrees with the picture it replaced —
+ * reported from a phone as *"khi drag timer thì nó ko khít như video"*, with the
+ * video edge to edge and the still in a letterbox inside it.
+ *
+ * A named function with a test for the reason `fillFromPinch` and `barTravel`
+ * are ones: `min` and `max` both compile, both draw a picture, and the wrong one
+ * is only visible beside the frame it is standing in for.
+ */
+internal fun scrubPreviewScale(
+    boxWidth: Float,
+    boxHeight: Float,
+    tileWidth: Int,
+    tileHeight: Int,
+    fill: Boolean,
+): Float {
+    if (tileWidth <= 0 || tileHeight <= 0) return 0f
+    val byWidth = boxWidth / tileWidth
+    val byHeight = boxHeight / tileHeight
+    return if (fill) max(byWidth, byHeight) else min(byWidth, byHeight)
 }
 
 /**

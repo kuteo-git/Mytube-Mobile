@@ -5159,3 +5159,169 @@ Measured after: pinch out and the bars go to 0 and **stay** 0 two seconds after
 the fingers lift; pinch in and 240px comes back; a one-finger drag in fullscreen
 leaves 240px throughout; and a drag past the threshold still collapses the video
 into the miniplayer.
+
+## The scrub bar grew a picture (2026-09-27)
+
+Reported as: dragging shows no image of the moment being aimed at, with the
+suspicion that yt-dlp was at fault. It was not, and the charter's own note from
+2026-08-31 had the shape of it right — *"the server has no storyboard… it is a
+change in both repositories"* — while being wrong about what that costs. There
+are no sprites to cut at ingest: YouTube publishes the whole ladder and yt-dlp
+has always extracted it. The server repository's entry holds the measurements.
+
+**What was here**: a readout, centred over the picture, saying the time. That
+was the whole of it, and the charter's own words for this fault elsewhere fit —
+*a readout is not a control* — except that here the readout was right and
+incomplete.
+
+- **The still covers the player.** It was a 90dp card floating in the middle
+  first, and that was reported in one sentence — *"ủa nó ko fill player như
+  youtube ở mobile hả"* — which is right, and the reason is that a card reads as
+  a thumbnail *about* the video rather than as the video moving. Somebody
+  scrubbing is looking for a scene, and a scene is easiest to recognise at the
+  size it is normally watched.
+- **So the rung had to go up, and that is a decision in the other repository.**
+  Filling a 1080-pixel picture from a 160-pixel tile is a 6.75x enlargement:
+  blocky, not soft. The server copies the 180-tall rung now, at 3.4x, and pays
+  for it in disk. The card version did not need that and the full-bleed version
+  cannot do without it — one change forced the other, which is worth saying
+  because the two look unrelated in a diff.
+- **Shaped like the picture, which is not the same as fitted.** The first
+  version always fitted, with the right argument attached: a portrait upload is
+  letterboxed in the same 16:9 box while it plays, so a still cropped to fill
+  would be a different shape from the picture it replaced. True, and it answers
+  the wrong question — the shape to match is whatever the *video* was asked to
+  do, and in fullscreen the viewer can pinch it out to cover the screen.
+  Reported from the phone: *"ở mode zoom, dùng 2 ngón tay pan ra để cho nó fit
+  với màn hình, khi drag timer thì nó ko khít như video"*. Measured on the
+  emulator at the time: the video's black bars were **0px** and the preview's
+  **240px**.
+  - `scrubPreviewScale` is a named pure function with a test, for the reason
+    `fillFromPinch` and `barTravel` are ones: `min` and `max` both compile, both
+    draw a picture, and the wrong one is only visible beside the frame it stands
+    in for.
+  - **The clip is an intersection, and both halves of it are load-bearing.**
+    Fitted, the cell is smaller than the box and the clip stops the tiles around
+    it bleeding into the letterbox; filled, the cell is larger and the clip stops
+    it spilling over the page below.
+- **Opaque.** A translucent still over a moving video is two frames of the same
+  film at once, unreadable in exactly the moment it has to be read.
+- **The clock moved to the foot of the picture.** Centred was right while the
+  middle was empty — this charter's own reason, that it is where the eye already
+  is. It is not empty any more, and a pill over the middle of a frame hides the
+  subject of the one picture somebody is reading. It takes `controlRowBottom`,
+  so it sits exactly where the corner clock sits.
+- **`zIndex(-1f)`, and it is load-bearing.** The seek bar is written *before*
+  this block, so a still filling the picture covers it. The bar is the one
+  control that must survive its own gesture: it is what says where the finger
+  is, and hiding it under the answer leaves nothing to aim with.
+- **`frameAt` is a named pure function with a test**, for the reason
+  `wholeSeconds`, `barTravel` and `fillFromPinch` are ones: nothing in the type
+  system catches an off-by-one, and getting it wrong does not fail — it draws a
+  confident picture of the wrong scene for the whole video. Read column-major
+  instead of row-major and every moment shows the still five places away.
+- **Clamped to the last cell of the last sheet.** The last sheet is usually only
+  partly filled, so a moment near the end lands in a cell that exists while the
+  one after it does not. Without the clamp the final seconds of every video have
+  no picture — exactly where somebody hunting the closing scene drags to.
+- **`StoryboardState`, not a nullable board.** Most of this library has no
+  ladder, so "not asked yet" and "this video has none" are two answers the bar
+  draws the same thing for, and a state makes that a decision rather than a
+  coincidence. A `Ready` board is already known to be drawable, so no screen
+  asks twice.
+- **Its own port.** `StreamRepository` answers "how can this be played" — asked
+  when somebody presses play, may involve talking to YouTube, and can answer
+  differently a minute later. This asks what a *control* can draw, once per
+  video, and its answer never changes. `NarrationRepository` is the other
+  on-demand server asset and is not the place either: that one drives a job.
+- **Every failure is "no preview".** A 404 means no ladder, which is most of the
+  library; a refused connection means the video is not playing either and the
+  screen already says so. The cost is stated rather than hidden: a preview that
+  fails for a reason worth knowing fails silently, and the gateway's log is
+  where it is written.
+- **Asked for on opening the video, not on first touching the bar.** The first
+  ask is the slow one, and the moment somebody wants a preview is the moment
+  they are already dragging. The up-next rail's rule, applied to a control.
+- **A broadcast is skipped**: no zero and no end, which is why narration refuses
+  one too.
+
+### The crop is a drawing instruction, because a layout could not be
+
+The obvious construction is the browser's: the sheet as a child sized to the
+whole grid, shifted by a negative offset, clipped by a box one cell wide. It was
+built first, and it **fails past a distance**.
+
+Measured, with the node reporting its full `2100x1181` and Coil reporting
+`Success`: a shift of one tile (`-420px`) drew the right still; `-1260px` on the
+same sheet a moment later drew **black**. Both `Modifier.offset` and a
+`graphicsLayer` translation behave the same way, and the black is total rather
+than partial. Whatever culls it lives below Compose.
+
+A preview that works for the first column of every sheet is worse than none, so
+the crop is now `drawBehind { clipRect { translate { painter.draw() } } }` —
+no layer to place and nothing to cull. It is also the cheaper of the two for
+what this does: the still changes on every frame of a drag, and this costs a
+redraw where a modifier carrying a new offset costs a relayout.
+
+- **`requiredSize` was a real fix and not this one.** `Modifier.size` is coerced
+  into the parent's constraints, so the sheet was first squashed to one cell and
+  then shifted by an offset measured for a sheet five times wider. It is gone
+  with the layout approach, and the lesson stands for the next thing that has to
+  be larger than the box clipping it.
+
+### Measured on the emulator, on the release build
+
+Open a video, hold a drag on the bar, screenshot: the picture is replaced by
+the still of the moment under the finger, the time pill sits at its foot, the
+red bar is still drawn along the bottom, and the still **changes with the
+position**. The sheets are copied on opening the video.
+
+The loop is a held touch (`adb shell input motionevent DOWN`, which `input tap`
+cannot do) plus a screenshot, and it was read as an image rather than scored:
+the first three attempts at a numeric check compared crops of crops, because
+**macOS is case-insensitive and `a.png` had quietly overwritten `A.png`** — the
+same trap this charter records from the KLIB hunt. For a question about what is
+drawn, the instrument is the picture.
+
+### Driving a pinch on the emulator, and a rotation that lies
+
+Reproducing that took two things this charter had recorded in harder forms.
+
+- **Two fingers go through `ABS_MT_SLOT` on one device.** The emulator lists a
+  device per finger (`virtio_input_multi_touch_1..11`) and only the first is
+  routed: measured, a tap injected on `event1` reveals the controls and the same
+  tap on `event2` does nothing at all. `event1` declares slots 0..10, so both
+  fingers belong on it. Measured after: the video's bars went 240px → 0.
+- **The rotation to use is not the rotation reported.** `dumpsys` says
+  `ROTATION_90` and the mapping that actually lands is ROTATION_270's —
+  `(X, Y) → (1080 − Y, X)`. Found by injecting a tap at the exit-fullscreen
+  button and checking whether the app left fullscreen, which is a landmark with
+  an unambiguous answer.
+- **In fullscreen the bar follows the controls, so the loop has to reveal them
+  first.** A run that skipped it measured "both fill" on a drag that never
+  registered — green for the wrong reason, and the reason the loop now asserts
+  the overlay is up before it believes either number.
+
+### The web app has it too, from the same numbers
+
+`storyboardFrame` in `web/src/features/watch/domain/storyboard.ts` is the same
+function in TypeScript, with the same tests, and the still is a
+`background-position` on one `<div>` — so the browser holds one decoded sheet
+however many stills come off it. There the gesture is **hover**, before anything
+is pressed, which is why the bar tracks the pointer separately from the range
+input's value: reading that would follow the playhead rather than the cursor.
+
+**The taller rung reaches the web as a sharper picture, not a bigger one.** A
+pointer hovering a bar wants nothing like a full-player still, so the scale
+there now allows going *below* 1: the same 160x90 box, drawn from a 320-pixel
+tile at half size. Measured after: `background-size: 480px 270px` in a box still
+160x90.
+
+Measured with Playwright against the running gateway: storyboard 200, a preview
+element carrying `/media/4xil_0qwrKY/storyboard/0.webp` at
+`background-position: -320px -180px` over `background-size: 800px 450px`, drawn
+160x90 above the bar with the time under it.
+
+**`npx tsc --noEmit` does not check that project.** It exits 0 on a file with an
+unresolved identifier in it; `tsc -b`, which is what `npm run build` runs, finds
+it. An unresolved `mediaURL` nearly shipped behind a green typecheck.

@@ -7,6 +7,7 @@ import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.Narration
+import com.mytube.app.domain.model.StoryboardState
 import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Reaction
@@ -17,6 +18,7 @@ import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.PlayingSubtitle
 import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.PreferencesRepository
+import com.mytube.app.domain.repository.StoryboardRepository
 import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
@@ -157,6 +159,17 @@ sealed interface WatchState {
         val railCollapsed: Boolean = false,
         /** The rail is filtered to this video's own channel. */
         val railChannelOnly: Boolean = false,
+        /**
+         * The stills the seek bar draws while a finger is on it.
+         *
+         * [StoryboardState.Loading] until the answer lands and
+         * [StoryboardState.None] for most of this library, which has no ladder.
+         * Held as a state rather than a nullable board because "not asked yet"
+         * and "this video has none" are different answers and the bar draws the
+         * same thing for both — a state makes that a decision rather than a
+         * coincidence.
+         */
+        val storyboard: StoryboardState = StoryboardState.Loading,
         /** The track being shown, or empty for none. */
         val subtitleLanguage: String = "",
         /**
@@ -253,6 +266,7 @@ class WatchViewModel(
     private val mediaBaseUrl: String,
     private val videos: VideoRepository,
     private val streams: StreamRepository,
+    private val storyboards: StoryboardRepository,
     private val narration: NarrationRepository,
     private val preferences: PreferencesRepository,
     /**
@@ -1032,6 +1046,7 @@ class WatchViewModel(
 
             loadUpNext("")
             fillDescription()
+            loadStoryboard()
             // Before the narration decision below, and deliberately: on a video
             // nobody has opened before there are no caption tracks yet, and the
             // pass this app is about to ask for reads one.
@@ -1093,6 +1108,41 @@ class WatchViewModel(
      * is a round trip to YouTube and the caller's block has work behind it that
      * the viewer is actually waiting on.
      */
+    /**
+     * The scrub-preview sheets, asked for on opening the video.
+     *
+     * Asked now rather than when a finger first touches the bar. The first ask is
+     * the slow one — the server copies the sheets from YouTube — and the moment
+     * somebody wants a preview is the moment they are already dragging: fetching
+     * then would answer a gesture seconds after it ended. This is the up-next
+     * rail's own rule, that a round trip nothing on screen is waiting for runs
+     * behind the one call the viewer *is* waiting on, applied to a control.
+     *
+     * A broadcast is skipped. It has no zero and no end — the charter's reason
+     * narration refuses one — so there is no ladder to publish and nothing a
+     * still could be placed against.
+     */
+    private fun loadStoryboard() {
+        val current = _state.value as? WatchState.Playing ?: return
+        if (current.isLive) return
+        val id = current.video.id
+
+        viewModelScope.launch {
+            val board = storyboards.storyboard(id)
+            _state.update { state ->
+                // The id is checked for `fillDescription`'s reason: the first ask
+                // is seconds of copying and pressing next takes one, so without
+                // this a video's stills would be drawn on the next video's bar —
+                // a preview that is confidently wrong, which is worse than none.
+                if (state is WatchState.Playing && state.video.id == id) {
+                    state.copy(storyboard = board)
+                } else {
+                    state
+                }
+            }
+        }
+    }
+
     private fun fillDescription() {
         val current = _state.value as? WatchState.Playing ?: return
         if (current.video.description.isNotEmpty()) return

@@ -1169,6 +1169,7 @@ fun App(
                         mediaBaseUrl = baseUrl,
                         videos = container.videoRepository,
                         streams = container.streamRepository,
+                        storyboards = container.storyboardRepository,
                         narration = container.narrationRepository,
                         preferences = container.preferencesRepository,
                         openedFrom = session.queue,
