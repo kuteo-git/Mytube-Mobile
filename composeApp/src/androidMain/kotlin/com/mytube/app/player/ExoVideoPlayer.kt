@@ -90,6 +90,19 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
     private var pending: Pair<PlayingMedia, Double>? = null
 
     /**
+     * Whether the caller has asked for sound since the last load.
+     *
+     * `load` only buffers — the port's contract — and `play` is a separate
+     * request. It has to be remembered rather than forwarded, because the first
+     * load usually lands before the service connection does, and a `play()`
+     * sent to a controller that does not exist yet is simply lost. `start` used
+     * to call `play()` unconditionally instead, which is what made the restored
+     * miniplayer of the last session start talking on launch on Android while
+     * iOS honoured `autoPlay = false`.
+     */
+    private var wantsPlay = false
+
+    /**
      * The second voice, built once the controller exists.
      *
      * It needs the video's player to read the playhead from and to duck, and
@@ -205,6 +218,7 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
 
     override fun load(media: PlayingMedia, startAtSeconds: Double) {
         _state.update { PlaybackState(isLive = media.isLive) }
+        wantsPlay = false
         if (controller == null) {
             pending = media to startAtSeconds
             return
@@ -232,10 +246,12 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
     }
 
     override fun play() {
+        wantsPlay = true
         controller?.play()
     }
 
     override fun pause() {
+        wantsPlay = false
         controller?.pause()
     }
 
@@ -362,7 +378,10 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
             (startAtSeconds * 1000).toLong().coerceAtLeast(0),
         )
         player.prepare()
-        player.play()
+        // Set, not merely "play if asked": `playWhenReady` survives
+        // `setMediaItem`, so a controller that was playing the last video would
+        // start this one on its own.
+        player.playWhenReady = wantsPlay
     }
 
     private fun durationOrZero(): Double =
