@@ -300,11 +300,17 @@ watching, its red bar drawn.
   of the gesture uncovers an empty background and the feed snaps in at the end,
   which reads as a reload rather than a video moving out of the way. So Home and
   Watch are one branch of the route, stacked in a Box.
-- **The threshold is a third of the screen, and distance only — no velocity.** A
-  flick is the same intent as a slow drag past the line, and reading velocity
-  means a quick short flick meant as a scroll can dismiss. That is the failure
-  people describe as an app closing on its own, and the cost of getting it wrong
-  is throwing away the video somebody was watching.
+- ~~**The threshold is a third of the screen, and distance only — no velocity.**
+  A flick is the same intent as a slow drag past the line, and reading velocity
+  means a quick short flick meant as a scroll can dismiss.~~ **Superseded, and
+  corrected on 2026-10-03** — the QA pass measured a collapse at ~100pt and
+  read the gap as a fault. The rule changed when the gesture was rebuilt on the
+  web app's arithmetic (`SwipeToDismiss.kt`): the picture travels into the bar,
+  so the line is **a quarter of the picture's height** (`COMMIT_FRACTION`,
+  ~55pt on an iPhone 16e), and a flick past **700 px/s** commits at any
+  distance (`COMMIT_VELOCITY`). The scroll-flick risk this bullet refused
+  velocity over is answered by *where* the drag may start — on the picture,
+  which does not scroll. The file's own comments carry the reasoning.
 - **A fraction, not a number of pixels.** A thumb's idea of "most of the way
   down" scales with the phone; 240px is decisive on a small screen and a nudge on
   a tablet.
@@ -1313,6 +1319,11 @@ right one was "then do not use a popup layer".
 `GlassSheet` is an ordinary child of the caller's full-screen `Box`, at real
 coordinates. Measured: the settings sheet frosts the watch page behind it, and
 the profile sheet frosts the feed.
+
+**The profile picker is no longer a sheet** (corrected 2026-10-03). It is a
+page, `Route.Profile`, opened from the Profile row in Settings — so the profile
+lines below describe what was true when this was written, not what the app
+draws now. The player's settings are the sheet this entry's rules still govern.
 
 - **Everything the platform sheet gave away had to be rebuilt** — the rise,
   tap-outside, drag-down, back. A sheet missing any one of them is a trap. All
@@ -5351,6 +5362,19 @@ no ears.
   server: it stripped the query from every still, and `hq720_custom_N.jpg` is a
   404 without the signature YouTube handed out. Fixed there; its changelog has
   the measurement.
+
+### One sighting that would not come back
+
+While the simulator was being set up, a screenshot six seconds after a cold
+launch showed **Settings** with profile **KuTeo**, and a tap a minute later
+landed on **Home** — while the device's stored profile is Tuấn Khanh, which
+only the profile page writes. Four cold launches from Settings afterwards,
+sampled through the accessibility tree every 0.4s, and a ten-frame screenshot
+burst, all went straight to Home with nothing before it. No loop, so no cause
+is claimed. The cheapest explanation is a stale picture of an older session
+shown while a freshly installed Debug build was still starting; the thing to
+check, if it is ever seen on the phone, is whether the profile name changes
+with it.
 
 ### Driving the simulator, written down at last
 
