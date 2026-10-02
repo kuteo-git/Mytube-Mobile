@@ -46,6 +46,38 @@ class PlaylistViewModelTest {
     }
 
     /**
+     * The count in the header follows the rows.
+     *
+     * Found by QA: remove the last video and the page said "1 video" over an
+     * empty list, because the header reads `itemCount` from the first answer
+     * and only the rows were changed.
+     */
+    @Test
+    fun removingLowersTheCountInTheHeader() = runTest(dispatcher) {
+        val model = PlaylistViewModel("pl_music", FakePlaylist())
+        advanceUntilIdle()
+        val before = assertIs<PlaylistState.Ready>(model.state.value).playlist.itemCount
+
+        model.remove(video("v1"))
+        advanceUntilIdle()
+
+        assertEquals(before - 1, assertIs<PlaylistState.Ready>(model.state.value).playlist.itemCount)
+    }
+
+    /** And comes back with the row when the server refuses. */
+    @Test
+    fun aRefusedRemovalPutsTheCountBack() = runTest(dispatcher) {
+        val model = PlaylistViewModel("pl_music", FakePlaylist(removeFails = true))
+        advanceUntilIdle()
+        val before = assertIs<PlaylistState.Ready>(model.state.value).playlist.itemCount
+
+        model.remove(video("v1"))
+        advanceUntilIdle()
+
+        assertEquals(before, assertIs<PlaylistState.Ready>(model.state.value).playlist.itemCount)
+    }
+
+    /**
      * A failed removal puts the row back.
      *
      * Unlike the feed's "not interested", which never returns a card: that list

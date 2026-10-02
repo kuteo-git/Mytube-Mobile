@@ -89,13 +89,15 @@ fun PlaylistsScreen(
     onOpenSettings: () -> Unit,
     onOpenSaved: () -> Unit,
     onOpenPlaylist: (String) -> Unit,
+    /** See `PlaylistScreen`'s parameter of the same name; the tab has the same fault. */
+    edits: Int,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // Asked again on arrival, quietly. The ViewModel is held in the activity's
     // store and outlives this route, so a playlist made from the sheet on Home
     // would otherwise be missing here until the app was restarted.
-    LaunchedEffect(Unit) { viewModel.refresh() }
+    LaunchedEffect(edits) { viewModel.refresh() }
 
     PlaylistsContent(
         state = state,

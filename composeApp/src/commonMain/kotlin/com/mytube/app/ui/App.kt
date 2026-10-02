@@ -30,6 +30,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -389,6 +390,10 @@ fun App(
             // `video.saved`, so it has to be told. A card's menu row reads
             // "Lưu vào playlist" whatever the answer, and has nothing to redraw.
             var savedSink: ((Boolean) -> Unit)? by remember { mutableStateOf(null) }
+            // Every page that lists playlists asks again when this moves. They
+            // are composed under the watch layer, so a save made there reaches
+            // them by no arrival of their own.
+            var playlistEdits by remember { mutableIntStateOf(0) }
             val openSaveSheet: (SaveTarget) -> Unit = { target ->
                 savingTarget = target
                 sheetOpen = true
@@ -867,6 +872,7 @@ fun App(
                                     onOpenSettings = { route = Route.Setup },
                                     onOpenSaved = { route = Route.Saved },
                                     onOpenPlaylist = { route = Route.Playlist(it) },
+                                    edits = playlistEdits,
                                 )
 
                                 Tab.Settings -> SettingsScreen(
@@ -1041,6 +1047,7 @@ fun App(
                         // player had to change.
                         onOpenVideo = { id, queue -> watching = WatchSession(id, queue = queue) },
                         onOpenChannel = openChannel,
+                        edits = playlistEdits,
                         onDeleted = { deleted ->
                             // Told rather than refetched: the page knows which
                             // row went, and asking the server again would draw
@@ -1538,6 +1545,7 @@ fun App(
                     onDismiss = { sheetOpen = false },
                     onSaved = { saved ->
                         savedSink?.invoke(saved)
+                        playlistEdits++
                         sheetOpen = false
                     },
                 )

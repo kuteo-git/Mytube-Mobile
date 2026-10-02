@@ -69,6 +69,15 @@ fun PlaylistScreen(
     onOpenVideo: (String, List<QueueItem>) -> Unit,
     onOpenChannel: (String) -> Unit,
     onDeleted: (playlistId: String) -> Unit,
+    /**
+     * How many times the save sheet has applied something, from anywhere.
+     *
+     * Arrival alone is not enough: this page stays composed under the watch
+     * layer, so a video saved into it from the watch screen's sheet never
+     * arrives anywhere — collapse the video and the page still said "Nothing in
+     * here yet" over a playlist the server held one video in.
+     */
+    edits: Int,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -77,8 +86,9 @@ fun PlaylistScreen(
     // The id goes with it, so the page behind can drop the row without asking
     // the server what it already knows.
     // Same reason as the page behind it: the contents can have changed from a
-    // sheet on another screen since this was last drawn.
-    LaunchedEffect(Unit) { viewModel.refresh() }
+    // sheet on another screen since this was last drawn — or from the sheet
+    // over this one, which is what [edits] counts.
+    LaunchedEffect(edits) { viewModel.refresh() }
 
     val deleted = state as? PlaylistState.Deleted
     if (deleted != null) {

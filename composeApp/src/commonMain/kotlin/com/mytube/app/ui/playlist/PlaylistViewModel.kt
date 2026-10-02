@@ -97,12 +97,21 @@ class PlaylistViewModel(
      */
     fun remove(video: Video) {
         val ready = _state.value as? PlaylistState.Ready ?: return
-        _state.value = ready.copy(videos = ready.videos.filterNot { it.id == video.id })
+        if (ready.videos.none { it.id == video.id }) return
+        // The header's count moves with the row. It is read from the first
+        // answer, so taking only the row away left "1 video" over an empty page.
+        _state.value = ready.copy(
+            playlist = ready.playlist.copy(itemCount = (ready.playlist.itemCount - 1).coerceAtLeast(0)),
+            videos = ready.videos.filterNot { it.id == video.id },
+        )
         viewModelScope.launch {
             runCatching { videos.removeFromPlaylist(playlistId, video.id) }.onFailure {
                 update { current ->
                     if (current.videos.any { it.id == video.id }) current
-                    else current.copy(videos = ready.videos)
+                    else current.copy(
+                        playlist = current.playlist.copy(itemCount = current.playlist.itemCount + 1),
+                        videos = ready.videos,
+                    )
                 }
             }
         }
