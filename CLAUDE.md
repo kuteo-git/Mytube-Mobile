@@ -5325,3 +5325,47 @@ element carrying `/media/4xil_0qwrKY/storyboard/0.webp` at
 **`npx tsc --noEmit` does not check that project.** It exits 0 on a file with an
 unresolved identifier in it; `tsc -b`, which is what `npm run build` runs, finds
 it. An unresolved `mediaURL` nearly shipped behind a green typecheck.
+
+## A QA pass over the whole app, and three it found (2026-10-03)
+
+A tester working from the charter wrote `docs/qa/test-cases.md` (122 cases) and
+ran what the iOS Simulator allows; three bugs came back, all three fixed, and a
+second pass confirmed them with no new ones. Not run, and recorded as such:
+pinch, sound, the lock screen and rotation — the simulator has one pointer and
+no ears.
+
+- **Back from a channel opened inside a channel did nothing.** Channel → video →
+  the channel's name, and `openChannel` remembered the route it was on — a
+  channel — as where back should lead. Back then landed on a channel, and from
+  there on itself, on a page with no tab bar. `channelOrigin` keeps the first
+  origin: "one level, deliberately" was the right rule, and the level it kept
+  has to be one that is not a channel.
+- **The playlist page went stale two ways.** The header read `itemCount` from
+  the first answer, so removing the last row left "1 video" over an empty page;
+  and the page is composed under the watch layer, so a save from the watch
+  screen's sheet reached it by no arrival of its own. `remove` moves the count
+  with the row, and the sheet bumps `playlistEdits`, which both playlist screens
+  refresh on. *Arrival* is not the only way a page's contents change, which is
+  the general form of the second half.
+- **A YouTube result with a custom thumbnail was a grey box**, and that was the
+  server: it stripped the query from every still, and `hq720_custom_N.jpg` is a
+  404 without the signature YouTube handed out. Fixed there; its changelog has
+  the measurement.
+
+### Driving the simulator, written down at last
+
+This charter has described synthesised `CGEvent` clicks three times and never
+kept the code. `tools/sim-touch.swift` is it — tap, drag with a hold at the end,
+long press, all in device points, finding the Simulator window itself — and
+`tools/sim-ui.py` reads every element's label and centre from `idb ui
+describe-all`, which *does* see this Compose scene where `idb`'s tap does not.
+Together they are the loop the test cases were run with.
+
+- **Labels before coordinates.** The first tap of this pass landed on a feed card
+  instead of a Settings row, because the app had moved from Settings to Home
+  between the screenshot and the tap. Finding the element by label at the moment
+  of the tap is what made every later step trustworthy.
+- **A process started from a tool's shell dies with that shell.** Swapping the
+  ingest service with `nohup … &` left it dead a second later; it has to start in
+  a session of its own (`start_new_session=True`), with the environment read
+  from the old process through `sysctl KERN_PROCARGS2` rather than retyped.
