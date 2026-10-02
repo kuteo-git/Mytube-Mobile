@@ -128,7 +128,7 @@ import kotlinx.coroutines.launch
  * replaces what came before, and expressing it as one would mean fighting the
  * library to keep the tab composed while the layer is dragged off it.
  */
-private sealed interface Route {
+internal sealed interface Route {
     data object Deciding : Route
     data object Setup : Route
     data object Home : Route
@@ -145,6 +145,20 @@ private sealed interface Route {
     data object Language : Route
     data class Channel(val channelId: String) : Route
 }
+
+/**
+ * Where back from a channel opened while on [current] should lead.
+ *
+ * The page somebody was on — unless that page is itself a channel. The only way
+ * from one channel to another is through a video, which leaves the channel
+ * route standing underneath; remembering it would make back from the second
+ * channel land on a channel, and back from *that* land on itself. Measured on
+ * the simulator: Channel → video → the channel's name, and the back arrow did
+ * nothing however often it was pressed, on a page with no tab bar and no other
+ * way out. So the first origin is kept, and back leaves channels altogether.
+ */
+internal fun channelOrigin(current: Route, remembered: Route): Route =
+    if (current is Route.Channel) remembered else current
 
 /**
  * The video being watched, and whether it is collapsed to the miniplayer.
@@ -337,17 +351,18 @@ fun App(
             // history and the watch screen, and sending all five back to Home
             // throws away the list somebody was reading.
             //
-            // One level, deliberately: this is a *var*, not a stack, and the
-            // second channel opened from inside a channel overwrites the first.
-            // A stack would model a history nothing here creates — the only way
-            // to that second channel is through a video, and opening a video
-            // leaves this route standing rather than pushing onto it.
+            // One level, deliberately: this is a *var*, not a stack, and a
+            // second channel opened from inside a channel keeps the first one's
+            // origin — see [channelOrigin]. A stack would model a history
+            // nothing here creates: the only way to that second channel is
+            // through a video, and opening a video leaves this route standing
+            // rather than pushing onto it.
             var channelFrom: Route by remember { mutableStateOf(Route.Home) }
             // The one way to a channel, so the two lines never come apart. Five
             // call sites set the route directly and four of them would have
             // forgotten this one.
             val openChannel: (String) -> Unit = { id ->
-                channelFrom = route
+                channelFrom = channelOrigin(route, channelFrom)
                 route = Route.Channel(id)
             }
             var tab by remember { mutableStateOf(Tab.Home) }
