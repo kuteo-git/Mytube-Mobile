@@ -129,7 +129,10 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            _state.update { it.copy(isPlaying = isPlaying) }
+            // Playing again means the last error was recovered from, so it is
+            // history: left set, the watch screen would offer "could not play"
+            // over the next pause.
+            _state.update { it.copy(isPlaying = isPlaying, error = if (isPlaying) "" else it.error) }
             // The position only moves while something is playing, so the ticker
             // runs only then. A timer firing four times a second against a
             // paused video is battery spent on a number that is not changing.

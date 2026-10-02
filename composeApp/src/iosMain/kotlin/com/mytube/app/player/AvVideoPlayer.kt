@@ -523,7 +523,11 @@ class AvVideoPlayer : VideoPlayer {
                     hasEnded = ended,
                     liveStartSeconds = windowStart,
                     liveEndSeconds = windowEnd,
-                    error = failure ?: it.error,
+                    // Cleared once it plays again — the stall watchdog's
+                    // reattach is a recovery, and an error left set would be
+                    // offered as "could not play" over the next pause.
+                    error = failure
+                        ?: if (av.timeControlStatus == AVPlayerTimeControlStatusPlaying) "" else it.error,
                     positionSeconds = CMTimeGetSeconds(time),
                     // NaN is what AVPlayer reports before it knows, and it must
                     // not reach a progress bar: NaN/NaN draws as nothing at all.

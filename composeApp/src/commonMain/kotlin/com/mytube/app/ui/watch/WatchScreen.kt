@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -510,7 +511,16 @@ fun WatchContent(
                     // do — so it says which one it is. YouTube's own player does
                     // the same thing for the same reason.
                     if (state.playback.isBuffering) BufferingBadge(strings.loadingVideo)
-                    PlayerControls(
+                    // In place of the controls, not over them: on iOS 26 the
+                    // transport discs are drawn by SwiftUI above the whole scene,
+                    // so anything Compose put on top would sit under them. The
+                    // drag down still collapses the video, and back still works.
+                    if (state.playback.failed) PlaybackFailed(
+                        title = strings.couldNotPlay,
+                        detail = state.playback.error,
+                        actionLabel = strings.tryAgain,
+                        onRetry = onRetry,
+                    ) else PlayerControls(
                         playback = state.playback,
                         isLive = state.isLive,
                         fullscreen = fullscreen,
@@ -849,6 +859,34 @@ private fun ChannelRow(
  * the frame to look at, and a message in the corner of a black rectangle reads
  * as a stray label rather than as the state of the thing.
  */
+/**
+ * The player stopped because something broke and is not fixing itself.
+ *
+ * A decoder that cannot play the file, a source that answered with something
+ * that is not video: both platforms report it in `PlaybackState.error` and,
+ * before this, nothing read it — a still frame with no word and no way back
+ * except closing the video. Retry reloads the stream, which is also what clears
+ * a stale address.
+ */
+@Composable
+private fun PlaybackFailed(title: String, detail: String, actionLabel: String, onRetry: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(Space.md),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(title, color = Color.White, fontSize = 15.sp, textAlign = TextAlign.Center)
+        if (detail.isNotEmpty()) {
+            Text(detail, color = Tokens.text2, fontSize = 12.sp, textAlign = TextAlign.Center)
+        }
+        Spacer(Modifier.height(Space.md))
+        GlassButton(label = actionLabel, onClick = onRetry, primary = true)
+    }
+}
+
 @Composable
 private fun BufferingBadge(label: String) {
     Row(

@@ -193,6 +193,16 @@ data class PlaybackState(
 ) {
     val hasError: Boolean get() = error.isNotEmpty()
 
+    /**
+     * The picture has stopped because something broke, and nothing is fixing it.
+     *
+     * Not [hasError] alone: both platforms recover from a dropped connection on
+     * their own, and while that buffers or plays again the error is history
+     * rather than news. This is what the watch screen shows a way out of —
+     * without it a decoder failure was a still frame with no word and no retry.
+     */
+    val failed: Boolean get() = hasError && !isPlaying && !isBuffering
+
     /** Set once the player has reported a window with something in it. */
     val hasLiveWindow: Boolean get() = isLive && liveEndSeconds > liveStartSeconds
 
