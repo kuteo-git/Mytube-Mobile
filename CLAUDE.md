@@ -5393,3 +5393,46 @@ Together they are the loop the test cases were run with.
   ingest service with `nohup … &` left it dead a second later; it has to start in
   a session of its own (`start_new_session=True`), with the environment read
   from the old process through `sysctl KERN_PROCARGS2` rather than retyped.
+
+## A whole-project review, and four it found (2026-10-03)
+
+Two reviewers read the whole tree at v0.1.10 against this charter, one for the
+rules it states and one for the behaviour it asks for. Five findings came back
+marked HIGH; four were confirmed by reading and fixed, one was not HIGH.
+
+- **The last video's narration played over the next one.** `advanceTo`
+  cancelled the poll and never told the player, which outlives the video and so
+  kept its clips — lines of one video at that video's times, ducking the next
+  until its own pass started after its captions. `player.narrate(emptyList())`
+  on the way out; red in `WatchQueueTest` first.
+- **Android ignored `autoPlay = false`.** `ExoVideoPlayer.start` called
+  `play()` on every load, so the port's contract — `load` buffers, `play` is
+  separate — held on iOS only, and the restored miniplayer started talking on
+  launch. `play`/`pause` record the intent, `load` clears it, and `start` sets
+  `playWhenReady` from it — *set*, because `playWhenReady` survives
+  `setMediaItem`. Remembered rather than forwarded because the first load lands
+  before the service connection does. Measured: PLAYING on launch before,
+  PAUSED after, and a video opened from the feed still plays.
+- **"(auto)" was English in the Vietnamese sheet.** `trackLabel` held it as a
+  literal; it takes `Strings` now, like every formatter. The untranslated guard
+  cannot see a literal outside a composable, which is the gap it slipped
+  through.
+- **A broken playback said nothing.** Both players wrote `PlaybackState.error`
+  and nothing in `ui` read it. `failed` names the case — an error with nothing
+  playing and nothing buffering, so a recovery in progress is not one — both
+  players clear the error once playing resumes, and the watch screen draws
+  "could not play" with Try again *in place of* the controls: over them, on iOS
+  26, it would sit under the SwiftUI discs.
+  - **Not reproduced end to end.** Cutting the emulator's network only buffers:
+    Media3 keeps retrying past two minutes and never reports. The overlay was
+    verified by forcing the state on both platforms, and Try again by the
+    gateway logging one more stream request per press.
+
+**Not HIGH, and why:** English fallbacks in ten ViewModels' error states. Only
+Home and Watch draw that text, and there it is a diagnostic — usually the
+exception's own message — under a translated title. The MEDIUM and LOW findings
+(a `ui → data` import of `ServerNotConfigured`, defaulted flags on
+`WatchSession`, wire spellings reaching `UnavailableCopy`, playlist and channel
+ViewModels piling up in the activity store, three screens without previews,
+`X-User-Id` attached by hand at forty call sites) are recorded here and not
+fixed in this round.
