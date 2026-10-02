@@ -407,6 +407,10 @@ class WatchViewModel(
         report(force = true)
         narrationPoll?.cancel()
         narrationPoll = null
+        // The player outlives the video, and so would its clips: lines of the
+        // last video at the last video's times, spoken over this one and ducking
+        // it until its own pass is asked for — which waits on its captions.
+        player.narrate(emptyList())
         videoId = next
         // Advancing means "play me the next thing", so it starts at zero;
         // *choosing* one means "play me this", which resumes where the server

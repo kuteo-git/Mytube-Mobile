@@ -96,6 +96,36 @@ class WatchQueueTest {
     }
 
     /**
+     * Moving on hands the narrator nothing from the video before.
+     *
+     * The narrator matches clips against the playhead, and a list left over from
+     * the last video is a list of *its* lines at *its* times — played over the
+     * next one and ducking it, until that video's own pass is asked for, which
+     * waits on its captions. Found by review: `advanceTo` cancelled the poll and
+     * never told the player.
+     */
+    @Test
+    fun `advancing takes the last video's narration off the player`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first", "second"))
+        val players = FakePlayerFactory()
+        val model = open(
+            videos,
+            queue = listOf(item("first", inLibrary = true), item("second", inLibrary = true)),
+            narration = NarratedOnly("first"),
+            players = players,
+        )
+        model.toggleNarration()
+        advanceUntilIdle()
+        val player = players.created.single()
+        assertEquals(1, player.clips.size, "the first video's line should be playing")
+
+        model.advanceTo("second", fromTheStart = true)
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), player.clips)
+    }
+
+    /**
      * Retry must not buy the write twice.
      *
      * `load()` runs `ensureInCatalogue` every time, and `retry()` is `load()`.
@@ -264,6 +294,8 @@ class WatchQueueTest {
         streams: StreamRepository = FakeStreams,
         storyboards: StoryboardRepository = FakeStoryboards,
         videoId: String = "first",
+        narration: NarrationRepository = FakeNarration,
+        players: FakePlayerFactory = FakePlayerFactory(),
     ): WatchViewModel {
         val model = WatchViewModel(
             videoId = videoId,
@@ -274,31 +306,52 @@ class WatchQueueTest {
             videos = videos,
             streams = streams,
             storyboards = storyboards,
-            narration = FakeNarration,
+            narration = narration,
             preferences = FakePreferences,
             openedFrom = queue,
-            playerFactory = FakePlayerFactory(),
+            playerFactory = players,
         )
         advanceUntilIdle()
         return model
     }
 
     private class FakePlayerFactory : VideoPlayerFactory {
-        override fun create(): VideoPlayer = FakePlayer()
+        val created = mutableListOf<FakePlayer>()
+        override fun create(): VideoPlayer = FakePlayer().also { created += it }
     }
 
     private class FakePlayer : VideoPlayer {
+        /** The last list of clips handed over, which is what the narrator plays. */
+        var clips: List<NarrationClip> = emptyList()
         override val state = MutableStateFlow(PlaybackState()) as StateFlow<PlaybackState>
         override val rendersSubtitles = false
         override fun load(media: PlayingMedia, startAtSeconds: Double) {}
         override fun play() {}
         override fun pause() {}
         override fun seekTo(seconds: Double) {}
-        override fun narrate(clips: List<NarrationClip>) {}
+        override fun narrate(clips: List<NarrationClip>) {
+            this.clips = clips
+        }
         override fun setNarrationLevels(voice: Float, duck: Float) {}
         override fun showSubtitles(language: String) {}
         override fun stop() {}
         override fun release() {}
+    }
+
+    /** A pass that has finished for [videoId] and has nothing for anything else. */
+    private class NarratedOnly(private val videoId: String) : NarrationRepository {
+        override suspend fun start(videoId: String, fromSeconds: Double) {}
+        override suspend fun stop(videoId: String) {}
+        override suspend fun state(videoId: String) = Narration(
+            NarrationStatus.Done,
+            done = 1,
+            total = 1,
+            clips = if (videoId == this.videoId) {
+                listOf(NarrationClip(startSeconds = 0.0, durationSeconds = 3.0, clipUrl = "/media/$videoId/a.wav", text = "a"))
+            } else {
+                emptyList()
+            },
+        )
     }
 
     /**
