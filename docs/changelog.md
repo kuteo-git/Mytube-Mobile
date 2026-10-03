@@ -1,0 +1,5228 @@
+# Mytube App — Changelog of decisions
+
+> Moved verbatim out of `CLAUDE.md` on 2026-10-03, when the charter passed
+> 300k characters and stopped fitting in an agent's context. Every entry is
+> dated and stays as written, including the ones later corrected — the
+> strikethroughs are part of the record.
+>
+> **New entries go at the end of this file.** When an entry produces a rule
+> that should hold for every future change, add one line for it to
+> "Rules learned" in `CLAUDE.md`, pointing back here.
+
+## The watch screen is a layer, and dragging it down reveals the tab (2026-08-29)
+
+The server charter says it plainly — *"On phones, the watch screen is a layer
+over the previous tab; pulling it down reveals the tab underneath"* — and the
+brief for this app named the gesture directly. Measured on the emulator: a drag
+of a fifth of the screen springs back with the video still running at 0:19, and
+a drag past the threshold lands on Home with that video at the head of Continue
+watching, its red bar drawn.
+
+- **Home is composed underneath, not rebuilt afterwards.** A drag reveals what is
+  behind it. Restoring the tab only once the layer is gone means the first half
+  of the gesture uncovers an empty background and the feed snaps in at the end,
+  which reads as a reload rather than a video moving out of the way. So Home and
+  Watch are one branch of the route, stacked in a Box.
+- ~~**The threshold is a third of the screen, and distance only — no velocity.**
+  A flick is the same intent as a slow drag past the line, and reading velocity
+  means a quick short flick meant as a scroll can dismiss.~~ **Superseded, and
+  corrected on 2026-10-03** — the QA pass measured a collapse at ~100pt and
+  read the gap as a fault. The rule changed when the gesture was rebuilt on the
+  web app's arithmetic (`SwipeToDismiss.kt`): the picture travels into the bar,
+  so the line is **a quarter of the picture's height** (`COMMIT_FRACTION`,
+  ~55pt on an iPhone 16e), and a flick past **700 px/s** commits at any
+  distance (`COMMIT_VELOCITY`). The scroll-flick risk this bullet refused
+  velocity over is answered by *where* the drag may start — on the picture,
+  which does not scroll. The file's own comments carry the reasoning.
+- **A fraction, not a number of pixels.** A thumb's idea of "most of the way
+  down" scales with the phone; 240px is decisive on a small screen and a nudge on
+  a tablet.
+- **Zero height never dismisses.** `onSizeChanged` has not fired on the first
+  frame, and every comparison against a fraction of zero is true — without the
+  guard the first pixel of the first drag closes the screen.
+- **The drag is read above the content**, which is right while the watch screen
+  does not scroll and must be revisited the moment it does: a page with comments
+  needs the drag to start only at the top, or scrolling up closes the video.
+- **What is still missing is the miniplayer.** Dismissing keeps the sound going,
+  deliberately — `release()` lets go of the connection and does not stop the
+  service — but with no miniplayer the only way back to the video, or to stop it,
+  is the notification. The web app has one; this does not yet.
+
+## The watch screen grew controls, opinions and a rail (2026-08-29)
+
+Measured on the emulator against the running library, one video (`gEWF0LL4IPA`,
+2:20):
+
+| | |
+|---|---|
+| tap the bar at 76% | **109.2s of 140s** |
+| drag to 37% | **50.9s** |
+| skip buttons | ±10s |
+| Save | `pinned: true` on the server |
+| Like, pressed twice | `LIKE` then `NONE` |
+| progress, unprompted | `watchProgress 0.0749`, `watchPositionSeconds 10` |
+
+- **A readout is not a control, and that was the whole gap.** The bar under the
+  picture displayed a position and could not be moved, so the only way to go
+  anywhere in a video was to reopen it. It is now over the picture and takes both
+  a drag and a tap — **two `pointerInput` modifiers, not one branch**: the
+  gestures are recognised separately, and deriving a tap from a drag that never
+  passed the slop threshold is how the tap silently stops working.
+- **A tap on the picture shows the controls; it does not play or pause.** The
+  server charter draws that line for touch, and the reason is that a finger has
+  no hover — a phone where tapping the picture pauses is a phone where checking
+  how far through you are stops the video. Play/pause is a button.
+- **A paused video keeps its controls.** Hiding them leaves a still frame with no
+  sign the app is running, and the thing somebody paused for is usually the
+  button to start again.
+- **The lit state had to be a change of shape.** `surface` and `surfaceHover` are
+  `0x212121` and `0x272727` — six units apart, which the design system uses for a
+  pointer hovering and which is invisible as a state. Measured: pressing Like set
+  the reaction on the server and *looked like nothing had happened*. The thumb
+  and the bookmark are now filled when on.
+- **The thumb is centred, and it was drawn in the wrong place for a release.**
+  The parent `Box` centres its children, so a box occupying the filled fraction
+  was centred in the bar rather than starting at its left edge: the thumb sat at
+  55% over a video twelve per cent through, with the red fill beside it
+  disagreeing. `align(CenterStart)` is load-bearing.
+- **Every action is drawn first and sent second, and put back if refused.** These
+  are statements about the viewer's own opinion; a control that waits for a round
+  trip before lighting up feels broken. Keeping a lit button over a like the
+  server rejected would be worse than never lighting it, so a failure reverts.
+- **Progress is reported every ten seconds of playback, and once more on the way
+  out.** Ten because what it feeds — Continue watching, and the ranker's WATCH
+  signal — cannot tell; the report in `onCleared` is the one that matters most,
+  because closing the screen is exactly when somebody stops watching.
+- **Up next is fetched after the stream, not beside it.** It is a second round
+  trip nothing on screen waits for, and running it concurrently would put it in
+  front of the one call a viewer is actually waiting on. A rail that fails stays
+  empty.
+- **The rail is inside the same `LazyColumn` as the details.** Twenty entries is
+  twenty thumbnails, and a `Column` would fetch every one before the viewer had
+  scrolled to any.
+- **Share is not drawn.** It needs a platform share sheet on each side, and §5
+  of the server charter forbids a button that does nothing outright.
+
+### `./gradlew check` cannot be green on this machine
+
+`check` includes `linkDebugTestIosSimulatorArm64`, and linking a Kotlin/Native
+binary needs **full Xcode** — this machine has only the Command Line Tools, so it
+fails with `MissingXcodeException` on `xcrun xcodebuild -version`. This is not a
+fault in the code and it is not fixed by a Gradle flag.
+
+The verification command until Xcode is installed is therefore:
+
+```sh
+./gradlew jvmTest :composeApp:compileDebugKotlinAndroid :composeApp:compileKotlinIosSimulatorArm64
+```
+
+which covers the unit tests, both guards, the Android build and the iOS
+*compile*. What it does not cover is iOS linking and `iosSimulatorArm64Test` —
+recorded as uncovered rather than quietly dropped, because iOS is where this app
+differs most.
+
+## The miniplayer, and two things it uncovered (2026-08-29)
+
+Dragging the watch screen away already left the sound playing, and that was half
+a feature: the audio carried on with nothing on screen to say so, and the only
+way back to the video — or to stop it — was the notification. So the watch screen
+is now **collapsed, not dismissed**.
+
+Measured on the emulator, one 2:20 video: drag down → the bar appears above the
+tab bar with the picture still running, `state=PLAYING`; tap the bar → full
+screen again; press X → `state=NONE(0)` and the server holds `56s / 0.399`, the
+position the playhead was at.
+
+- **`Route.Watch` is gone; a `WatchSession` sits beside the route.** A route is
+  somewhere you are, and this is something that keeps playing while you go
+  elsewhere. Modelling it as a destination is what made *leaving the screen* and
+  *stopping the video* the same act.
+- **The picture keeps playing in the bar** — the same `VideoSurface` pointed at
+  the same player, because `PlayerView` rebinds on update and the connection
+  never drops. A still thumbnail would be cheaper and would show a paused video
+  as though it were playing.
+- **`stop()` had to become its own thing, separate from `release()`.** That
+  separation *is* the miniplayer: release hands back this app's connection while
+  the sound carries on, which is what leaving the screen means; stop ends the
+  playback, which is what the close button means. Measured before it existed:
+  pressing close removed the bar and left the video playing with nothing on
+  screen at all — worse than the fault the miniplayer was written to fix.
+  - **Disposal must not stop.** Opening another video composes the new ViewModel
+    — which loads and plays — *before* the old one's `onDispose` runs, so a stop
+    there would kill the video that had just started.
+  - On Android, `stop()` alone leaves the item loaded and Media3 keeps the
+    session and its notification alive over a player with nothing to play;
+    clearing the queue is what ends it. On iOS the equivalent is replacing the
+    item with null, or Now Playing keeps showing a closed video.
+
+### `viewModel()` was leaking a player per video
+
+`androidx.lifecycle.viewmodel.compose.viewModel()` stores the instance in the
+**activity's** `ViewModelStore`, where it outlives the screen entirely — so every
+video opened left another `WatchViewModel` behind, each holding a live connection
+to the playback service, and `onCleared` never ran on any of them. The final
+progress report lived in `onCleared`, so it never ran either.
+
+The watch screen now uses `remember(videoId)` with a `DisposableEffect` calling
+an explicit `close()`. That is only correct because the activity declares
+`configChanges` for rotation and is never recreated under it; without that line
+in the manifest this would restart the video on every turn of the phone.
+
+### A report that could never succeed, swallowed as though it might
+
+The gateway declares `positionSeconds` as an **int32**. The app sent a Double, so
+Go refused the whole body with 400 — and `recordProgress` is deliberately fire
+and forget, swallowing failures on the reasoning that a missed report costs a
+stale Continue watching entry. That reasoning is right for a network blip and
+wrong for a request that can never work: measured, after forty-five seconds of
+playback the server still held the position from before the app was opened, and
+nothing anywhere said why.
+
+`wholeSeconds` rounds at the edge and refuses negatives — a player reports a
+position before it has loaded, and on some that is negative, which is not a place
+in a video. It is a named function rather than an expression inside the request
+builder so `ProgressBodyTest` can assert it without a network.
+
+## The other three tabs (2026-08-29)
+
+Measured on the emulator against the running library: Subscriptions lists the
+household's channels alphabetically with counts (`1.8Tr`, `127N` under the
+Vietnamese formatter), History shows what was watched with the red bar the
+progress writes now feed, and Settings switches language — which survives a
+force-stop and takes the tab bar with it.
+
+- **One frame, three screens.** `tabContentPadding`, `ScreenTitle`, `EmptyState`
+  and `TabScaffold` exist because the same arithmetic was about to be written a
+  fourth time. Both bars float over the content, so every list starts below one
+  and ends above the other, and the top bar is 56dp *plus* the status bar — the
+  server charter records the web app learning four separate times that this
+  number belongs in exactly one place.
+- **Subscriptions lists channels, not their uploads.** New uploads from followed
+  channels already have a fixed share of Home (`slotFreshSubscribed`), so
+  repeating them here would be a second feed with the same contents and nothing
+  to tell the two apart. This tab is for *reaching a channel*.
+  - Sorted by name **here**, not asked for in that order: a list somebody scans
+    for one channel wants one predictable order, and sorting on the server would
+    change that endpoint for every other reader.
+  - **A subscriber count is drawn only when there is one.** A row reading "0
+    subscribers" states a fact nobody measured, and most rows here have none —
+    a flat listing does not carry it.
+  - **Pressing a row does nothing yet.** The channel screen is not built, and a
+    row that navigates nowhere is the honest state until it is. The list is
+    already the answer to "who do I follow", which is most of what the tab is
+    for.
+- **An empty tab says two things, not one.** A bare "nothing here" reads as a
+  fault; the second line says what would put something here.
+- **Settings is deliberately four rows.** Storage, Activity, the feed mix, the
+  ranking constants, the proxy, narration and speech are screens for *fixing the
+  server*, and people fix a server sitting in front of a computer. What is left
+  is what belongs to this device: where its library is, and what language it
+  reads in.
+  - **The server row shows the address, not "Configured".** Somebody opening it
+    is checking *which* machine, usually because it stopped answering.
+  - **Each language is named in its own words, always.** Somebody who pressed the
+    wrong row is looking at an interface they cannot read, and "English" written
+    in English is the way back out.
+  - **The selected row is a filled dot.** The same lesson the Like button cost:
+    a background cannot carry a state when the two surface tokens are six units
+    apart.
+- **Empty means "follow the device", and it stays empty.** Resolving the language
+  on first launch and writing it back would freeze a phone into whatever it
+  happened to be set to that day. Nothing is drawn until the stored value has
+  been read, so English never flashes at somebody who chose Vietnamese.
+- **The miniplayer crosses tabs**, which is the whole point of holding the
+  session above the routes. Measured: collapse on Home, switch to Subscriptions,
+  `state=PLAYING` and the bar still on the tab bar.
+
+## Search and the channel page (2026-08-29)
+
+- **The top bar's search box was never a field.** It is a button shaped like one,
+  and the search screen's real field lands exactly where it was — so the two
+  never appear together and there is no inert box behind the one being typed
+  into.
+- **Typing is debounced by 300ms, and the pending job is cancelled.** A search is
+  a full-text query *and* a recorded behaviour signal — the gateway records one
+  per request — so typing "nothing phone" without this is thirteen queries and
+  thirteen signals for one intent, and recsys would be learning every prefix of
+  what somebody typed. Cancelling matters as much as the delay: without it the
+  wait postpones each request without reducing how many are made.
+  - The screen blanks only on the *first* search. Replacing results with a
+    spinner on every keystroke makes a list that is mostly still correct flicker
+    away while somebody refines a word.
+  - `Idle` is its own state, not an empty result. Nobody has asked anything yet.
+- ~~**There is no "On YouTube" half.** The web app splits its results, but the
+  gateway has one search route and it answers from the catalogue only.~~
+  **Wrong, and corrected on 2026-09-01** — `GET /api/discover` exists and the web
+  app has always called it. See "Search reaches YouTube again" below.
+- **The channel page's uploads come from YouTube, not the catalogue** — the
+  gateway asks upstream because a scan only brings in the newest few dozen, so a
+  page served from the catalogue would cap a channel at that number with nothing
+  to say why. The consequences are visible in the DTO: an absolute
+  `thumbnailUrl`, no channel per row, no user state.
+  - So `imageModel` decides per image whether a path is inside the library or an
+    address upstream. Deciding it in one function means a card does not have to
+    know which kind of list it is in.
+  - The channel is passed *into* the mapper because the endpoint sends one
+    channel for the whole page, not one per row.
+  - **The sort labels are not translated.** They arrive as "Latest", "Popular",
+    "Oldest" in whatever language upstream answered in, each with an opaque token
+    beside it; translating one would mean guessing which of the three it is, and
+    being wrong the day a fourth appears.
+  - **No banner**, though the gateway sends a `bannerPath`. It is 200dp of
+    decoration above the one thing the screen is for, and on a phone it pushes
+    the first video off the fold.
+- **The channel page carries its own back arrow, drawn over every state.** It has
+  no top bar and no tab bar, so without one a channel that would not load is a
+  dead end — and Android's system back leaves the app entirely, while iOS has no
+  system back at all. The way out has to be on the screen.
+- **The miniplayer moved above the routes.** It now shows on Home, Search and the
+  channel page, and deliberately not on the setup screen: somebody typing an
+  address is fixing the connection this video came through, and a bar playing
+  over that form is in the way of the one thing that screen is for.
+
+## The iOS half exists in Kotlin and has nowhere to run (2026-08-29)
+
+Everything on the Kotlin side is written and compiles for
+`iosSimulatorArm64`: the player, the audio session, the lock-screen entry, the
+settings store, the language, and `MainViewController` — the counterpart of
+`MainActivity`, building the same container and handing it to the same `App`.
+The Swift entry point and `Info.plist` are in `iosApp/iosApp/`.
+
+**What is missing is the Xcode project, and it cannot be written here.** This
+machine has the Command Line Tools and not Xcode, so there is no `.xcodeproj`,
+nothing has ever run on a simulator or a device, and `linkDebugTestIosSimulator`
+fails on `xcrun xcodebuild -version`. A hand-written `project.pbxproj` was
+considered and refused: it could not be opened or built here, so it would be a
+file claiming to work with nothing behind the claim.
+
+None of the iOS behaviour below is measured. It is written to the platform's
+documented contract and marked untested, which is not the same as working.
+
+- **Background audio needs two things and either alone is silence**:
+  `AVAudioSessionCategoryPlayback`, set when a player is built, and
+  `UIBackgroundModes: audio` in the Info.plist. The category is set at player
+  construction rather than at launch because it is global to the process, and
+  claiming playback while nothing plays takes audio focus from whatever else the
+  phone is doing.
+- **The lock screen is two APIs, not one.** `MPNowPlayingInfoCenter` carries the
+  text and the scrubber; `MPRemoteCommandCenter` carries the buttons. Setting
+  only the first gives a lock screen that reads correctly and whose play button
+  does nothing. This is the counterpart of Android's `MediaMetadata`, and it
+  exists because that side measured what its absence looks like: a notification
+  reading "Mytube is running".
+  - **`togglePlayPause` is registered beside play and pause**, because headphone
+    buttons and car stereos send toggle rather than either — a lock screen that
+    works while a steering wheel does not is worse than neither.
+  - **The artwork is deliberately not fetched.** `MPMediaItemPropertyArtwork`
+    takes a `UIImage`, so showing one means downloading and decoding here, on a
+    URL that is on the house wifi and unreachable the moment the phone leaves it.
+    A lock screen with a title and no picture is complete.
+  - **`release()` does not clear it and `stop()` does** — the same split as
+    Android's, for the same reason: releasing hands back this app's hold while
+    the sound carries on, and a lock screen that empties while audio plays is the
+    miniplayer fault in reverse.
+- **`NSAllowsLocalNetworking`, not `NSAllowsArbitraryLoads`.** The gateway has no
+  TLS and the charter leaves media URLs unprotected because the LAN is trusted;
+  the narrow key permits cleartext to local addresses and refuses it to the
+  internet. `NSLocalNetworkUsageDescription` is required too — without it iOS 14+
+  refuses the network with no error a person could act on.
+- **Portrait only, matching Android.** The activity there declares
+  `configChanges` for rotation, which is what makes holding the watch ViewModel
+  in `remember` correct; letting iOS rotate would be the two platforms behaving
+  differently in the one place that costs a restarted video.
+
+### To finish it, on a machine with Xcode
+
+1. Create an iOS App target named `iosApp` in `iosApp/`, using the `Info.plist`,
+   `iOSApp.swift` and `ContentView.swift` already there.
+2. Add the `composeApp` framework to it (`./gradlew :composeApp:embedAndSignAppleFrameworkForXcode` as a build phase, the standard KMP setup).
+3. Then, and only then, the claims above become measurable — and the ones that
+   matter are the charter's: play, lock the screen, and confirm the sound
+   continues and the lock-screen controls work; take a call mid-video, hang up,
+   and confirm it resumes.
+
+## Narration on the client (2026-08-29)
+
+The server does the reading, translating, synthesising and fitting; this app asks
+for a pass, polls it, and plays the clips over the video. Measured on the
+emulator against the running library: pressing the button started a pass the
+server logged, and the label read **"Đang chuẩn bị 121/160"** — resumed from
+what an earlier run had already written to disk rather than repeated.
+
+- **`narrate(clips)` is on `VideoPlayer`, not a second port.** Only the player
+  knows where the playhead is and only the player can turn the video down. A
+  separate `Narrator` port would need both, so the seam would exist to be
+  threaded through rather than to separate anything.
+  - An **empty list switches narration off**, deliberately the same call:
+    "narrate nothing" and "stop narrating" are one state, and two methods for it
+    would be two states that can disagree.
+  - The list is **replaced, not appended to**. The server's pass grows while it
+    runs, so this is called with a longer list every few seconds.
+- **The Android narrator polls rather than schedules.** A timer per clip has to
+  be cancelled and rebuilt on every seek, every pause and every list update. Four
+  checks a second against the playhead cannot drift, needs no special case for a
+  seek, and picks up a clip appended a moment ago on the next tick.
+- **Switching narration off does not stop the server's pass.** It is writing
+  translations and audio to disk that the next viewing will use; abandoning it
+  halfway means paying for the same lines twice.
+- **The clips are handed over on every poll, not at the end.** A pass takes
+  minutes and the first lines are ready in seconds.
+- **The button is first in the action row**, against the convention that puts
+  Like first. Its label grows to carry the pass's progress, and in fourth place
+  that label ran off the edge of the phone — "Đang chuẩn bị" with the numbers cut
+  off. A row that scrolls is not an excuse for hiding the one control the screen
+  is for.
+- **iOS returns `Unit` and says so.** The equivalent is a second `AVPlayer` in
+  the same audio session and it is straightforward — and there is no Xcode
+  project here, so nothing on that platform has ever played a sound. Writing it
+  untested and calling it done would put the app's whole reason for existing
+  behind an unmeasured claim.
+
+**The ducking has not been heard.** The emulator runs with `-no-audio`, so what
+is measured is the arithmetic (`levelsFor`, `clipAt`, with tests) and the fact
+that clips are fetched and started. Whether the voice sits right against the
+video is a question for a real phone, and it is the thing most likely to need a
+number changed.
+
+## Four bugs the phone found (2026-08-29)
+
+Narration was confirmed audible on a real device; these came back with it. All
+four were the same shape — something drawn that was not wired, or wired in a way
+that removed it.
+
+### A live broadcast said YouTube had refused it
+
+`live` was parsed in the DTO and **never read** in `toDomain`, so a broadcast
+fell through to `NothingPlayable`, which the watch screen turned into "YouTube
+will not hand this over / no_tier". That is a lie in the worst direction: it
+names an upstream refusal for a video upstream is serving perfectly well, and it
+offers no retry.
+
+Measured after the fix, on a real broadcast through this server: it plays,
+`state=PLAYING`.
+
+- **Live is checked before HLS.** The server never sends both — a broadcast
+  answers with the live tier alone, because offering `hls` beside it would have
+  the player climb toward a playlist built from adaptive tracks the broadcast
+  does not publish. The order is belt and braces and it is the honest one.
+- **No `?max=` on a live URL.** That parameter is read where the *ordinary*
+  master playlist is written; the live master comes from a different route that
+  has never seen it, and the charter's measurement of a live ladder is 144p–720p
+  — already under a phone's ceiling.
+- **A broadcast has nothing to resume to and nothing to report.** Its zero is an
+  hour ago and its end is now, so it opens at the live edge; and its "fraction
+  watched" is a position inside a sliding window, which would put a nonsense
+  figure in Continue watching.
+- **The bar is replaced by a red dot and the word LIVE.** The server charter
+  records what drawing one anyway looks like: `position / duration` on a stream
+  26 minutes into a live video is **155,700%** — solid red from the first second,
+  reading "25:57 / 0:00" beside it.
+
+### `indicator = {}` does not move an indicator, it removes one
+
+All three pull-to-refresh screens passed it, with a comment saying the default
+"would land under the floating top bar". The gesture worked and refreshed the
+list, and **nothing on screen ever said so** — which reads as a pull that did
+nothing, so people pull again. `TabRefreshIndicator` offsets it by the same
+arithmetic as `tabContentPadding`.
+
+### The overflow menu was a dead button
+
+Drawn on every card and wired to nothing, which is the one thing §5 of the server
+charter forbids outright. It now opens **Lưu · Không quan tâm**, both real
+endpoints; measured, "not interested" removes the row and the feed goes on.
+
+- **Null callbacks draw no button at all.** A card in a list of upstream results,
+  where neither action means anything, has no dot rather than a dead one — the
+  channel page and the up-next rail are that case.
+- **History gets Save and not "not interested".** It is a record of what was
+  watched, and telling the ranker off from a list of things somebody chose to
+  watch is the wrong signal in the wrong place.
+- **A removed row is not put back if the request fails.** It is gone from the
+  viewer's page either way, and returning it a second later is the more confusing
+  outcome; the next feed load is where the truth shows.
+
+### Fullscreen did not exist
+
+`ApplyFullscreen` is `expect/actual` — the case that rule is for, since there is
+no object with methods, only a call into the platform's window. Measured: the
+emulator reports `cur=2400x1080` and the screenshot comes back landscape with no
+system bars.
+
+- **It takes the state, not an event.** An event has nothing to undo, and a
+  screen disposed while fullscreen would leave the phone sideways with no bars.
+- **`LocalContext` is not the Activity** — Compose wraps it, sometimes several
+  times. Unwrapping and returning null on failure means a preview, which has no
+  Activity at all, draws instead of crashing.
+- **In fullscreen the back arrow leaves fullscreen, not the video.** Somebody who
+  filled the screen wants out of *that* first.
+- iOS is a no-op that says so: rotation there is a property of the view
+  controller and of the Info.plist, and neither can be run without Xcode.
+
+## Compared with the web, screen by screen (2026-08-29)
+
+Screenshots of the web app on a phone were the first real reference this project
+has had. Reading them beside the app found more than the four bugs before it, and
+almost all of it was the same failure: **the app was built from the design
+tokens, and the tokens describe pieces rather than screens.** A card's radius was
+right; the order and shape of the things around it were guesses.
+
+The lesson is recorded rather than the corrections alone: for anything the web
+app already does, read `web/src/features/watch/ui/*.tsx` and copy the structure.
+Guessing at it produced eight differences on one screen.
+
+### The control bar
+
+It was a centre play button flanked by two ±10s circles — the shape a phone's
+*system* player uses. The web app's is a thin progress line with **one row under
+it**: play, next, the clock on the left; audio, settings, fullscreen on the
+right. The old arrangement put the three most-pressed controls over the middle of
+the picture, which is exactly where somebody is looking.
+
+The "next video" slot holds forward-ten-seconds here. Next needs a queue this
+app has not got, and a button that does something beats one that matches a
+layout and does nothing.
+
+### The menus belong on the player
+
+The gear now opens a panel **under the picture**, so the video keeps running
+above whatever is being changed — a sheet over the video would have somebody
+changing the narration setting while looking at a grey rectangle.
+
+Narration moved into it from the action row. As a pill its label had to carry the
+pass's progress, and a label that grows in a row that scrolls is a label that
+runs off the edge of the phone — measured: "Đang chuẩn bị" with the numbers cut
+off. In the panel it is a switch with a progress bar, which can say *how far*.
+
+**Subtitles and Autoplay are in the web's panel and deliberately not in this
+one**: this app renders no subtitle track and holds no queue, so either row would
+be a dead button. The equaliser is phase 2 and its button is not drawn.
+
+### Icons
+
+Three were wrong and each was wrong in the same way — a shape that reads as
+something else. Subscriptions was a **stack of cards**, which is a playlist;
+Settings was a **sun**, which is brightness; the mark was a bare red rectangle,
+which reads as an image that failed to load. They are now two people, a cog, and
+a rectangle with a play triangle in it. The search field gained the magnifier
+segment that makes it read as a search box.
+
+### The chip row is pinned
+
+It was the first item in the feed's list, which is how a phone usually does a
+header. The chips are the feed's *filter*, and a filter that scrolls away means
+changing your mind costs a journey back to the top.
+
+### The watch screen's order
+
+Title → channel with subscriber count → actions → description box → comments →
+up next, which is the web's order and was not this app's.
+
+- **Like and dislike are one pill with a divider**, and the like carries its
+  count. Two separate pills read as two unrelated opinions rather than one
+  control with two directions — which is what they are, since pressing either
+  clears the other.
+- **Share exists**, through a platform share sheet, and shares the **YouTube**
+  link: a LAN address only works inside this house.
+- **The channel row has a subscriber line.** Without it the row is a name and a
+  button, and the button is the only thing with any weight — so the eye goes to
+  Subscribe rather than to whose channel this is.
+- **The description box** clamps to two lines and opens on a press anywhere in
+  it. The description is the one block whose length is out of the app's hands.
+
+### Up next was a second feed
+
+Full-width cards, in the shape the feed uses. The web's rail is a header naming
+what plays next, two chips (**All / From <channel>**), and **horizontal** rows —
+a 168dp thumbnail with the text beside it. The card shape is the difference that
+matters: full-width cards fill the screen, so reaching the third suggestion is a
+journey, and the rail competes with the video instead of sitting beside it.
+
+The channel filter is **sent to the server**, not applied here: the endpoint
+answers with a different *ranking* for a channel, not a subset of the unfiltered
+one, so filtering locally would show the wrong videos in the wrong order and only
+look right.
+
+### Comments were missing entirely
+
+Now read-only, with replies nested one level — YouTube nests no deeper. The
+catalogue holds none for a video nobody has opened, so an empty section triggers
+the import once and says *"checking"* meanwhile: "none yet" and "still asking"
+are different answers, and saying the first while the second is true is the fault
+this section is most likely to show.
+
+**There is no "Add a comment" field**, and that is a decision rather than an
+omission. The gateway accepts a post and writes it into *this household's own
+catalogue* — it never reaches YouTube. Beside a keyboard on the web that is
+defensible; under two thousand real YouTube comments on a phone it reads as a
+reply to them, and it would be a reply nobody outside this house will ever see.
+
+Commenters get a coloured initial rather than an image: the gateway sends an
+empty `avatarPath` for every one of them, so `AsyncImage` would be a request per
+comment for a 404 and a grid of grey circles.
+
+## Subtitles, next, and resuming (2026-08-30)
+
+Three things that were stand-ins. A stand-in named in a comment is still a debt.
+
+### Subtitles
+
+Side-loaded, not from the manifest: the captions live beside the video as `.vtt`
+files and the HLS ladder the server writes carries no text tracks at all. Every
+track is attached at **load**, because both platforms bind text to the *media
+item* — adding one later means a new item and a restarted video — and choosing
+one afterwards is a track selection, which costs no buffering.
+
+- **Language and disabled-flag move together.** Setting only the language leaves
+  the type disabled if it was off; disabling only the type leaves a language
+  selected that nothing shows. Either alone makes the menu and the picture
+  disagree.
+- **No `SELECTION_FLAG_DEFAULT`.** A track marked default appears the moment the
+  video opens, and subtitles nobody asked for is the wrong way round.
+- **The row is absent when a video has no tracks**, rather than showing a
+  Subtitles control whose every option is the state it is already in.
+- **The chip says `VI (auto)`, not `VI-X-MT (auto)`.** The machine track is
+  tagged `vi-x-mt` so nothing confuses it with a human Vietnamese track on disk
+  — that is a *storage* distinction, and printing it raw put the subtag in a
+  control two words wide.
+
+Measured on the emulator: EN and VI (auto) offered, EN selected, captions drawn
+over the picture.
+
+### Next
+
+The control bar's second button was forward-ten-seconds standing in for "next
+video". It is now the first row of the rail below it, so the button and the list
+always name the same thing, and it is **absent when the rail is empty** rather
+than drawn dead.
+
+### Resuming, and two faults under it
+
+The position was computed as `durationSeconds × watchedFraction`. That looks
+equivalent to the server's own `watchPositionSeconds` and is not: a video whose
+duration the catalogue never learned — every video that arrived through a flat
+listing — has `durationSeconds` 0, so the product is 0 and the video silently
+restarts every time. It reads the server's number now.
+
+Then two more, both found by measuring rather than reading:
+
+- **A seek between `setMediaItem` and `prepare` is dropped.** Before prepare the
+  controller's timeline is empty, so there is no window to seek within. A video
+  left at 18 seconds of 74 opened at zero, every time, while the server held the
+  right number all along. The start position goes *into* `setMediaItem`.
+- **`startAtBeginning` had a default and the one call site did not pass it.** The
+  compiler said nothing, and pressing next resumed the following video twelve
+  minutes in — the precise behaviour the flag exists to prevent. The default is
+  gone: it bought one short call site and paid for it with a fault nothing can
+  catch.
+
+Measured after: a video stored at 18s reopens and is at 26s ten seconds later;
+pressing next on a video stored at 60s starts it at zero.
+
+## Six more from the phone, and the player changes shape again (2026-08-30)
+
+### The control bar is YouTube's, not the web app's
+
+Asked for by name, with a screenshot. The previous version copied the *web* app's
+single bottom bar — right for a page, cramped on a phone, where six controls
+shared one row with the clock between them. It is now: chevron-down and gear at
+the top, three transport controls on translucent discs in the middle, the clock
+as a pill bottom-left, fullscreen opposite, and the progress line along the very
+bottom edge.
+
+- **The discs are load-bearing.** Over a moving picture a bare glyph disappears
+  against whatever is behind it, and the middle of the frame is the one place
+  that cannot be relied on to be dark.
+- **A chevron, not a back arrow.** It collapses the video to the miniplayer
+  rather than closing it; an arrow promises the opposite.
+- **Previous and next are drawn faint when there is nowhere to go**, not removed
+  — so the play button does not move under a thumb already reaching for it.
+- **No cast button.** There is nothing to cast to: the library is reached over
+  the house wifi by IP, and a Cast receiver is a second server this project does
+  not have.
+- **The trail lives in the app, not the ViewModel.** "Previous" is a fact about
+  the *sitting*, and a ViewModel rebuilt for every video cannot remember what
+  came before it. Not persisted either: offering to go back to something watched
+  last week is not what the button says.
+
+### The settings panel is a bottom sheet
+
+It was anchored under the picture, which pushed the whole page down as it opened
+— the title and channel row moved under a thumb already reaching for them. A
+sheet rises over the page and leaves it where it was, and on a phone the bottom
+is where a hand is. **No scrim**: the default dims the whole window, which would
+grey out the video these settings are about.
+
+Autoplay is real now, and fires from the ViewModel only when it is on *and* there
+is somewhere to go — so the caller has no condition to re-check and the two
+cannot disagree about when a video ends. "Finished" is `isPlaying` going false
+with the playhead at the duration; there is no separate event on the port and
+adding one would be a second way to say the same thing.
+
+### Four things that were missing
+
+- **The Continue watching rail had no overflow menu.** A card that looks like the
+  others and has one fewer control is one somebody presses twice before deciding
+  it is broken. The menu moved into `VideoCardMenu` so both cards draw the same
+  one.
+- **Save had nowhere to lead.** There was a Save action in every menu and no page
+  showing the result — the same defect as a dead button, one step removed: the
+  press did something real and nothing in the app could show it. `/api/pinned` is
+  that page.
+- **The channel avatar did nothing.** It is the one part of a card that *is* the
+  channel; pressing it and getting the video is what people describe as "the
+  avatar does nothing", because something did happen and it was not what they
+  aimed at. On the watch screen the name is a target too — 40dp is small for the
+  only thing on that row which is not a button.
+- **Loading was a spinner.** A spinner in the middle of an empty screen says
+  "wait"; the skeleton says *what* is coming, and the page then fills in rather
+  than appearing. It pulses rather than sweeping a gradient: a sweep is a second
+  animation to keep at 60fps on a television, and a fade between two greys says
+  the same thing for one alpha.
+
+### The feed mix
+
+Three sliders, read from and written to the server — it is **one setting for the
+household**, so a phone changing it changes everybody's Home. The fixed share is
+read from the server rather than assumed: the web app carried its own copy once
+and spent a release quoting a stale figure after a new fixed share took ten per
+cent of the page.
+
+**The other two shares are rescaled rather than each slider clamped.** Clamping
+each to "100 minus the other two" makes the last few percent unreachable, and a
+slider that stops before its end is one people push at. `rebalance` is pure and
+tested, because the edges are where it goes wrong: moving one to 100 leaves
+nothing to rescale, and three integers rounding to a total of 100 does not come
+out even.
+
+## The feed stopped at 48, and the chips jumped left (2026-08-30)
+
+### `remember` with no key froze the end of the list
+
+`atEnd` was computed inside `remember { derivedStateOf { … state.videos.lastIndex … } }`.
+`derivedStateOf` re-reads *snapshot* state on every frame; `state.videos` is a
+plain captured value, and a keyless `remember` captures the **first** one. So the
+comparison was against the first page's size for ever.
+
+What that looks like: `atEnd` goes true near the bottom of page one, loads page
+two — and then can never go false again, because the visible index only grows.
+`snapshotFlow` emits on *change*, so it never fires again. The feed stopped at 48
+videos with nothing anywhere saying so.
+
+Everything now comes from `layoutInfo`, including `totalItemsCount`, which is
+snapshot state and grows with the list. There is no captured value left to go
+stale. Measured: 28 swipes and still in fresh content.
+
+### A topic switch destroyed the chip row
+
+Pressing a chip set the state to `Loading`, which unmounts the composable holding
+the chip row — so the row was rebuilt with its scroll at zero. Scroll right,
+press "Science & Technology", and the row jumped back to "All" with the chip just
+pressed off the screen.
+
+`Ready` gained `switching`. The state stays `Ready` through a topic change: the
+chips keep their scroll, and the skeleton is drawn **only where the videos will
+go**. Measured: the row does not move and the selected chip stays in place.
+
+`loadMore` refuses while switching — the first page of the new topic is already
+in flight, and a second request would append it to itself.
+
+## Icon's tint repaints every path (2026-08-30)
+
+The CC button's "on" state was a filled white box with the letters knocked out in
+black. `Icon` applies a **tint**, which replaces the colour of every path in the
+vector — so the black letters turned white with the box and the button became a
+solid white square.
+
+The state is an underline now, and the glyph never changes. The rule is general
+and worth keeping: **anything two-toned inside an `Icon` has this fault waiting
+in it.** A two-colour glyph has to go through `Image`, or be expressed as
+something beside the icon rather than inside it.
+
+## Three preferences that were forgotten every video
+
+Subtitles, narration and autoplay lived in the watch ViewModel, which is rebuilt
+for every video — so all three reset on the next one.
+
+They are per **device**, in a port of their own. The reasoning is the charter's
+own for the equaliser: a phone in a pocket and a television in a room want
+different answers, and none of this is a statement about taste the ranker should
+hear. `ServerRepository` answers "where is the library and who is asking" —
+questions settled before any request can be made — and folding these in would
+leave that name true of half its members.
+
+- **A remembered subtitle language is a language, not "the first track".**
+  Remembering EN and being handed VI on the next video because that is what it
+  carries is not what was asked for. A video without the remembered language
+  opens with subtitles off, which is the honest answer to "show me English" when
+  there is none — and the CC button is not drawn at all, because there is nothing
+  to toggle.
+- **Remembering narration on is the one preference with a cost**, and it is worth
+  saying: opening any video then starts a server pass — translation and speech
+  for every line. That is what somebody who turned it on asked for.
+- **The switch and the pass are separate calls.** `toggleNarration` records what
+  somebody wants; `startNarration` does the work. Folded together, the remembered
+  case would have had to flip a boolean it already knew the value of just to
+  reach the code that starts the pass.
+- **A broadcast is never narrated on open.** ~~The pass reads a caption file, and
+  one that is still being spoken has none.~~ **Wrong, and corrected on
+  2026-09-03** — measured against YouTube while three streams were on air:
+  Al Jazeera English carries an `en` automatic track, Sky News carries none, and
+  a 24/7 music stream would not give up its metadata at all. Some broadcasts do
+  have captions.
+
+  The behaviour is unchanged and the reason is different: **a broadcast has no
+  end**, which is what the pass is built on. See "A live broadcast has captions
+  and no end" below.
+
+## "Watched" belongs on the Continue watching rail
+
+It is the only list in the app whose whole membership rule is *not finished*, so
+it is the one place a way out of it belongs. Recorded as fully watched rather
+than only hidden: the ranker already drops anything past 95% from Home, so
+telling it the truth is what makes the press outlive the app it was made in — the
+local removal only covers the seconds until the feed is next fetched.
+
+## A white status bar, and back finally means something (2026-08-30)
+
+### The strip above the app is white
+
+Measured before changing anything: the status bar, the top bar and the page were
+all `#0F0F0F` — identical, no seam, nothing broken. So this was a preference, not
+a fault, and it was asked for by name.
+
+**It is two settings, not one.** The app paints the strip (`Tokens.statusBar`),
+and `MainActivity` tells the system to draw its clock, battery and signal in
+*dark* ink — `SystemBarStyle.light` means a light background. Painting the strip
+alone leaves white glyphs on white. They must move together, and the token's
+comment says so where somebody would change it.
+
+### The system back gesture was never handled
+
+Pressing back anywhere left the app. It is now **one handler in `App`**, and one
+is the point: back is a question about the whole navigation state, and every
+screen knows only its own part — the watch layer sits over a tab, the tab sits
+inside a route. A handler on any of them would guess about the others.
+
+Ordered outwards from the most recently opened thing: an expanded video collapses
+to the miniplayer, then a screen returns to Home, then a tab returns to the first
+one. After that the handler is **disabled** rather than doing nothing, so the
+system closes the app as every other app does.
+
+- **Every condition that enables it must have a branch.** It did not, for one
+  build: a *collapsed* video counted as backable with nothing to do, so back was
+  swallowed and the app could not be left. Measured — three presses, still on
+  screen.
+- **A collapsed video is deliberately not backable.** The miniplayer survives
+  changing tabs and is closed by its own X; back closing it too would make the
+  one control that means "stop" ambiguous.
+- `ui-backhandler` is a separate artifact. It was already in the Gradle cache —
+  something resolves it transitively — and is not on the classpath until asked
+  for by name. Worth using rather than Android's: what "back" means is the same
+  on both platforms, and `expect/actual` there would be a seam with nothing
+  different on either side of it.
+
+### Saved had no way out
+
+Reached from Settings, with no tab bar of its own. Same back arrow as the channel
+page, drawn over every state — a shelf that would not load was otherwise a dead
+end, and iOS has no system back at all.
+
+## The card takes YouTube's shape, and the white strip moves to one place (2026-08-30)
+
+### The feed card
+
+The reference for Home and History changed from the web app to the **YouTube
+app**, with screenshots. Measured off them (iPhone, 1170px wide) rather than
+eyeballed:
+
+| | web card (before) | YouTube app (now) |
+|---|---|---|
+| thumbnail | 12dp radius, side margin | **edge to edge, square** |
+| meta | two grey lines | **one**: `channel · views · age` |
+| pressed | ripple over the card | `#272727` on the **meta row only**, full width |
+
+- **Edge to edge is what makes a feed read as a column of pictures** rather than
+  a list of tiles. Measured: the thumbnail reaches x=0 and x=1169.
+- **One meta line, because two is four lines of text per card** under a two-line
+  title, and on a narrow screen that turns the column of pictures into a wall of
+  writing.
+- **The pressed fill is on the row, not the card.** Measured by diffing the two
+  screenshots: `#0F0F0F` → `#272727` across the whole meta band, with the
+  thumbnail unchanged. A ripple over a photograph is invisible anyway.
+- The bottom padding moved *inside* the meta row, because the fill has to reach
+  the bottom of it — space between cards would leave a gap the highlight stops
+  short of.
+
+### One place paints the status bar
+
+Painting it per screen was wrong twice in one sitting.
+
+- **Three screens painted it and three did not.** Channel, Saved and Setup only
+  *reserved* the height. That was invisible until the system glyphs were told to
+  draw dark, and then the clock vanished on exactly those three — measured,
+  `#0F0F0F` under dark ink.
+- **Then it was painted at the root, above the watch overlay** — and the watch
+  layer draws over the tabs with its own background, so the clock went
+  dark-on-dark again the moment a video was open. It is now the **last child of
+  the root Box**.
+
+Sized from `WindowInsets.statusBars`, which is zero while the bar is hidden, so
+fullscreen gets no white band without a condition saying so.
+
+### The status bar names a background, and the root Box was drawn twice (2026-08-30)
+
+Two faults shipped in one build, both from one line-based edit that removed the
+white status-bar strip.
+
+- **`SystemBarStyle.light`/`dark` describe the strip behind the glyphs, not the
+  glyphs.** `light` was correct while that strip was white; with it gone the bar
+  is transparent over `Tokens.bg` (#0F0F0F), where the dark ink `light` asks for
+  is invisible. `dark` is what gives white ones. The two settings were always one
+  decision and had to move together — only one of them moved.
+- **A duplicated root `Box` swallowed every touch.** The deletion left the whole
+  route `when` standing twice, the first copy trailed by a stray `when` that
+  mutated `route`, `tab` and `watching` *during composition*. Nothing looked
+  wrong: the second Box drew the same screens over the first. But a full-screen
+  Box takes the touches that land on it, so the tab bar and the miniplayer were
+  both dead while the pixels were correct. **A UI fault with no visual symptom is
+  the argument against line-number edits** — the compiler was happy, the tests
+  were green, and the only way to find it was to tap.
+
+### iOS builds, and has never run (2026-08-30)
+
+`iosApp/iosApp.xcodeproj` is hand-written rather than generated: the three Swift
+files it wraps were already correct, and the KMP wizard would have replaced them.
+
+- Measured: `xcodebuild -sdk iphonesimulator26.5` → **BUILD SUCCEEDED**,
+  `Mytube.app` at 74 MB with 952 Kotlin symbols in the binary.
+- **The framework is static**, so there is no `Frameworks/` directory and the
+  74 MB is the executable. An empty embed step is the expected shape here.
+- **The Kotlin build phase sources `env.sh`.** The toolchain is on the external
+  volume and Xcode inherits no `JAVA_HOME` from the Finder, so without it the UI
+  build fails where the terminal build succeeds — a difference that reads as a
+  broken project.
+- **No iOS runtime is installed** and the connected iPhone reports `iOS 26.5 is
+  not installed`. Compiled and linked is all that has been shown; nothing has
+  been run, and the several-gigabyte platform download is still the open
+  decision.
+
+## The drag had no destination, and the glass had two colours (2026-08-31)
+
+Two faults reported from the phone, with screenshots of the web app beside them.
+Both were about the same few pixels at the bottom of the screen.
+
+### Nothing arrived; the layer underneath merely came into focus
+
+`MiniPlayer` was composed only once `session.minimised` was already true, so for
+the whole length of the drag **there was no bar**. The one thing changing on
+screen was `WatchLayer`'s own ground: a `hazeEffect` whose blur ran down from
+28dp to zero, revealing the tab out of focus and sharpening as the finger
+landed. Described from the outside, accurately: *"kéo xuống thì nó không show
+background của mini player, thay vào đó cái layer ở dưới bớt mờ dần."*
+
+The web app does the opposite and it is the whole difference: the feed is sharp
+from the first pixel, and the video visibly shrinks **into a bar that is already
+there**.
+
+- **The uncover blur is gone.** It was written to keep the video the thing being
+  looked at, and what it actually produced was a screen where the destination
+  does not exist until the gesture ends. All the layer does now is thin its
+  paint, which is the honest description of one screen being uncovered by
+  another.
+- **The bar is drawn by `App.kt`, not by the layer.** Only `App.kt` knows where
+  it lands — it already computes `landingFromBottomPx` from the navigation
+  inset, the tab bar's height and how far that bar has scrolled away. So the
+  layer reports its progress outward (`onDragProgress`) and `App.kt` draws the
+  bar underneath it, alpha ramping linearly with the drag.
+- **One modifier, two call sites.** The bar drawn under the drag and the bar left
+  behind by it share the `align`/`offset`/`padding` chain. They have to land on
+  the same pixel, because `landingFromBottomPx` is built from those same three
+  terms; a placement that differed between them would put the picture down where
+  the bar is not.
+- **`showSurface` is false during the drag, and has no default.** Both platforms
+  bind a player to exactly one surface — Android's `PlayerView`, iOS's
+  `AVPlayerLayer` — so two `VideoSurface`s on one player means the second steals
+  it and the first goes black. The watch screen holds it while the drag runs, and
+  the real picture is travelling into precisely that box, so the black box is
+  never seen empty. No default on the flag for the reason `startAtBeginning`
+  lost its own: a flag defaulted to the common case is a flag the one call site
+  that needed the other value forgets, silently.
+- **The title that flew down is deleted.** `WatchScreen` drew its own title and
+  channel tracking the shrinking thumbnail's right edge. With the bar present
+  from the first pixel that is the same text twice, one copy sliding over the
+  other. Text already in its final place does not need a second copy flying to
+  meet it.
+
+### Two tints stacked on one another
+
+The miniplayer asked for `TINT_PANEL` 0.86 and the bars for `TINT_CHROME` 0.74,
+on the reasoning that a panel carrying text wants more of the app's colour over
+it than an edge content merely passes under. Fine in isolation, wrong in place:
+the miniplayer *rests on* the tab bar and shares an edge with it, so the two read
+as two surfaces that happen to be adjacent.
+
+One constant now, `TINT_GLASS`, and it is the **higher** value — unifying
+downward would have made the miniplayer's two lines less legible over a passing
+thumbnail, while 10sp tab labels have room to spare at 0.86. Measured after: the
+miniplayer band and the tab bar band both read 18–19 with no step at the seam.
+
+### iOS has now actually run
+
+The charter above says it never had. That is out of date: an iOS 26.5 runtime is
+installed, and this was measured on the **iPhone 16e simulator** — the drag,
+the spring-back with the video still playing, the bar landing under the picture,
+and the seam. The Release build is signed and installed on the phone itself.
+
+- **Gestures on the simulator are drivable from the terminal**, which is what
+  made the above measurable rather than described. `simctl` has no touch input;
+  synthesised `CGEvent` mouse drags over the Simulator window do. The device
+  screen sits inside the window at 1:1 points with a bezel offset — calibrate by
+  finding one landmark (the red mark in the top bar) in both a `simctl io
+  screenshot` and a `screencapture` of the window, rather than assuming the
+  screen fills it.
+
+## Glass on the player, and a sheet that is finally made of it (2026-08-31)
+
+Reported from the phone with a screenshot of YouTube's own player beside it.
+
+### The seek bar had no frame to be the edge of
+
+In fullscreen the bar stayed on screen after the controls had faded — a red
+stripe across the bottom with nothing to explain it. The cause was a decision
+that is still right everywhere else: the bar is drawn *outside* the scrim, so a
+video playing with the controls hidden still says how far through it is. That
+works because the bar is the **bottom edge of the picture**. Fullscreen has no
+picture edge, so the same line is a stripe floating over the film.
+
+- **It follows the controls in fullscreen and only there.** Outside fullscreen
+  the hairline stays, because the reason for it is intact.
+- **And it moves in from the edges**: 16dp at the sides, and the real
+  `navigationBars` inset plus 16dp at the bottom. Not 34dp — that is an iPhone
+  with a home indicator, and a phone with buttons reports 0. At the very bottom
+  the bar's 32dp target overlaps the home-indicator swipe, so a finger seeking
+  would leave the app.
+
+### One material for everything over the picture
+
+The controls carried three different fills — 0.45 for the transport discs, 0.55
+for the clock pill, nothing at all behind the corner buttons. Three shades of
+black on one frame is the fault corrected between the miniplayer and the tab bar
+a day earlier, one screen over. `Modifier.glassSurface(shape)` is now the only
+answer: 0.45 black with a 0.12 white hairline, which is what makes it read as
+glass rather than as a hole punched in the picture.
+
+- **It is not a blur and cannot be.** The picture behind these controls is a
+  `UIKitView` on iOS and a `SurfaceView` on Android; Compose draws neither into
+  its own layer, so Haze has no video pixels to sample. Worth stating because
+  the request was for "liquid glass" — and the reference screenshot turns out
+  not to be frosted either. `BarBackdrop` can frost the bars because what passes
+  under *those* is a Compose-drawn feed.
+- **CC and the gear share one pill**; the three transport discs stay separate,
+  as in the reference. Two glyphs with nothing around them read as two unrelated
+  marks; in a pill they read as one cluster, which is what they are — and the
+  pill is where the extra width comes from.
+- **The buttons are 56dp wide and still 48 tall.** The gear was reported as hard
+  to hit and the room to fix that is horizontal: the row has width to spare,
+  while growing downward reaches into the frame and, at the bottom, into the
+  seek bar's own target.
+- **Fullscreen gains the title and channel**, top left. Only there: everywhere
+  else they are already the first thing under the picture.
+
+### The sheet is glass, after a file explaining why it could not be
+
+`SheetBackdrop.kt` recorded the failure honestly and drew the wrong conclusion
+from it. `ModalBottomSheet` renders into its own popup layer with its own
+coordinate space, so Haze — which positions from `positionInRoot` — drew the
+slice of the app from the *top of the screen* into the sheet's place. That is
+not a tuning problem and no parameter fixes it: **the sheet is not in the scene
+Haze recorded.** The conclusion drawn was "a sheet is not made of glass". The
+right one was "then do not use a popup layer".
+
+`GlassSheet` is an ordinary child of the caller's full-screen `Box`, at real
+coordinates. Measured: the settings sheet frosts the watch page behind it, and
+the profile sheet frosts the feed.
+
+**The profile picker is no longer a sheet** (corrected 2026-10-03). It is a
+page, `Route.Profile`, opened from the Profile row in Settings — so the profile
+lines below describe what was true when this was written, not what the app
+draws now. The player's settings are the sheet this entry's rules still govern.
+
+- **Everything the platform sheet gave away had to be rebuilt** — the rise,
+  tap-outside, drag-down, back. A sheet missing any one of them is a trap. All
+  four are measured except back, which iOS does not have.
+- **Drawn last, and that is now load-bearing.** A popup layer is on top wherever
+  it is written; a child of a Box is on top only if it is written last. Left
+  where it was, `ProfileSheet` opened underneath every screen and the miniplayer.
+- **Always composed, told whether it is showing.** An `if` around it removes the
+  node the exit animation would play on, so the sheet would vanish rather than
+  slide away. Same reason `MutableTransitionState` drives it: composed already
+  visible, there is nothing to animate *from*.
+- **The back handler is local, against the one-handler rule.** That rule is
+  about *navigation* state, which each screen knows only part of. Whether a
+  sheet is open is not navigation — `settingsOpen` is a `remember` inside
+  `WatchScreen` — and `ModalBottomSheet` handled its own back for the same
+  reason. The innermost enabled handler wins.
+- **The scrim is a parameter, not a constant.** The player's settings sit over
+  the video they adjust, so dimming it would grey out the thing being changed;
+  the profile sheet covers a feed it has no relationship with and dims it like
+  any modal. One material, two answers about what is behind.
+- **The watch screen registers its own haze source.** `hazeSource` wraps only
+  `AppShell`'s content, and the watch layer is a sibling drawn over it — a sheet
+  reading the ambient `LocalHaze` would frost the feed hiding behind the video.
+
+### The glass was dark, not glassy; and the sheet stretched when the phone turned
+
+Both reported after the first build reached the phone.
+
+- **A single flat fill reads as a hole, not a pane.** 0.45 black with a 0.12 rim
+  is *dark*, which is not the same thing. It is three layers now: a lighter base
+  (0.32) that still keeps a white glyph legible, a diagonal white sheen fading
+  out across the shape, and a brighter rim (0.22) over both. The gradient is what
+  does the work — a flat translucent fill has no direction, and direction is what
+  says light is landing on a surface rather than a window being cut in the
+  picture. Diagonal rather than vertical: a vertical ramp on a 48dp disc reads as
+  a shadow under it.
+- **The blur was asked for again, and costed rather than refused.** It is
+  reachable — a `UIVisualEffectView` inside `VideoContainer` above the
+  `AVPlayerLayer` on iOS, a TextureView plus `RenderEffect` on Android. Both work
+  by pushing the position and shape of every one of these controls down into the
+  platform layer, which is a crack straight through the seam §3 exists to keep,
+  and the Android half is unverified. Not done, for an effect the reference
+  screenshot does not itself have.
+- **The sheet kept its height and lost its proportion.** Content sized for
+  portrait is ~246dp: a third of a portrait phone and two thirds of a landscape
+  one, where it covered the video it is about. Capped on **both** axes, because
+  they are two faults: `widthIn(max = 480.dp)` — above any phone in portrait, so
+  that orientation is untouched — stops an 844dp band of glass holding two
+  switches; `heightIn(max = 45%)` stops it swallowing the screen. The content
+  scrolls when the cap bites, below the drag handle rather than around it, or the
+  scroll container would take the dismiss gesture.
+
+### Driving the simulator: activate first
+
+Synthesised `CGEvent` clicks are swallowed while the Simulator window is not
+frontmost — the first click only focuses it. Every measurement above needed
+`osascript -e 'tell application "Simulator" to activate'` before the click, and
+half an hour went into taps that appeared to do nothing. Note also that a tap
+made while the controls are hidden only reveals them, so reaching a button is
+two taps, not one.
+
+### Still not done
+
+Preview frames while scrubbing, asked for in the same round. The server has no
+storyboard — grep of `services/` finds no sprite, VTT storyboard or preview
+route — so it is a change in both repositories: sprites at ingest, a route, a
+DTO, and the drawing here. Deliberately deferred, not forgotten.
+
+## Liquid Glass on the tab bar, without splitting the app (2026-08-31)
+
+The tab bar is drawn by SwiftUI on iOS 26 so it can be made of the system's
+Liquid Glass. Everything else is still the one Compose tree it was.
+
+### The measurement that decided the architecture
+
+JetBrains' guide for this (`multiplatform/ios-liquid-glass.html`) is explicit:
+*"you need a native SwiftUI shell, because Liquid Glass effects are rendered by
+the system through native `TabView`, `NavigationStack`, and toolbar APIs"*, and
+its worked example gives **each tab its own `ComposeUIViewController`**.
+
+That is right for an app whose tabs are independent and wrong for this one.
+`App` holds the watch session, the sitting's trail, one scroll position per tab,
+the feed mix and the household's profile in a single composition; the miniplayer
+crosses tabs precisely because it is a *sibling* of the shell rather than a child
+of any tab; and the watch screen is a layer over the tab with Home composed
+underneath it. Four compositions means all of it leaves the tree.
+
+So the load-bearing question was asked as an experiment rather than assumed:
+**does `.glassEffect()` sample a Compose scene rendered underneath it?** A
+throwaway capsule over the feed answered yes — the thumbnails behind it are
+visibly frosted. The charter's earlier finding still stands and is a different
+arrangement: a `UIVisualEffectView` *inside* Compose through `UIKitView` punches
+a hole in the scene and ends up looking at the window's background. Over the top
+of the whole hosting view there is no hole.
+
+With that, nothing had to move. `ShellBar.swift` draws one bar over the Compose
+view and `ShellBridge` carries the four facts the two sides must agree on.
+
+### What crosses, and what deliberately does not
+
+- **Labels come from Kotlin.** A Swift `Localizable.strings` beside the `Strings`
+  interface would be a second place a translation can go missing, which is the
+  one thing §7 builds that interface to make impossible.
+- **The selected tab crosses both ways.** Compose changes it too — switching
+  profile resets to Home, and so does back — and without the push the platform
+  bar would keep a highlight over a screen that had moved on.
+- **Pressing the current tab still scrolls to the top.** Written on the Kotlin
+  side of the bridge as well, because the platform bar cannot reach `tabScroll`
+  and leaving it out would make the two bars differ on one gesture.
+- **Swift runs the slide, Kotlin decides it.** Kotlin already reduces the scroll
+  to a boolean; pushing the animated fraction instead would put a layout value
+  across the language boundary every frame. The cost is that 220ms is written
+  twice, and both copies say so.
+- **The bar's height stays Kotlin's.** Every list in the app ends above it,
+  computed from `Size.topBar`; Swift asks for the number rather than keeping one.
+
+### `present` is the whole difference between a bar in the scene and a bar over it
+
+A platform bar is on top of everything Compose renders. So it is taken away — not
+merely covered — wherever Compose draws something that owns the bottom of the
+screen: the search, channel and saved screens, which never had a tab bar; an
+expanded video; and an open `GlassSheet`. Getting this wrong is a modal sheet
+with a tab bar floating on it.
+
+### Two things measured after the first build
+
+- **Glass takes its tone from what is behind it.** `.regular` over a pale
+  thumbnail turned the pane nearly white and the four white labels vanished into
+  it. It carries `.tint(Color.black.opacity(0.55))` now — the platform's version
+  of `TINT_GLASS`, and the same lesson.
+- **The home indicator's inset belongs inside the glass.** Compose reserves the
+  bar's row *plus* the inset; leaving the inset outside the pane left a strip of
+  unfrosted feed along the bottom edge.
+
+### The debt, stated
+
+**Two shells now live side by side**: iOS 26 gets the SwiftUI bar, everything
+below it keeps the Compose one, chosen by a single `#available` in
+`ContentView.swift` and carried by one defaulted parameter,
+`App(nativeTabBar =)`. `MainActivity` does not pass it, so the Android shell is
+provably the one it always was.
+
+The alternative was raising the deployment target to an iOS released this year,
+in a house with more than one phone. Worth revisiting when that stops being true.
+
+### Haze is gone; the glass has a lens now (2026-08-31)
+
+`dev.chrisbanes.haze` is replaced by **Backdrop** (`io.github.kyant0:backdrop`,
+Apache-2.0), a Compose Multiplatform library that draws a copy of a recorded
+layer with effects on it. Haze blurred; this refracts.
+
+- **The version is not the newest, and the reason is this project's toolchain.**
+  2.0.1 needs Kotlin 2.4.10 and Compose 1.12.0; 2.0.0 needs `compileSdk 37`,
+  which is past what AGP 8.11.1 supports at all — and AGP cannot move, because
+  AGP 9.x is incompatible with the KMP plugin outright. `2.0.0-alpha03` is the
+  last version published before the library moved to a toolchain this project is
+  locked out of: Kotlin 2.3.10, Compose 1.10.1, `minCompileSdk=36`. Both floors
+  are *below* ours, which is the safe direction. It is an alpha and that is a
+  fact about support, not about the code.
+- **`lens()` is the point.** A blur says the content continues underneath; a lens
+  bends what is behind the pane's edges the way thick glass does, and that is the
+  difference between frosted and *liquid*. It needs `RuntimeShader`, so it is
+  **Android 13+**; blur is Android 12+. Below that the library draws what it can,
+  which is what the app looked like before.
+- **The effect order is fixed and the docs say so**: colour filter, then blur,
+  then lens. Reversed, the lens refracts an unblurred image and the blur then
+  smears the refraction flat.
+- **The backdrop must have the page's background drawn into it.**
+  `rememberLayerBackdrop { drawRect(Tokens.bg); drawContent() }` — without the
+  first line the recording has transparent pixels wherever a screen does not
+  paint, and the glass shows them as holes. It is the first thing the library's
+  own guide warns about.
+- **`shape` must be a `CornerBasedShape`**, because the lens refracts along the
+  corners. A square bar is `RoundedCornerShape(0.dp)`.
+- **Measured on the iOS 26.5 simulator**: it runs, and the thumbnail behind the
+  miniplayer is visibly soft where it was sharp. It did **not** reproduce the
+  `SkRecordCanvas::onDrawTextBlob` segfault the hand-rolled `GraphicsLayer`
+  attempt hit, which was the risk worth checking first — this library manages the
+  recording rather than re-recording a layer mid-frame.
+- **Still not the video.** Like Haze, it samples a Compose layer, and the picture
+  is an `AVPlayerLayer` in a `UIKitView` on iOS and a Media3 `PlayerView` on
+  Android. The player's own controls keep `glassSurface`, which is paint.
+
+**Not yet run on Android.** The lens is the half of this that only Android has,
+and it is the half that has not been seen.
+
+## Everything floats: capsules, and one glass in two kinds (2026-08-31)
+
+The reference stopped being YouTube for this part and became **Apple Music on
+iOS 26**, screenshot by screenshot. Its bars are not bars: they are capsules
+inset from the edges with the page running underneath and down both sides.
+
+### The three panes
+
+Top bar, miniplayer and tab bar are now floating capsules sharing one margin and
+one shape (`GLASS_MARGIN`, `GLASS_SHAPE` in `BarBackdrop.kt`). Three panes
+stacked up one edge of the screen, and a different inset on any of them reads as
+a mistake rather than as a margin.
+
+- **A true capsule, `percent = 50`.** A fixed radius was tried first on the worry
+  that a 28dp curve would eat the outer items; it does not, because a capsule's
+  left edge is at x=0 across the whole middle of its height and everything in
+  these rows is vertically centred. What it *does* eat is the corner of anything
+  reaching the pane's top or bottom edge — which is why the miniplayer's picture
+  is inset further from the left than from the top.
+- **The status bar left the top bar.** The clock and the battery sit on the page
+  now, which is what every iOS 26 app does and what a floating capsule forces.
+- **The chip row left it too**, and that reverses "one bar, one material, one
+  movement" — right while the bar was a full-width band, impossible now: a
+  horizontally scrolling row inside a 28dp radius is clipped at both ends every
+  time it moves. The chips lose nothing, each being its own pill already, and the
+  movement is still shared because the offset is on the Box around both.
+- **`consumeTaps` moved onto the panes.** It used to swallow every touch across
+  the full width; beside a capsule there is now page, and a tap there belongs to
+  the page.
+
+### The miniplayer's round window
+
+The picture in the bar is a circle, which needs `VideoSurface(fill = true)` —
+`RESIZE_MODE_ZOOM` on Android, `AVLayerVideoGravityResizeAspectFill` on iOS.
+Fitted instead of filled, a 16:9 frame inside a circle is a stripe with two black
+caps, which reads as a broken image.
+
+- **The drag lands on it.** The travelling picture now lerps its aspect ratio
+  from 16:9 to square and crops from the first pixel of the gesture, and its
+  fraction is *measured* against the layer's real width rather than the
+  hard-coded 0.3 that was "derived against a phone's width". Without that the
+  video arrives as a wide frame and is replaced by a round one in a single
+  frame — the handover the whole gesture exists to hide.
+- **The progress line sits on the capsule's bottom edge, inset by the corner
+  radius.** That number is arithmetic, not taste: a `percent = 50` capsule's
+  bottom edge is straight only between its corners, exactly `height / 2` in from
+  each side. Less and the line runs into the curve and is clipped; more and it is
+  short of the shape for no reason.
+
+### One material, two kinds — and the rule for choosing
+
+- **`BarBackdrop` samples**, and belongs to surfaces that float *over* the page
+  and are outside the recording the shell makes: the two bars, the miniplayer,
+  the sheet.
+- **`glassControl` paints**, and belongs to everything *on* the page: the action
+  pills, the chips, the description box, the up-next header, the sort options,
+  the sheet's own rows. A sampled material is impossible for these — they are
+  inside the layer the shell records, so a button would be sampling a recording
+  of itself.
+- **`glassSurface` paints too, but from black**, for the controls over the video.
+  Same idea, inverted, because the backdrop there is bright and moving.
+- **Selected is a change of *kind*, not of shade.** `glassControl(selected =
+  true)` swaps to the solid inverted surface. That is the lesson the Like button
+  cost: `surface` and `surfaceHover` are six units apart, which is invisible as a
+  state.
+
+### The player's scrim is gone
+
+Black at 0.4 over the whole frame, and the note beside it already knew it was
+wrong: *"darkening the whole picture to fix that is punishing the video for the
+controls."* It was the only answer available before the controls were made of
+glass. Measured after removing it: the picture is untouched and every glyph still
+reads, because each one now sits on a pane that does the work the scrim was
+doing.
+
+Two things had been legible only because of it and gained panes in the same
+change — **the chevron**, and **the fullscreen title and channel**. They were the
+last bare glyphs on the screen, and finding them is the check to repeat before
+adding anything to this screen: if it is not on a pane, the scrim is not coming
+back for it.
+
+`GLASS_BASE` went back up to 0.40 (from 0.45 → 0.32 when the sheen and rim were
+added, then → 0.40 here). The pane is now the only thing between a white glyph
+and a sunlit shot.
+
+## The glass over the picture is finally glass, on iOS 26 (2026-08-31)
+
+Reported from the phone: the player's controls have Liquid Glass turned on and
+**do not blur**. That was true, it was documented, and the documentation drew the
+wrong conclusion from a correct measurement — the same shape of mistake
+`SheetBackdrop.kt` made about bottom sheets a day earlier.
+
+The correct part: `BarBackdrop` samples a layer Compose records, and the picture
+is an `AVPlayerLayer` in a `UIKitView`, which Compose never draws into that
+layer. No parameter changes that, and `glassSurface` is paint because of it.
+
+The part nobody had tried: **the same `.glassEffect()` that draws the tab bar,
+laid over the whole hosting view, samples the video.**
+
+- **Measured before a line of it was written**, with a throwaway capsule over a
+  playing video and **two screenshots 1.2 seconds apart**. The two-shot part is
+  the measurement: the content inside the capsule was blurred *and it changed*.
+  One screenshot cannot tell a live sample from a stale snapshot, and a snapshot
+  would have been worse than no glass — a frozen frame of a video that is still
+  playing, sitting under the pause button.
+- The failure the charter already records is the opposite arrangement and still
+  fails: an effect view *inside* Compose through `UIKitView` punches a hole in
+  the scene and looks at the window's background.
+
+### Compose owns the layout; the platform owns the paint
+
+`GlassPane` and `GlassItem` are the seam, and the rule is one sentence: **Swift
+is told where to draw, never how big a thing is.** The composable is still
+composed — it measures and places exactly as it does on Android — and
+`drawWithContent {}` suppresses only its painting. What crosses is the rectangle
+it landed on.
+
+That is what makes this different from the two routes costed and refused
+before (a `UIVisualEffectView` inside `VideoContainer`, a TextureView plus
+`RenderEffect`): those work by pushing *the position and shape of every control*
+down into the platform layer. This pushes a rectangle Compose computed.
+
+- **The content has to cross too, and that is the real cost.** The platform layer
+  is above everything Compose renders, so a glyph left in Compose would be
+  blurred by the pane it belongs to. So `GlassItem` names an SF Symbol, and these
+  seven controls look slightly different on iOS 26 than on Android — the debt
+  "iOS first" already accepted, now visible.
+- **A readout is not a Button.** The clock and the fullscreen title cross as text
+  with `interactive = false`; wrapping them in a `Button` would draw a control
+  that looks pressable and does nothing.
+- **Disabled is faint *and* dead.** `onPress = null` for a transport disc with
+  nowhere to go, so the platform cannot report a press Kotlin would act on.
+- **The live badge's red travels as `0xAARRGGBB`.** A Swift copy of `Tokens.brand`
+  is a second place it can be wrong.
+- **Every piece of state is a key on the publish, not just the position.** A
+  rectangle that has not moved fires no `onGloballyPositioned`, so a clock keyed
+  only on its bounds would show the time it had when the controls appeared.
+- **A pane leaves the platform layer when its composable leaves the tree**, and
+  it fades on the way out. Without the fade the glass stays solid through
+  Compose's own fade and then pops, which reads as the picture blinking.
+- **The underline is drawn over the glyph, never stacked above it.** A `VStack`
+  was the first version and was reported at once: the mark takes a row of its
+  own, so the glyph sits off the centre of its own button whether or not the mark
+  is showing. This is Compose's `Box(contentAlignment = BottomCenter)`, and the
+  two have to agree because Kotlin sized the rectangle.
+
+### What it is not for
+
+A pane inside a scrolling list *works* — it is an ordinary layout node — and it
+is the wrong tool twice over: it pushes a rectangle across the language boundary
+on every frame of the scroll, and the platform layer is not clipped by the list
+it appears to be inside, so a card scrolled under the top bar is still drawn over
+it. **Everything on the page keeps `glassControl`**, which is paint and costs
+nothing. The division in "One material, two kinds" now has a third entry:
+sampled (`BarBackdrop`), painted (`glassControl`, `glassSurface`), and
+platform-drawn (`GlassPane`) — the last only for chrome that stays still over a
+picture Compose cannot see.
+
+### Measured on the iPhone 16e simulator
+
+Seven panes: chevron, the CC/gear cluster, three transport discs, the clock, the
+zoom button. The picture behind each is visibly soft — the pause disc smears the
+face under it, the clock pill smears the shirt — where the painted version was
+flat black.
+
+And the two things a platform layer breaks if it is wrong, both checked because
+a UI fault with no visual symptom is the one this arrangement invites:
+
+| | |
+|---|---|
+| tap between the discs | controls hide, and the panes leave with them |
+| drag down | the video collapses to the miniplayer, still playing |
+
+`./gradlew jvmTest :composeApp:compileDebugKotlinAndroid :composeApp:compileKotlinIosSimulatorArm64` is green, so the Android shell is provably the one it always was.
+
+**Not on Android, and not below iOS 26.** `LocalNativeGlass` is false there and
+every pane paints `glassSurface`, which is what this looked like yesterday.
+
+## The tab bar came back to Compose, and the glass stopped being frosted (2026-08-31)
+
+Reported from the phone, in one sentence each: the miniplayer is a different
+material from the tab bar, and the chips are transparent with no blur at all.
+Both were true, and the fix for the first was to undo the day's other decision.
+
+### A platform bar is one pane of a set
+
+`ShellBar.swift` drew the tab bar with iOS 26's own material, and the entry
+recording that is still right about what it measured. What it missed is that the
+bar has **three siblings** — the top bar, the chip row and the miniplayer —
+stacked up the same two edges of the same screen. The other three cannot be
+platform-drawn: the miniplayer holds a live `AVPlayerLayer` and the chip row is
+a horizontally scrolling list, and both would have to leave the Compose tree.
+
+Four panes in two materials reads as a mistake, which is how it was reported. So
+the tab bar is Compose's again, `ShellBar.swift` and `ShellBridge.kt` are
+deleted, and `App(nativeTabBar =)` became `App(nativeGlass =)` — the flag now
+means the one thing that is still platform-drawn, the panes over the video, which
+stay that way because a video is the one backdrop Compose cannot sample.
+
+**The tab bar loses the system's material and the app gains one that is the same
+everywhere, Android included.** That is the trade, and it is the right way round:
+the panes are read against each other, not against another app.
+
+### Liquid glass is mostly not blur
+
+The material was `blur(16dp)` against `lens(12, 24)` — inherited from Haze, where
+blur was the only tool there was — and beside the platform's own bar it read as
+*frosted*. The first two attempts at fixing that raised the blur, to 12 and then
+to 20, and both were wrong.
+
+**Measured, in one screenshot carrying both bars at once**: under iOS 26's tab
+bar a map showed through with the road numbers and "Peterborough" perfectly
+legible. The system's material barely blurs. It is a tint, a refraction at the
+rim and a specular edge — what makes it read as glass is that you can still see
+through it. The library's own bottom-bar tutorial says the same in numbers: 4dp
+of blur against a 16/32 lens.
+
+So: `blur(8dp)`, `lens(16, 32, depthEffect = true, chromaticAberration = true)`.
+The last two are what the earlier version never turned on — the depth bends the
+middle of the pane as well as its edges, and the aberration splits colour at the
+rim the way thick glass does.
+
+- **`refractionHeight` is capped at the shape's smallest corner radius.** The
+  library's own constraint, and it is why a 32dp chip cannot carry the bars'
+  16dp refraction: there is nothing to bend along a corner tighter than it.
+- **The blur is 8 rather than the tutorial's 4 because of what passes under each
+  pane.** The tab bar crosses thumbnails, where 4 already reads as glass; the
+  miniplayer crosses the feed's own captions, and 13sp text under 4dp is still
+  sharp enough that the pane looks like a clear window with writing behind it.
+  Reported exactly that way, twice.
+- **`GLASS_BLUR` is one constant, like `TINT_GLASS`.** A chip that blurred less
+  than the bar above it is the same seam in a different parameter.
+
+### The chips could always have sampled
+
+They were `glassControl` — paint — on the reasoning that anything *on the page*
+is inside the layer the shell records, so a control would be sampling a recording
+of itself. That reasoning is right about the page and wrong about the chips:
+`AppShell` records `content()` alone, the screens, and the chip row is a sibling
+of the top bar drawn over that recording and outside it.
+
+`Modifier.liquidGlass` is that material for a control rather than a bar. The
+watch page's action pills, the description box and the sort options keep
+`glassControl`, because those genuinely are inside the recording.
+
+**Selected is still a change of kind**, not a brighter pane: a selected chip is
+the app's inverted surface, solid and light. The Like button's lesson, unchanged.
+
+## A downloaded video said YouTube had refused it (2026-08-31)
+
+Reported from the phone: search "phuong", open *PHƯƠNG MỸ CHI x DTAP | 'THIÊN
+ĐƯỜNG VỚI NGƯỜI THƯƠNG'*, and the watch screen says **"YouTube will not hand this
+video over"**.
+
+Measured against the running gateway, that video answers:
+
+```json
+{"local":{"url":"/media/pYTHEpMod8E/1080p.mp4","mimeType":"video/mp4","seekable":true}}
+```
+
+`mediaState` is `READY` — the household has **downloaded** it — so the server
+offers the file and no HLS ladder at all. `StreamDto` declared `local` and
+`toDomain` never read it, so it fell through to `NothingPlayable`.
+
+**This is the third time a tier has been declared and not read**, and the second
+time it has shipped: `live` was the first, corrected on 2026-08-29, and the note
+there says the fault is *"a lie in the worst direction"*. This one is worse than
+that one. The earlier lie named an upstream refusal for a video upstream was
+serving; this named an upstream refusal for **a file on the household's own
+disk**, in the house, over the LAN.
+
+- **Local plays now, and it is the last tier tried.** The order is live → hls →
+  local. Not because local is worse but because the tiers are not equivalent:
+  HLS is adaptive and carries the phone's 720 ceiling on the URL, while this is
+  one whole file at whatever height was downloaded, usually 1080. On house wifi
+  that is fine, and it is still the wrong default when a ladder was offered.
+- **No `?max=` on it.** There is nothing to cap: it is a file, not a playlist.
+- **§2 of the charter said local was phase 3.** That scope decision is what
+  produced the message, so it is revised here rather than worked around — a video
+  in the library that cannot be played, with a sentence blaming YouTube for it,
+  is not a smaller feature. Downloading *to the phone* is still not done and is
+  still the thing §2 refuses.
+- **`StreamMappingTest` now covers all five answers**, with bodies copied from the
+  running server rather than invented. Nothing in the type system catches a
+  `when` branch that was never written; three times is enough to write the test
+  that does.
+
+### Two more from the same screen
+
+- **The avatar on a search result did nothing.** `VideoCard` has taken
+  `onOpenChannel` since the feed learned this lesson; the search screen was
+  written afterwards and never passed it, so every avatar in the list opened the
+  video. The charter's own words for it: *"something did happen and it was not
+  what they aimed at"*.
+- **The keyboard stayed up over the results.** It comes up on arrival, which is
+  right — somebody who pressed a search box meant to type — and it has to leave
+  at the first sign that typing is over. Scrolling is that sign, and half the
+  screen is keyboard. It is dismissed on scroll and again when a result is
+  opened, because this screen stays composed under the watch layer and a keyboard
+  left up is drawn over it.
+
+## The bars flickered under a resting thumb (2026-09-01)
+
+`rememberBarsVisible` was `listState.lastScrolledForward`, which is the list's
+own answer to "which way did the last movement go" — and it answers that about
+**the last pixel**. A finger resting on a moving list wobbles a pixel each way,
+so the bars came back and left again under a thumb whose owner was holding
+still. Reported as the scroll not being smooth.
+
+**The fix is not a debounce or a throttle.** Both are about *time*, and nothing
+here is too fast: a bar that appeared 200ms after the wobble is the same fault,
+late. What is wrong is that a movement of any size counts as a change of mind.
+
+So the bars now need a **distance**: 48dp of travel one way to flip them, and
+48dp back to flip them again. It accumulates and **resets on a reversal** rather
+than summing, so a slow drift never adds up to a flip while a decisive short
+flick always does.
+
+- **48dp is about a finger's width**, and a third of a card's thumbnail: past
+  anything a resting thumb does, short of a real flick.
+- **A change of item counts as one decisive movement, not as a number.** Within
+  one item `firstVisibleItemScrollOffset` is a real distance; across items the
+  next one has its own height and its own zero, so the delta there is a value
+  this cannot know. It is scored as exactly one threshold in that direction.
+- **The top still wins outright.** `!canScrollBackward` is checked before any of
+  this, and it is still `derivedStateOf` for the original reason: it is read on
+  every frame of every fling.
+
+## The controls became a design system (2026-09-01)
+
+Reported in one batch, and all of it the same thing: the glass arrived one
+surface at a time — the bars, then the player, then the chips — and every
+control the *platform's* widgets drew stayed where it was. A Material slider
+with a gap in its track, an outlined text field with a notched border, a
+dropdown with a 4dp corner, a pull-to-refresh disc in default grey with the only
+drop shadow in the app. Beside a floating capsule of glass each of those reads
+as a control borrowed from another app.
+
+`GlassComponents.kt` is where the shapes and surfaces live now, so a screen asks
+for a control rather than for a Material one it then has to talk out of its own
+appearance. The next time the material changes, it changes in one file.
+
+- **`GlassRadius`**: `control` (a true capsule — chips, fields, buttons, bars),
+  `panel` (20dp — a menu), `sheet` (28dp top corners). The sheet's radius is
+  larger than the panel's because it is the width of the screen: the same number
+  that reads as generous on a 200dp menu reads as almost square on a 390dp sheet.
+- **`GlassSlider`** replaces Material's `Slider` *and* the hand-rolled
+  `LevelSlider` written to escape it. That one already had the right argument —
+  one bar filled to the value, not two bars with a gap — and then drew the bar in
+  a flat surface colour, which is the same argument left half finished. The track
+  is glass; **the knob is solid**, because a translucent knob on a translucent
+  track is two panes that disappear into each other.
+- **`GlassTextField`** is `BasicTextField` on a pane, with the label above it
+  rather than floating in a notch — there is no border for a Material label to
+  notch into.
+- **`GlassRefreshIndicator`** grows with the pull and carries a determinate ring
+  while the finger is still deciding, spinning only once there is something to
+  wait for. It also had to be told what else floats under the top bar: on Home
+  the chip row is pinned there, and the old fixed offset drew the disc *behind*
+  the chips — measured, peeking out from under "Gaming".
+- **The overflow menu is paint, not a sampled backdrop**, and that is the third
+  place this rule has come up. A popup renders in its own layer with its own
+  coordinate space, so a backdrop read there draws the slice of the app from the
+  top of the screen — the failure `SheetBackdrop.kt` recorded. A sheet was worth
+  moving out of a popup to escape it; a menu of three rows is not.
+- **`GlassOption` was written and then deleted.** Nothing in the app is shaped
+  like it: the two lists that exist are a tick list (Settings' languages, which
+  is what the platform's own Settings does) and a chip row. A design system with
+  a component nobody calls is the dead button one level up.
+
+### The tab bar's labels sat high
+
+Reported as the top padding being smaller than the bottom, and it was — but not
+in any padding. A `Text` with no line height carries the font's own leading, and
+for 10sp that is about 14sp with more slack under the glyphs than over them. The
+column is centred in the bar, so the *box* was centred while the ink sat high in
+it. `lineHeight = 10.sp` is the fix.
+
+### The drag rounds, crops and lands on the window
+
+The travelling picture already shrank, moved and cropped. Two things were still
+wrong at the end of it:
+
+- **The corners were square until the last frame**, which then swapped a
+  rectangle for a round window. They now round with the drag, in `percent` rather
+  than dp: the box is shrinking, and a fixed radius would be a different
+  proportion of it every frame. The box is square by the end, so 50% *is* the
+  circle exactly when it arrives.
+- **It landed a thumb's padding above the window.** `travel` ends at the
+  capsule's top edge, and the round window is inset `MINI_THUMB_PAD` below that —
+  so the last 8dp were crossed in one frame. `MINI_THUMB_PAD` is public now,
+  because the drag is the second thing that needs it.
+
+## Autoplay stopped at the end of a video with the screen off (2026-09-01)
+
+Reported precisely, which is what made it findable: *"nó chỉ xảy ra khi app in
+background thôi, foreground thì okie"*.
+
+`WatchViewModel` was one instance per video, built by `remember(session.videoId)`
+— and `remember` is composition. **Composition on iOS stops when the app leaves
+the foreground**, so advancing meant constructing an object that could not be
+constructed: the sound ran to the end and stopped, and the next video appeared
+only when somebody unlocked the phone and looked at the app.
+
+Background audio is the one thing §1 of the charter says this app exists for, so
+a sitting has to be able to move on without a frame being drawn.
+
+- **The ViewModel now owns the sitting, not one video.** `videoId`,
+  `startAtBeginning` and `autoPlay` are `var`s, and `advanceTo(next,
+  fromTheStart)` loads the next video into the same player. It runs in
+  `viewModelScope`, which is a coroutine and not a frame.
+- **`WatchSession` gained a `sittingId`**, and that is what the `remember` is
+  keyed on. `copy` carries it, a fresh `WatchSession(...)` does not — so "open
+  this video" starts a new sitting and "the last one finished" does not, and the
+  player is never torn down between two tracks meant to run on.
+- **The route is told after the fact.** `onFinished` still fires and still owns
+  the trail and the session; it may simply be running while nothing is composed.
+  The session is then the source of truth going the other way — a
+  `LaunchedEffect(session.videoId)` calls `advanceTo`, which checks the id first,
+  so the background case costs nothing when composition catches up.
+- **Pressing next, picking from the rail and pressing previous all `copy` now.**
+  Same sitting, same player. Previous passes `fromTheStart = false`, because
+  going back means returning to where you were.
+
+### And the panes over the video were swallowing taps
+
+Found while testing the above: `PlayerGlass` gave each pane a `Color.clear` to
+size its stack, and **a `Color` in SwiftUI is a shape that fills its space and
+takes touches**. Every tap landing on a pane was eaten by it — the button under
+the finger never fired, and neither did the Compose control still composed
+underneath. The `.frame` that follows already sizes the stack, so the fill was
+never needed.
+
+## A sampled backdrop inside the recorded layer is a crash, not a bad look
+
+The rule was written as an appearance problem: a control inside the layer the
+shell records would be "sampling a recording of itself". Giving the
+pull-to-refresh pane `liquidGlass` while it still lived inside the list measured
+what it actually costs — **on launch**:
+
+```
+EXC_BAD_ACCESS  Could not determine thread index for stack guard region
+SkRasterPipeline::run … SkBlurImageFilter::onGetOutputLayerBounds …
+SkCanvas::internalSaveLayer …
+```
+
+A stack overflow inside Skia's image-filter bounds walk. The filter contains
+itself and the walk never ends.
+
+So the indicator moved out rather than being tuned: the screens publish how far
+the pull has got (`PullGlass`) and **`AppShell` draws the pane**, as a sibling of
+the recording, exactly where the bars are drawn and for exactly the same reason.
+Measured after: the pane is real glass, the feed shows through it, and it grows
+with the pull.
+
+**The overflow menu on a card is still paint, and cannot be otherwise today.** It
+lives in a popup — its own layer with its own coordinate space — which is the
+failure `SheetBackdrop.kt` recorded, *and* its anchor is inside the recorded
+layer, which is the crash above. Real glass there needs the platform route
+(`GlassPane`, as the player's controls use), with an anchor rect published from
+an invisible node and the rows drawn by SwiftUI. That is a piece of work with a
+dismiss gesture in it, and it is deliberately not started here.
+
+So it is `menuSurface`: **the theme's own surface at 0.92 with the panes'
+hairline**, and not `glassControl`. That one is built for a control *on* a page —
+white at 0.09 — and over a bright thumbnail it turned the menu into a grey smear
+with sharp video showing through it. A menu is a sheet of the app's colour that
+happens to be slightly see-through, which is what it now says it is rather than
+imitating a material it cannot have.
+
+### And the pane it replaced would not go away
+
+The first version of `PullGlass` read `state.distanceFraction` **inside**
+`SideEffect`. A state read there subscribes nothing — the effect runs *after* a
+recomposition, it does not cause one — so the pane was only ever updated when
+something else happened to recompose that slot. While a finger drags a list that
+is constantly; the instant it lifts it stops, and the pane kept the last fraction
+it had been handed and stayed on screen. Reported as the loading not hiding. The
+read moved into composition, where it subscribes.
+
+## Settings became a menu, and four smaller things (2026-09-01)
+
+### A settings screen is a list of answers, not a page of controls
+
+It was one long page: an address, a shelf, two sliders, a text field and a list
+of languages, all scrolling past each other under one title. What belongs on a
+phone is a **menu** — a row per subject, the subject on its own screen — which
+is what the platform's own Settings does and what makes each row's *value*
+legible without reading the control that sets it.
+
+Four rows now: the server's address, the saved shelf, the Vietnamese voice
+(showing the voice's name), and the language (named in its own words). Behind
+them, `VoiceScreen` and `LanguageScreen`.
+
+- **`DetailScaffold` is the third time this shape was written**, after the
+  channel page and the saved shelf, so it is a function now: a title, a back
+  chevron drawn over the content, and the argument both of those recorded — these
+  screens have no tab bar, Android's system back leaves the app and iOS has no
+  system back at all, so the way out has to be on the screen.
+- **The setup screen gets the same arrow, and only when there is somewhere to go
+  back to.** It is two things — the first thing on a fresh install, where an
+  arrow would lead nowhere, and a row in Settings. `onBack` is null in the first
+  case rather than a button that does nothing.
+- **And it stopped being Material.** It drew an `OutlinedButton`, a `Button` and
+  an `OutlinedTextField` — a container colour, a border and an elevation from a
+  design language that is not this one, on the first screen anybody sees.
+  `GlassButton` has two weights and no third: `primary` is the app's inverted
+  surface, everything else is a pane of glass. A screen with three kinds of
+  button is a screen where none of them means anything.
+- **The miniplayer follows onto these pages**, as it does onto the saved shelf
+  and a channel — the sound carrying on across screens is the point of holding
+  the session above the routes.
+
+### Save's "Saved" state was a blank white pill
+
+`glassControl(selected = true)` swaps to the inverted surface — solid, light —
+and the pill's content stayed `Tokens.text`, which is white. So the saved state
+was a white capsule with an invisible bookmark and an invisible word on it. The
+content follows the surface now. Every other selected surface in the app already
+did this; this one was the exception.
+
+### Like and dislike lost their count
+
+The count was there because the web app's is, and because an empty space where a
+number belongs reads as a number that failed to load. On a phone that loses to
+the row it is in: the row scrolls sideways and the widest thing in it was a
+figure nobody presses. The count is a fact about *other people* and it is still
+on the page, under the title beside the date, where facts about the video live.
+
+### The channel's sort row lit nothing
+
+Pressing Popular appeared to do nothing at all. It was doing the request — what
+it could not do was **stay lit**: every answer carries a fresh set of
+`sortOptions` with fresh tokens, so the token that was sent matches none of the
+ones that come back, and `lit = option.token == selected` was false for all
+three the moment the answer landed.
+
+Lit by **position** now. The order is the server's own and is stable within a
+channel; the token is not, and was never a name for anything.
+
+- **The list is a skeleton while a different order is on its way**, and the
+  header is not. The page used to dim to 0.45 whole, which says "something is
+  happening" and not *what* — and it left the old order legible underneath, so
+  the first thing to change when the answer arrived was a list somebody was
+  already reading.
+- **What is still wrong is not in this app.** Measured against the gateway: for
+  one channel all three tokens return the same thirty videos in the same order,
+  while for another (`UCsT0YIqwnpJCM-mx7-gSA4Q`) Popular genuinely differs. So the
+  request path here is right and the sort itself is a question for the server.
+
+### The miniplayer was not glass on three screens
+
+`AppShell` registers the backdrop source around the four tabs, and for a while
+that was the whole app. It is not: search, a channel and the saved shelf are
+routes of their own with no shell around them — and **the miniplayer floats over
+all three**. There it was sampling a recording nothing was writing to, so the one
+pane that crosses every screen was the one that stopped being glass whenever
+somebody opened a channel.
+
+`Modifier.glassSource()` is that registration, applied by each of those screens
+and by `DetailScaffold`. Only one route is on screen at a time, which is what
+makes a shared recording safe.
+
+## Seven from one round of use (2026-09-01)
+
+- **The setup screen slid the wrong way.** It was ground with Home in `depth`,
+  on the reasoning that it is where the app starts before there is a library. It
+  is also a row in Settings, and there it was the one screen in that menu whose
+  animation disagreed with its neighbours. Depth 1 now; a fresh install slides in
+  from the right on first launch, which is what arriving somewhere looks like.
+- **The saved shelf's menu offered "Saved".** The same action needs a different
+  word on that screen: in a feed the menu offers to keep something, and on the
+  shelf every row is already kept, so the item stated what was already true and
+  gave no verb to press. `saveLabel` is the caller's, and `removeFromSaved` is on
+  the dictionary in both languages.
+- **The player's settings sheet was cut off in fullscreen.** The cap is 45% of
+  the screen, which is ~380dp in portrait and ~175dp on a phone turned sideways —
+  and fullscreen is the one place this app is ever landscape. Two fractions now,
+  0.45 and 0.8. What the cap protects is what is behind the sheet, and behind it
+  is a video whose subject is in the middle of the frame either way.
+- **The profile picker did nothing.** `if (profiles.size > 1)` — and the list is
+  fetched once at launch, unguarded, so a server that was asleep for those two
+  seconds left the household with no members and an avatar that did nothing for
+  the rest of the run. The fetch is guarded, and pressing the avatar **asks
+  again** rather than shrugging.
+- **The chosen member was a grey band.** `surfaceHover` across the full width, a
+  flat rectangle inside a sheet made of glass and the only thing on it that was
+  neither. It is the same translucent pane every selected control uses, inset so
+  it reads as a row picked up rather than a stripe painted behind one.
+- ~~**The channel's sort row: measured, and half of it is not this app.** … That
+  is a question for the gateway.~~ **Wrong, and corrected on 2026-09-01** — the
+  request path was this app's fault all along; see "An ordering is a
+  continuation" below. The measurement was real and the conclusion drawn from it
+  was not: three tokens answering identically was the *symptom*, and testing
+  `sort=`, `order=` and `sortBy=` was testing three spellings of a parameter the
+  gateway does not read at all. What was
+  this app's, and is fixed, is the *lighting* — see the entry above — and the
+  spacing: the header's bottom padding and the row's own top padding were both
+  there, so the cluster sat 24dp below the counts and 8dp above the first card.
+  The header contributes none now and the row owns both sides.
+- **The channel banner is drawn, and it is not a band.** It was left out because
+  "a banner is 200dp of decoration above the one thing the screen is for" — right
+  about the way YouTube draws one, and not what this is: the picture fills the
+  space the header already occupies, cropped from its centre, ending under the
+  counts. It costs no height at all. **Blurred and tinted, in that order**: a
+  banner is somebody else's composition with its own text and its own focal
+  point, and reading a name over it needs the picture to stop being a picture —
+  while tinting before the blur would only make a pale banner paler.
+  `bannerPath` had to be carried from the DTO through the domain to get here; the
+  gateway had been sending it all along.
+  **Reversed on 2026-09-01** — see below. It cost no height, which answered the
+  objection it was drawn to answer, and produced a different one.
+
+## Search reaches YouTube again (2026-09-01)
+
+Reported in one sentence: search does not offer YouTube the way the web does.
+It did not, and the reason recorded for that was a mistake of fact — *"the
+gateway has one search route and it answers from the catalogue only"*. There are
+two: `GET /api/search` reads the catalogue, `GET /api/discover?q=&limit=` drives
+yt-dlp against YouTube, and the gateway's own note says it is not a fallback:
+*"it runs on every search, not only when the library comes up empty — topics
+decide what the feed offers, and searching is how someone deliberately looks past
+that."*
+
+A library search that cannot reach past the library is half a search, and the
+half it drops is the one somebody types a name into a search box to get.
+
+- **Two calls, two states, two failure modes.** `SearchState` for the library,
+  `UpstreamState` for YouTube. One state carrying both would mean a screen that
+  cannot show the half that worked — and the half that works is usually the
+  local one, answered off an index in milliseconds while the other is a yt-dlp
+  run over the internet. Both directions are tested.
+- **`ExternalVideo` is its own domain type.** Upstream sends a different set of
+  facts and every difference is visible: no channel *id*, so the name is text
+  rather than a target; no avatar, and a `Video` with an empty avatar path is a
+  request per row for a 404; no published date, so the meta line is two facts
+  rather than three; and a `thumbnailUrl` that is **absolute**, pointing at
+  YouTube rather than at a path inside the library. Squeezing it into `Video`
+  would have meant inventing a `Channel` nobody sent.
+- **Opening writes the row first and navigates second.** `POST
+  /api/videos/external` takes the *address* — not an id this app builds a URL
+  from — and answers with the catalogue id. Only metadata is written; the
+  download starts when the player asks how to play it. Navigating first would
+  put "YouTube will not hand this video over" on screen for a video that is on
+  its way, which is the lie this app has now told twice for other reasons. So
+  the card carries a spinner over its picture and refuses a second tap.
+  - **`inLibrary` skips the round trip**, and it is *not* what decides whether a
+    result is drawn. Hiding an upstream result already listed above is a question
+    about this screen, so it is answered with the ids on this screen — the web
+    app does the same.
+  - **An empty `videoId` is a refusal wearing a success's clothes.** The gateway
+    answers 200 with `{"videoId":""}` when it could not resolve the address, and
+    navigating to an empty id opens the watch screen on nothing.
+- **Upstream has no cursor.** `ytsearchN:` takes a count, so "more" is the same
+  search asked for at a larger size (+20), and the answers have run out when one
+  comes back shorter than what was asked for. A new query resets the size —
+  without that, refining a word inherits however large the last search had grown.
+- **No overflow menu on an upstream card.** Saving one means writing the row and
+  *then* pinning it: two requests for one press, on a video the household has not
+  decided to keep. The web app draws the button; the rule this app already
+  follows — a card whose actions mean nothing draws no dot rather than a dead one
+  — is the one that wins here.
+- **A pasted video link already works and needed nothing.** The gateway reads an
+  address out of the query itself and answers with that one video, or with
+  nothing when the library already holds it. Measured against the running server:
+  a `watch?v=` URL comes back as exactly one result, and the library half — which
+  finds nothing for the text of a URL — hides itself.
+- **A pasted channel link leaves the screen.** `GET /api/channels/resolve?q=`
+  answers with a channel id or `null`, and it is asked of *every* query because
+  only the gateway can tell: it reads the address and checks the catalogue's
+  handles, which covers 1,626 of this library's 1,690 channels with no upstream
+  request at all. Measured: `youtube.com/@mkbhd` → `UCBJycsmduvYEL83R_U4JriQ`,
+  and "nothing phone" → `null`.
+  - **A value the screen acts on, not a callback fired from the ViewModel.** The
+    resolve runs in a coroutine that outlives a frame; navigating from there
+    would navigate whether or not this screen was still on top of the app. The
+    screen clears it once it has gone, or coming back would send the viewer
+    straight out again.
+  - **Leaving, not stacking.** Back from a channel already returns to Home, so
+    there is no search page left behind that would only redirect here again —
+    which is what the web's `replace` buys.
+  - **A failed resolve is silence.** Nothing is wrong with a search that could
+    not be checked for being an address, and the two halves that matter have
+    already answered.
+- **Both halves are drawn, both are tested.** `DiscoverMappingTest` parses a body
+  copied from the running gateway rather than invented — the rule
+  `StreamMappingTest` was written under — and `SearchViewModelTest` covers the
+  debounce collapsing thirteen keystrokes into one request of each kind, each
+  half failing while the other answers, the page-size arithmetic, and every
+  branch of opening.
+
+## Back from a channel, and a third avatar that did nothing (2026-09-01)
+
+Both reported from the watch-history page, and both are faults of the same kind:
+something that was made to work once, on the screen it was reported on, and then
+written again from scratch on the next screen.
+
+- **The avatar in history opened the video.** `VideoCard` has taken
+  `onOpenChannel` since the feed learned this, the search screen was corrected
+  for it a day later, and history — which was a tab then and is a page now — was
+  never passed it. The charter's own words, now on their third screen:
+  *"something did happen and it was not what they aimed at."*
+- **Back from a channel always went Home.** Every other page in this app is
+  reached from exactly one place, so `route = Route.Home` is right for all of
+  them; a channel is reached from a feed card, a search result, the saved shelf,
+  watch history and the watch screen, and sending all five to Home throws away
+  the list somebody was reading.
+
+`channelFrom` records where the page was opened from, and `openChannel` is the
+**one** way to reach it — five call sites set the route by hand and four of them
+would have forgotten the other line. The system back gesture reads the same
+value, because it is one handler for the whole navigation state and this is part
+of that state.
+
+**One level, deliberately.** It is a `var`, not a stack: the only way to a second
+channel is through a video, and opening a video leaves the route standing rather
+than pushing onto it. A stack would model a history nothing here creates.
+
+### And back from a channel slid the wrong way
+
+The route transition reads its direction from `depth`, as `target >= initial`.
+That worked while every page was reached from Home: one level in slides from the
+right, and back reverses it. A channel opened from watch history is a pair at
+*equal* depth, and equal counts as forward — so leaving the channel animated as
+though it were another step in.
+
+`Route.Channel` is depth **2** now, the only route that is, because it is the
+only page reached from another page rather than from a tab. The fix belongs in
+`depth` rather than in the transition: the direction is a fact about the pair,
+and the pair was being described wrongly.
+
+### The banner is gone again (2026-09-01)
+
+Drawn a day earlier as a blurred, tinted ground behind the channel header, on the
+argument that it costs no height. That argument was sound and the result was not:
+a channel's banner is somebody else's composition, and 24dp of blur under the
+page's own colour makes a smear whose only job is to sit behind a name that reads
+perfectly well on plain ground. Reported in three words and they were right.
+
+**`bannerPath` stays on the DTO and on the domain type.** It is what the gateway
+sends and carrying it is the mapper's job; the decision not to draw it belongs on
+the screen that would. That is also what makes drawing it again cheap, if a third
+argument ever turns up.
+
+## An ordering is a continuation (2026-09-01)
+
+Reported again, with the right instinct attached: *"tao nghĩ là api ở mobile
+sai"*. It was.
+
+The gateway reads exactly one thing — `r.URL.Query().Get("pageToken")` — and this
+app sent the ordering as `sort=` beside it, so every ordering was dropped in
+silence and answered with the default one. The web app has always sent the sort
+token **as the first page token**, and says why: *"that is how YouTube models it
+— an ordering is just another continuation."*
+
+Measured against the running server on `UCsT0YIqwnpJCM-mx7-gSA4Q`, the channel
+whose orderings genuinely differ:
+
+| | |
+|---|---|
+| `?pageToken=<popular>` | `GNZBSZD16cY, 36m1o-tM05g, …` |
+| `?sort=<popular>` | the Latest list, unchanged |
+| page two of that continuation | `A6Dkt7zyImk, …` — still Popular |
+
+- **The wire has one slot; the app has two intentions.** *"Show me this ordering
+  from the top"* replaces the list, *"show me more"* appends to it, and the
+  screen has to keep them apart. So `channelPage(channelId, sortToken,
+  pageToken)` keeps both and `channelToken` folds them at the edge, where shapes
+  are allowed to differ. A cursor wins when there is one, because it already
+  carries the ordering it was handed out inside — the third row of the table is
+  that claim, measured rather than assumed.
+- **A named function, not an expression in a request builder.** The same reason
+  `wholeSeconds` is one: nothing in the type system catches a query parameter
+  nobody reads — both are strings and both requests succeed with a 200 — so
+  `ChannelTokenTest` holds it to the three cases without a server.
+- **The lesson is about the conclusion, not the parameter.** A day earlier this
+  was measured, found to answer identically for all three orderings, and written
+  down as the gateway's problem. Trying `sort=`, `order=` and `sortBy=` was three
+  spellings of a guess; reading the eleven lines of `handleChannelVideos` would
+  have ended it. **When a request appears to be ignored, read the handler before
+  varying the request.**
+
+## The bookmark asks which collection (2026-09-01)
+
+The bookmark wrote one bit — `POST /api/videos/{id}/pinned`, *keep this file when
+the disk fills* — and there was nowhere to say **which** collection, so the
+household could not keep music apart from news. Pressing it now opens a sheet.
+
+### The database was built for this and the API was not
+
+Migration `0015_playlists.sql` created `playlists` and `playlist_items` in
+2024, with a `position` column whose comment already said it is *"appended to at
+the end when somebody adds a video here"* — and above the catalog repository's
+interface sat a doc comment for a `SetPlaylistItem` **declared nowhere**. The
+gateway exposed two GETs. Nothing in either client could create a playlist, add
+to one, or remove from one, and the running server answered `{"playlists":[]}`.
+
+So the work is in the server repository first: four RPCs, four routes, and one
+new read. That order is not a preference — neither client had anything to call.
+
+- **`GET /api/playlists?videoId=` is the whole reason the sheet is one request.**
+  Every row then carries `containsVideo`. The alternatives were costed and
+  refused: `GET /api/videos/{id}/playlists` is a second request for a screen
+  that is useless without the first, and merging on the client is N requests for
+  one bit each. Without the parameter the flag is absent and every existing
+  caller is untouched.
+- **A `when` for the tiers, an `EXISTS` for ownership — and the ownership guard
+  was wrong.** The first version of the add was
+  `INSERT … SELECT $1, $3, COALESCE(MAX(position), -1) + 1 FROM playlist_items
+  WHERE playlist_id = $1 AND EXISTS (…owner…)`. Measured against the running
+  gateway, **it inserted into another member's playlist**: an aggregate SELECT
+  with no GROUP BY returns one row however the WHERE went, so MAX of nothing is
+  NULL and the position comes out 0. The rows come `FROM playlists` now, which
+  makes "not yours" no row at all. The position is still computed inside the one
+  statement, because two clients adding at once would otherwise pick the same
+  number.
+  - Measured after: add twice → one row; two videos → positions 0 and 1; another
+    member → 404 on add, remove and delete alike; deleting the playlist takes
+    its items (`ON DELETE CASCADE`).
+- **Idempotent on purpose, both ways.** Adding what is already there and
+  removing what is not are both success: the sheet can be saved twice, and a
+  duplicate key surfacing as a failure would be the app reporting a fault where
+  the outcome is exactly what was asked for.
+
+### The sheet
+
+`SavePlaylistSheet` over `GlassSheet` — an ordinary child of the root `Box`,
+which is why `App.kt` draws it **last**, and why the sheet is hoisted there at
+all: six screens open the same one.
+
+- **Save applies the difference, one request per change.** Not one call carrying
+  the final state: a tap is one or two changes, and an endpoint that takes the
+  whole state is one that empties a playlist the day a client is wrong about
+  what was in it. Unticking really removes — a tick that does not is a control
+  that lies.
+- **The first row is not a playlist.** It is the saved shelf, the pinned set,
+  which is not a row in `playlists` — and *that* is why it cannot be renamed or
+  deleted, rather than a rule invented for the UI. Modelling it as a `Playlist`
+  with a made-up id would put a row in the list that no call can reach and make
+  every call site remember which id was magic.
+- **The pinned bit is passed in, not fetched.** The card that opened the sheet
+  already knows it (`Video.saved`), and the watch screen's pill hands it out on
+  the way in. A second request for a fact in hand is a slower sheet for nothing.
+- **A new playlist arrives ticked.** Somebody who has just named a list for this
+  video means to put it there; asking again is asking the same question twice.
+- **An upstream result ensures first, and the *returned* id is what the adds
+  use** — `SearchViewModel.openExternal`'s pattern. An empty id back is a
+  refusal wearing a success's clothes, and adding with it would write rows
+  naming no video, so it adds nothing.
+- **`LIST_MAX_HEIGHT` is measured, not chosen.** At 280dp the Save button came
+  up below the fold on a household with six playlists — the sheet caps itself at
+  45% of the screen, and the title, the button and the home indicator's inset
+  are the rest of it. 196dp is what is left.
+- **Selected is a change of kind**, and the content colour follows the surface.
+  That is the Like button's lesson and the Save pill's: six units of grey is
+  invisible as a state, and white text on the inverted pane is invisible
+  outright.
+
+### The two pages, and one row in Settings
+
+The **"Đã lưu" row became "Playlist"** — one row, not two. The shelf did not
+disappear; it is the first row *on* the playlists page, which is where it
+belongs once there is more than one collection.
+
+- `Route.Playlist` is **depth 2**, like `Route.Channel` and for that entry's
+  reason: it is reached from a page that is itself one level in, and at equal
+  depths `target >= initial` reads leaving as going deeper.
+- **Opening a video from a playlist passes the page's ids as the queue.**
+  `WatchSession.queue` already existed for the channel page, so next and
+  autoplay stayed inside the list with **no player code changed at all**.
+- **A failed removal puts the row back**, unlike the feed's "not interested".
+  That list is a ranking and the row is gone from the page either way; this page
+  *is* the playlist, so a video still in it that is not drawn is the screen
+  lying about its own contents.
+- **The overflow is absent on the shelf** rather than present and refusing.
+
+### The card menu no longer says "Saved"
+
+The row's label used to follow `video.saved` — Save, then Saved. It is
+"Lưu vào playlist" whatever the answer now, because a video already on the shelf
+can still be wanted in a collection, and the old label would say the question had
+been answered. The three per-screen `toggleSaved` methods went with it: the sheet
+is the one writer of that bit, and `WatchViewModel.markSaved` only redraws the
+pill from what the sheet applied.
+
+**Upstream cards gained a menu with exactly one item.** They had none, on the
+rule that a card whose actions mean nothing draws no dot — and one action does
+mean something here.
+
+## The alert is glass too, and one of them crashed the app (2026-09-02)
+
+Reported in one batch after the first playlists build reached the phone. The
+interesting half is not the alert; it is where an alert may be drawn.
+
+### A sampled backdrop inside the recorded layer is still a crash
+
+The charter already records this from the pull-to-refresh pane — *"a stack
+overflow inside Skia's image-filter bounds walk. The filter contains itself and
+the walk never ends"* — and it was paid for a second time here. `GlassAlert` was
+written as the last child of each screen's own
+`Box(Modifier.fillMaxSize().glassSource())`, which is exactly the node that
+registers the layer every floating pane samples. Measured: pressing **Rename**
+dropped the app to the springboard, twice, with nothing in the console.
+
+The fix is the shape `PullGlass` already found: the alert is a **sibling** of the
+recorded box, not a child of it. Two boxes, and the nesting is load-bearing.
+
+The save sheet never had the fault because it is drawn from `App.kt`, outside the
+recording — which is why the same material worked there and crashed one screen
+over.
+
+### Everything a question needs, rebuilt
+
+`GlassAlert` is not `AlertDialog` for the reason `GlassSheet` is not
+`ModalBottomSheet`: a popup layer has its own coordinate space and a sampled
+backdrop in one reads the slice of the app from the top of the screen. So the
+scrim, tap-outside, back, and both halves of the animation are written here.
+
+- **`imePadding` goes on the centring box, not on the pane.** What has to move is
+  the *space the pane is centred in*. Padding the pane keeps it centred on the
+  whole screen and merely pushes it up at the end, which on a short phone leaves
+  the field under the keyboard — the one thing an alert with a field must never
+  do. Measured with the software keyboard up: the pane sits in the middle of what
+  is left.
+- **The caret goes to the end of a prefilled name.** A `String`-valued
+  `BasicTextField` focuses at position **zero**, so the first letter typed into a
+  rename landed in front of the word being edited — measured, "test" became
+  "xtest". Only the caller knows where the caret belongs, so `GlassTextField`
+  gained a `TextFieldValue` overload and the alert passes the selection.
+- **Return confirms.** Without it the key dismisses the keyboard and uncovers the
+  button that was always going to be pressed next.
+- **The keyboard is asked for rather than waited for**, keyed on `visible`: a
+  `FocusRequester` fired once at composition leaves every later opening without a
+  cursor, because the composable stays in the tree between them.
+
+### The sheet's "+" creates and adds in one press
+
+Pressing it closes the sheet and opens the alert — two panes of glass over each
+other, one asking which lists and one asking for a name, is two questions at once
+and the lower one is not answerable. Saving **creates the playlist and puts the
+video in it**: leaving the add to a later press of the sheet's own Save would
+make a named-but-empty playlist the outcome of cancelling, and that press is not
+even on screen. The new row is then ticked *and* part of the diff's baseline, so
+pressing Save afterwards sends nothing about it.
+
+**It is prepended, not appended.** The sheet's list is capped and scrolls, so
+appending put a playlist somebody had just named below the fold — the whole point
+of showing the sheet again is that they can see it happened. It is also the
+server's own order, which is `updated_at DESC`.
+
+### Four faults of state that outlives a route
+
+`viewModel()` stores in the activity's store, which outlives the screen. That is
+what makes the miniplayer possible and it is also what these four were:
+
+- **A deleted playlist stayed on the page**, opened nothing, and was gone only
+  after a restart. `PlaylistsViewModel` is hoisted into `App.kt` now and told
+  which row went — told rather than refetched, because this side already knows
+  the id and a round trip would draw the stale list while it ran.
+- **Both playlist screens ask again on arrival, quietly.** A playlist made from
+  the sheet on Home is otherwise missing from the page until the app restarts.
+  Quiet because blanking a list that is already correct, to redraw the same rows,
+  reads as a page that failed and recovered.
+- **The playlists page's scroll is the caller's**, for the tabs' reason: a
+  collection opens *over* it, so a `rememberLazyListState` inside it dies there
+  and coming back put the list at the top.
+- **`Route.Saved` is depth 2 now.** It is reached from the playlists page rather
+  than from Settings, and `forward` is `target >= initial` — so at equal depth
+  leaving it animated as another step inward. The third time this exact trap has
+  been sprung, after `Route.Channel` and `Route.Playlist`.
+
+### The modal glass is darker than the bars'
+
+One tint was wrong for two jobs. A bar is an edge content passes *under*, and
+being able to read the feed through it is what makes it glass. A sheet is a
+surface somebody stops at and answers, and at the bars' 0.75 the thumbnails
+behind it competed with its own rows. `TINT_MODAL` is 0.90 — then 0.95, because
+the reference given was the player's settings sheet, which is this same material
+over a page that happens to be almost black. The rim and the lens still read at
+the edges, which is what keeps it a pane rather than a panel.
+
+The sheet also takes **62% of the screen** rather than the player's 45%: that one
+is two switches over a video that must stay the subject, and this one is a list
+somebody scans. At 45% a household of twelve collections showed three.
+
+**The rows carry a round, centre-cropped picture** — the miniplayer's window and
+its reasoning, since a 16:9 frame fitted into a circle is a stripe with two blank
+caps. The saved shelf has no first video, so it draws its own bookmark; a
+playlist with nothing in it yet draws the collection mark rather than an empty
+grey circle.
+
+## A sheet that was never drawn, and the tabs change hands (2026-09-02)
+
+### The save sheet lived inside the watch session
+
+Reported from the phone: a card's menu → *Save to playlist* did nothing, and
+opening a video afterwards made the sheet rise on its own.
+
+`SavePlaylistSheet` was written inside `if (session != null && browsing)` — the
+branch that exists only while something is playing. With nothing playing the
+press set the target and there was **no parent to draw it**; opening a video then
+composed that branch with the target still set. It is a sibling of that branch
+now, the last child of the root `Box`. Six screens open this one sheet and none
+of them is about a video that happens to be playing.
+
+### A recording inside a recording is a segfault, and now it cannot happen
+
+Moving the playlists page from Settings to the tab bar crashed the app on sight:
+
+```
+EXC_BAD_ACCESS  SkRecordNoopSaveLayerDrawRestores → SkRecordOptimize
+                → RenderNode.endRecording → LayerBackdropNode.draw
+```
+
+The page carried `glassSource()` because it *was* a route, and `AppShell` already
+records every tab's content — so the same composable was correct in one place and
+fatal in the other. The charter already recorded the sibling shape from
+`PullGlass` and `GlassAlert`; this is the same rule failing in a new direction,
+and the third time it has been paid for.
+
+**So the rule is enforced rather than remembered.** `AppShell` provides
+`LocalGlassRecording` around the tab it draws, and `glassSource()` is a no-op
+when something above is already recording. A screen keeps asking whatever it is
+used as, and the second ask does nothing.
+
+### Playlists is a tab; subscriptions is a row in Settings
+
+They swapped places. Both are lists somebody scans for one name; the difference
+is how often — a household opens its own collections many times a sitting, and
+opens the list of who it follows when it is looking for a channel, which is what
+a menu of answers is for. New uploads from those channels already have a fixed
+share of Home, so nothing about the feed changed by moving it.
+
+- **`onBack` is nullable on the playlists page.** A tab is not reached from
+  anywhere, so an arrow there leads nowhere — the setup screen's rule, and the
+  same flag decides the content padding, because a tab ends above the tab bar and
+  a page does not.
+- **Back from a playlist or the shelf returns to the tab**, not to a route that
+  no longer exists.
+- **The tab icon is stroked, not `PlaylistIcon`.** That one is filled, drawn for
+  a badge over a picture; a filled glyph beside two stroked ones is the icon
+  fault this app has already had three times.
+
+### The glass grew a size, a shape and a colour
+
+- **The sheet floats.** `GLASS_MARGIN` at the sides and `max(navigationBars, 16)`
+  under it, so it is inset like the three bars rather than welded to the bottom
+  edge — and its corners are rounded on all four.
+- **`PANEL_RADIUS` is 32dp and is the default** for anything that is not a
+  capsule: the sheet and the alert. It is **concentric** with an iPhone 16e's
+  47.33pt display corner across that 16dp margin — a radius of 47.33 inside a
+  16dp inset draws a corner fatter than the phone's, and the gap then pinches at
+  the corners and opens along the edges.
+  - `GlassRadius.menu` is the one exception at 28dp, because a menu is narrow and
+    the curve that reads as generous across a 390dp sheet arrives while the first
+    row's text is still there.
+- **The one call to action is the brand's red.** `GlassButton(primary = true)`
+  used to wear the inverted surface, which is what *selected* means everywhere
+  else in this app — so a button said "this is on" rather than "press this".
+- **`GlassPill` is the design system's pill**, moved out of `WatchActions` when
+  the playlist page needed the same one. Play all and Shuffle are two of them,
+  neither louder than the other: they are two equal ways into one list, and a
+  filled button on either would call the other a fallback.
+- **Shuffle is an ordering, not a mode.** `queue.shuffled()` is handed over *as
+  the queue*, so next and autoplay stay inside the shuffled order — a random
+  first video followed by the list in its own order is what "shuffle" means to
+  nobody. Nothing in the player changed.
+
+### A playlist row says it is a playlist before it is read
+
+The reference was YouTube's own card: a strip of the picture behind showing above
+the thumbnail, and a small dark badge in the corner. The badge is
+`BadgeBackground` — the same black 0.80 a video card's duration wears, because
+two badges over two thumbnails in one list must not be two materials.
+
+The saved shelf gets no strip: it is one set, not a stack of collections.
+
+### The detail pages had two headings between them
+
+`DetailScaffold` drew the title *beside* the arrow while Saved, History, a
+channel and the search results all put a `ScreenTitle` at the head of their list
+under a floating `DetailBack`. Two screens out of five in the settings menu
+therefore looked like a different app. The scaffold now does what the other four
+do, and `DetailTopRow` is gone.
+
+## The chip for what was missed (2026-09-02)
+
+Home mixes everything into one ranked page, so a new upload from a followed
+channel competes with the rest of the library. **Bỏ lỡ / Missed** is a standing
+answer to one question: what did the channels this household follows post in the
+last day that nobody has watched?
+
+The work was in the server repository first, because there was nothing to call —
+`GET /api/feed/missed`, and its charter entry holds the ranking decisions. What
+belongs here:
+
+- **Its own repository method, not a topic.** `feed(topic =)` asks the gateway
+  for the household's mix; this is a different endpoint answering a different
+  question, and the mapper is the same because the gateway deliberately answers
+  in the same shape.
+- **`Chip.Missed` is not a `Category`**, exactly like `Chip.Live` and for both of
+  its reasons: the server answers it from another endpoint, and **the chip is
+  absent when the answer is empty**. "Nothing was missed" is a true and useful
+  answer, and it is said by the chip not being there rather than by a blank grid.
+- **One request, two jobs.** `missed()` is asked on every load — that is what
+  decides whether the chip exists — and when the chip is the selected one, that
+  same answer *is* the page. Nothing is fetched twice, and the two can never
+  disagree about what is in the list.
+- **A failure there leaves Home standing.** It is asked to decide whether one
+  chip is drawn, and a feed that will not render because of that is a screen lost
+  to a decoration.
+- **The window is the server's**, read from its config per request. The app sends
+  no `hours`: a number the app carries is a number that needs a release to change.
+- `loadMore` is the one place the kind of chip decides where a page comes from.
+  Everything else reads a token it was handed.
+
+**The refresh gesture is answered on the server.** The app sends no page token on
+a load, and the gateway mints a new rotation for the channel round-robin each
+time — so pulling the list down leads with a different channel while every
+channel still gets a row before any gets a second. Nothing on this side changed
+to get it.
+
+## What a finger gets back, and a mark for the app (2026-09-02)
+
+### Glass moves when it is touched
+
+Every control here is a pane of glass and pressing one did **nothing at all**:
+`indication = null` everywhere, because Material's ripple is ink spreading
+through paper and this app is not made of paper. That removed the wrong answer
+and left no answer — a button with no acknowledgement is one people press twice.
+
+There is no library for this. No Compose Multiplatform package draws an
+iOS-26-style press, and the version of `backdrop` this project is pinned to
+cannot move — 2.0.0 wants `compileSdk 37`, which is past what AGP 8.11.1
+supports, and AGP cannot move because 9.x is incompatible with the KMP plugin.
+So it is written here, on the library already in use.
+
+- **`drawBackdrop` takes lambdas for everything** — shape, effects, highlight —
+  and they are read at *draw* time. A press therefore costs a redraw and no
+  recomposition, which on a chip row is the difference between 2% of movement
+  and re-composing a `LazyRow` item at 120fps.
+- **`GlassPress` is a holder, not a modifier**, because two things read it from
+  two places: the layout scales the node and the *material* deepens its lens.
+  One object is what keeps the halves in step.
+- **Two springs, not one.** Pressing is quick and damped — meeting a surface;
+  releasing overshoots — a sheet under tension let go. One symmetric curve reads
+  as an animation playing rather than as a material responding.
+- **Painted surfaces brighten instead**, since paint cannot refract.
+- **`pressableGlassControl` and friends fold the material, the squash and the
+  click into one modifier.** Written apart, the next control written gets the
+  material and no press — which is exactly how fifteen of them ended up silent.
+- **Measured**: holding the Share pill takes it from mean 0.436 to 0.486 while
+  the Save pill beside it does not change by a single pixel. On the tab bar, the
+  held item differs by RMSE 0.055 against 0.003 for its neighbours.
+
+Cards keep their own 0.98 spring and are deliberately untouched: a card is a
+picture, and that number says "the touch landed here", not "this is a button".
+The player's controls over the video are untouched too — on iOS 26 they are
+drawn by SwiftUI, so a Compose squash would show on Android only.
+
+### The overflow menu is real glass now
+
+It was `DropdownMenu` with a painted surface, and the two reasons written down
+for that were both true and both about *where a popup draws*: its own coordinate
+space reads the wrong slice, and its anchor sits inside the recorded layer where
+sampling is a segfault. Neither is a fact about menus. So the menu moved to where
+the sheets and the alert are — an ordinary child of the root `Box` — and
+`MenuHost` carries the one open menu and the rectangle of the button it hangs
+from. `menuSurface` and `DropdownMenu` are gone from the codebase.
+
+- **The dismiss watcher is a modifier on the root, not a full-screen sibling.**
+  Not consuming the event is not enough: Compose hit-tests siblings in reverse
+  draw order and **stops at the first one hit**, so a node covering the screen
+  takes the gesture from everything beneath it whether it consumes anything or
+  not. Reported as the menu blocking the scroll, and measured — menu closed,
+  feed motionless. An *ancestor* sees the Initial pass first and the list still
+  receives it: one is a lid, the other a doorbell.
+- **It grows from the button**, `TransformOrigin` computed from the anchor, so it
+  is correct when the pane flips above rather than below.
+- **Rows are 40dp with the pane carrying 10dp**, because a label centred in a row
+  leaves half a row above and half below — so *between* two labels is a whole
+  row's leftover and at an edge it is half of one. Measured before: 37dp against
+  19dp, reported as uneven padding. And rows fill the pane's width: one that
+  answers only where the letters are is one people press twice.
+
+### The sheet's frame, measured off the platform
+
+A screenshot of iOS's share sheet (591×1280, 1.5 px per point) puts its left edge
+at x=14 and its right at 577 of 591 — 9.3pt each side — and its bottom edge
+10.6pt above the screen. So `SHEET_MARGIN` is 10dp, **even on all three sides**;
+the home indicator is cleared *inside* the pane instead. The corner follows: the
+same screenshot's arc is ~35pt, which is 47.33 − 10 — the platform draws its
+sheet concentric with the display, exactly the rule this app used for 32dp when
+the margin was 16.
+
+### Two bugs the phone found
+
+- **A channel's uploads come from YouTube, so most have no catalogue row** — and
+  pressing one navigated to a watch screen that answered *"gateway answered 404
+  for /api/videos/bnNMULP-Ftc"*. `ChannelViewModel.openVideo` writes the row
+  first and opens the id the server answers with, which is `SearchViewModel`'s
+  path for the same reason. Measured on the reported video: `POST
+  /api/videos/external` → `{"videoId":"bnNMULP-Ftc"}`, then 200 and an HLS
+  stream.
+- **The two "fetching this one" overlays were different spinners.** One
+  composable now, `OpeningOverlay`: the search results and the channel page have
+  the same state for the same reason and must not look like two apps.
+
+### The app has a mark
+
+The web app's own favicon — a house with a play in it, and its comment says why
+it is not YouTube's rounded rectangle: that is a trademark rather than a layout.
+iOS gets a 1024 asset catalogue entry, inset to 75% because a favicon read at
+16px runs to its edges and an app icon is masked. Android gets an **adaptive icon
+as a vector** rather than ten PNGs, with a monochrome layer for Android 13's
+themed icons.
+
+## Five from the narration, the lock screen and one changed tab (2026-09-02)
+
+### A slot with no slack, and a client that starts late
+
+Reported as every narration line being cut short. Neither half was wrong on its
+own, and together they lose the end of every sentence.
+
+The server fits each clip's audio to the gap before the next line —
+`tempoFor` stretches it to fill the slot exactly — so **there is no slack in the
+slot at all**. The client then started a clip up to a tick late and had it
+replaced by the next one exactly on time, so the tail lost precisely what the
+start had cost: the 250ms tick, plus fetching a WAV over the LAN.
+
+- **Fixed on the client, because that is where the delay is.** Making the server
+  fit into 92% of the slot would have worked by speaking faster to pay for
+  something slow somewhere else, and would have meant regenerating every clip
+  already cached.
+- **`NarrationHost.prepare(url)`, and two players used in turn.** One player
+  cannot buffer the next line while playing this one — loading a new item is
+  what stops the current one, on both `ExoPlayer` and `AVPlayer`. So the clip
+  after this is prepared on the idle player and starting it is a swap.
+- **One ahead, not a queue.** A platform holding several is a platform deciding
+  when they play, which is the one thing `Narrator` exists to keep in one place.
+- **The tick is 100ms**, and `nextClipAfter` reads from the playhead rather than
+  from the clip now speaking, so a seek lands on the right answer with no
+  special case — the reasoning that makes the whole loop poll rather than
+  schedule.
+
+`NarrationClip.durationSeconds` is no longer what stops a clip. Its comment said
+ducking must end when the line's time is up rather than when its file stops;
+that is right about ducking and was wrong as the rule for the audio.
+
+### The narration was read one sentence ahead, and it was the server's
+
+Recorded here because it was diagnosed from this side and reported as an app
+fault. `services/translate_server.py` asked the model for N numbered lines and
+checked only that N came back; a model that merged two cues into line 1 repeated
+a line to keep the count, and from there every cue carried the next cue's words.
+The server's own changelog holds the measurement. **Nothing in this app was
+wrong**, and the two clients differed only in that the web app had already been
+fed the same cache.
+
+The lesson worth keeping is the shape of the first fix considered: numbering the
+lines by hash instead of by position. It would have changed nothing — the model
+returned every number correctly and put the wrong text under it. **A check on
+the envelope cannot catch a fault in the contents.**
+
+### A screen that changes what it is used as loses the two-box trick
+
+Pressing "+" on the playlists tab killed the app. The alert was already wrapped
+in the two boxes this charter prescribes — a sampled backdrop drawn *outside*
+the node that records the layer — and that arrangement is only load-bearing
+while the screen records its own layer. As a **tab** it is composed inside
+`AppShell`'s recording, where `glassSource()` is deliberately a no-op, so both
+boxes were inside the layer the alert would sample and Skia's image-filter
+bounds walk recursed until the stack went.
+
+`PlaylistNameAlert` is drawn from `App.kt` now, beside `SavePlaylistSheet`, for
+exactly the reason that sheet is. **The rule is not "wrap it in two boxes", it
+is "draw it outside every recording"** — and the two are the same sentence only
+for a route.
+
+### `MPRemoteCommandCenter` is process-wide and its targets accumulate
+
+Play video A, background it, play video B, then press Play on the lock screen:
+**both were heard.** `NowPlaying` had a `registered` flag, which stops one
+instance registering twice and says nothing about a second instance registering
+beside it — and nothing ever removed a handler. Two players, eight targets, one
+button, two answers.
+
+`resign()` removes this instance's own handlers and is called from `release()`
+as well as `stop()`. That is the one place the release/stop split does *not*
+apply: releasing hands back this app's hold on the picture while the sound
+carries on, but a player that has let go must not still answer the lock screen.
+
+### The lock screen had no scrubber, and a comment claimed otherwise
+
+`describe()` runs the moment the item is handed to the player, when the duration
+is still zero — and a zero duration is written out as `MPNowPlayingInfoPropertyIsLiveStream`,
+which is how iOS is told there is nothing to scrub. The comment beside it said
+*"`progress` corrects it on the first tick"*. It did not: `progress` sent the
+elapsed time and the rate and never the length. So every video was a live stream
+with no length for its whole duration, and the lock screen offered no seek.
+
+**A comment that describes what another function does is a claim about code
+somebody else can change.** The length now travels on every tick beside the
+position, where the two cannot disagree.
+
+- **The artwork is fetched, reversing the decision recorded above.** *"A lock
+  screen with a title and no picture is complete"* does not survive contact with
+  the real thing — every other app has one, and its absence reads as an entry
+  that failed to load. The objections it was refused on are answered rather than
+  ignored: the fetch is asynchronous, a failure leaves the text untouched, and
+  "unreachable off the house wifi" is equally true of the video.
+- **A picture that lands late is only applied if it is still the right picture.**
+  A viewer can press next while it is in flight, and without the check the lock
+  screen shows the previous video under the new title.
+
+## A pass that begins where the viewer is (2026-09-03)
+
+Reported by comparing the two clients: on the web, seeking to 1:20 and turning
+narration on starts translating and speaking **at 1:20**; on mobile it always
+started at 0:00, so the first thing heard was the opening of a video the picture
+had long left behind. A pass takes minutes, and every one of those minutes was
+being spent on lines already gone past.
+
+The endpoint had no way to say otherwise — `runNarration` ran cue 0 to the end,
+full stop. So the work is in the server repository first, again, for the reason
+it was the last two times: there was nothing here to call.
+
+- **From the position to the end, then back for the beginning.** Not a filter,
+  and nothing is skipped: the earlier half is wanted by anybody who seeks
+  backwards or watches it again tomorrow, and by then it is already paid for.
+- **`start(videoId, fromSeconds)` has no default.** A caller that omits it is a
+  caller that has silently asked for the beginning, which is the exact fault
+  being fixed — the lesson `startAtBeginning` cost, applied before it could be
+  paid for a second time.
+- **A seek retargets a running pass, and the threshold lives on the server.**
+  The app asks again on every seek; the gateway answers a request for a place it
+  is already working from by doing nothing. Putting a "far enough" number on
+  both sides would be two rules that can disagree about what far means.
+  - Thirty seconds is what separates *skipping* from catching a line again. A
+    nudge of the bar must not reorder a pass.
+  - **The clips survive a retarget.** The client replaces its whole list from
+    every poll, so emptying `Clips` on the server would silence a narration that
+    is playing perfectly well. What resets is `Done`, which counts this run.
+  - **A cancelled run must not write over its replacement.** It is between two
+    cues when the cancel lands, and every registry write would otherwise report
+    the *new* pass as idle. A generation number on the pass is what each
+    goroutine checks before touching anything.
+  - **The manifest is kept sorted by start, one clip per cue.** A retargeted pass
+    walks the cues in a different order and some of them twice. `clipAt` scans
+    and does not care; `nextClipAfter` takes the *first* clip starting after the
+    playhead in order to buffer it, and on an unsorted list that buffers the
+    wrong file — which is the fault the buffering was added to fix.
+
+## Double tap to jump, and the tap it must not steal (2026-09-03)
+
+- **One `detectTapGestures` carrying both, not a `clickable` beside it.** Two
+  recognisers each see the first tap, so the controls would appear *and* the
+  video would jump. That is the same shape as the seek bar's rule — two
+  `pointerInput`s there because the gestures are genuinely different — and the
+  opposite conclusion, because here they are the same gesture read two ways.
+- **The cost is stated rather than hidden: showing the controls now waits ~300ms**,
+  the double-tap window, because until it expires nobody knows which gesture this
+  was. That is what the reference does too, and it is the price of the two never
+  firing together.
+- **A double tap does not touch the controls.** Double-tapping a bare picture
+  jumps and leaves it bare; showing the controls would put the transport discs
+  under a finger that is still tapping — and the third tap of a run is exactly
+  the one somebody is making when they mean to keep going.
+- **The badge accumulates, and only in one direction.** Four taps on the right is
+  one request for forty seconds; a badge flashing "10" four times leaves somebody
+  counting flashes. A tap on the other side is a new intention rather than twenty
+  seconds off this one.
+- **How long it shows and how long it may be added to are two durations.** The
+  fade is 260ms and the run stays open for 700, so a badge on its way out can
+  still be caught. Tying them together makes a total that cannot be reached.
+- **The ripple takes no pointer events.** It is drawn over the picture while a
+  finger is still on it, and anything there that consumed a touch would eat the
+  next tap of the run.
+- **One arrow, mirrored.** Two vectors for a shape that must stay identical is
+  two places for it to stop being.
+- **Which side was tapped is stored, not derived from the sign of the jump.**
+  Hiding the badge sets the seconds to zero, and zero is not positive — so a
+  derived side flipped to *left* for the whole of the fade-out, and a forward
+  jump ended by darkening the wrong half of the picture. The side has to outlive
+  the number because it is still being drawn after the number has gone.
+
+  The same shape as the lock screen's `IsLiveStream` one day earlier: a fact
+  computed from another fact, where the source's edge value means something the
+  derived one reads as an answer.
+
+## Closing a video stops the server spending on it (2026-09-03)
+
+`NarrationRepository` had `start` and `state` and no way to say stop, so
+pressing the close button ended the *polling* and left the gateway translating
+and speaking to the end of a video nobody was watching. On a three-hour film
+that is hours of model calls and speech for two minutes of viewing. The route
+to cancel had existed all along; nothing here called it.
+
+That was not a decision anybody made — it was the shape of a missing method —
+and the line it should follow was already drawn one layer down.
+
+- **Only the close button.** `stop()` on the player means the viewer is done;
+  `release()` means this screen is done and the sound carries on. Narration
+  takes the same split: switching the toggle off does not cancel, because the
+  pass is writing lines to disk that the next viewing would otherwise pay for
+  again, and shrinking to the miniplayer does not cancel, because that is still
+  watching.
+- **Nothing is lost.** Everything translated and spoken is on disk and skipped
+  by the next pass. What ends is the work still to come.
+- **`NonCancellable`, and the reason is a fact about the caller.** This request
+  is sent at the exact moment the screen goes away. `viewModelScope` survives
+  that *today* only because the watch ViewModel is held in a `remember` and
+  nothing calls `clear()` on it — which is the wrong thing for a request to
+  depend on. Without it, the day this moves into a `ViewModelStore` the server
+  carries on spending and nothing anywhere says why.
+
+### And the fault reported as "seek does not start narration" was a stale binary
+
+Measured before changing a line: the gateway answering on :8180 was built
+**2 Sep 15:37**, and `?from=` was committed **3 Sep 11:33**. The old binary read
+no such parameter, saw a pass already running, and returned it — so every seek
+did nothing, exactly as reported, with correct code on both sides.
+
+Rebuilt and swapped the gateway process alone, reusing the running one's
+environment. Measured after, against the library:
+
+| | |
+|---|---|
+| `?from=600` | first clip at **599.5s** |
+| 600 → 610 | no reorder; `done` carries on 123 → 139 |
+| → 1800 | reordered; nine clips around 1800 within 14s |
+| the manifest | still sorted, and the 136 clips already made were kept |
+
+**A version is part of the measurement.** Two days were nearly spent reading
+correct code because nobody asked what was actually running.
+
+## A live broadcast has captions and no end (2026-09-03)
+
+The note above said a broadcast has no caption file. Measured, that is false:
+YouTube publishes automatic captions for some live streams and not others, and
+what came back was the words being spoken.
+
+| stream | automatic captions, while live |
+|---|---|
+| Al Jazeera English `gCNeDWCI0vo` | **`en`, vtt** |
+| Sky News `YzWg-1a-uZA` | none |
+| a 24/7 music stream `jfKfPfyJRdk` | metadata refused outright |
+
+Pulling Al Jazeera's returned 85 KB of real speech — and it arrived as
+`frag 365/720` with four minutes to go, because it is not a file being
+downloaded. **It is a feed keeping pace with the broadcast**, a few seconds of
+speech per fragment.
+
+So the reason narration is refused for a broadcast is not that there is nothing
+to read. It is that **three things the pass is built on are missing**, and each
+would be missing even with a perfect transcript:
+
+- **No zero.** `X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:8478079648` — the
+  times count from when *this listener* started, not from when the broadcast
+  did. Every cue index, every resume position and every clip's `startSeconds` is
+  an offset from a beginning that a live stream does not have.
+- **No next cue, so no slot.** `slotFor` is the gap to the line that follows,
+  and that line has not been said yet. Without it there is no tempo to fit the
+  speech to, which is the whole mechanism that keeps a spoken line inside the
+  gap it belongs in.
+- ~~**The text rewrites itself.**~~ **Wrong, and corrected the same day.** That
+  was measured on yt-dlp's *concatenated* output, which is the VOD auto-caption
+  format, not what a live segment contains. Read from the segments themselves,
+  consecutive ones do not revise each other: a cue that spans a boundary is
+  **split**, appearing at the end of one and again at the start of the next with
+  the same words — `"shows the aftermath of"` at 3→5s and then at 0→1s. So the
+  join is a de-duplication, and the real third obstacle is smaller than the one
+  written here: **the lines arrive as fragments**, not sentences, and
+  translating "shows the aftermath of" on its own is what machine translation
+  handles worst.
+
+**Narrating a broadcast is therefore a second architecture, not a parameter on
+this one**: follow a cue feed, translate each line as it settles, speak it at a
+default tempo because there is no slot to fit, and accept running a few seconds
+behind the original — which is simultaneous interpreting, and is not what the
+pass does. Recorded as designed-against rather than forgotten.
+
+
+## Narrating a broadcast (2026-09-03)
+
+Built after the entry above recorded why it could not be, and one of that
+entry's three reasons turned out to be measured from the wrong place. What
+stood was decisive enough on its own: a broadcast has no zero and no next cue.
+
+### The feed is a playlist, which is why this was possible at all
+
+The load-bearing measurement, and it arrived after the design questions had been
+settled — reversing one of the answers. YouTube's live caption "URL" is a
+**rolling HLS playlist**, the same shape `live.go` already proxies for video:
+
+```
+#EXT-X-TARGETDURATION:5
+#EXT-X-MEDIA-SEQUENCE:616251
+#EXT-X-PROGRAM-DATE-TIME:2026-09-03T11:55:35.032+00:00
+```
+
+- **`EXT-X-PROGRAM-DATE-TIME` is an absolute wall clock**, and the *video*
+  playlist carries one too. The gateway rewrites only address lines and passes
+  every `#` tag through, so it reaches the player untouched.
+- So the time base is two additions and no presentation timestamps:
+  `segment(sq) = PDT + (sq − MEDIA-SEQUENCE) × EXTINF`, and a cue's clock is its
+  segment's plus its own offset — cue times inside a segment run 0..5s relative
+  to it. Confirmed independently: consecutive segments' `X-TIMESTAMP-MAP` values
+  differ by **450000** ticks of a 90 kHz clock, exactly the five seconds the
+  playlist claims.
+- **The earlier design gave up on anchoring and was wrong to.** It had concluded
+  the feed carried no absolute time, having only seen `X-TIMESTAMP-MAP`, which
+  counts from when this listener started. Anchoring on the clock costs one small
+  platform call per side — `AVPlayerItem.currentDate()`, and ExoPlayer's
+  `windowStartTimeMs` plus the position — and avoids reaching into PTS, which
+  would have cracked the seam §3 exists to keep.
+
+### What the pass does differently
+
+`runLiveNarration` is beside `runNarration`, not inside it. Every step of the
+recorded pass is indexed against a caption file that exists in full.
+
+- **A clause waits for the clause after it.** The gap between their starts *is*
+  its slot, and without a slot there is no tempo — the whole mechanism that
+  keeps a spoken line inside its gap. One clause of latency, bought knowingly.
+- **A line further behind than 25 seconds is dropped, not queued.** Translation
+  and speech can fall behind a broadcast, and a queue that drains slower than it
+  fills never recovers. Same judgement as `tempoFor`'s `errTooFast`: one line
+  lost beats two spoiled.
+- **Clauses, not cues.** Live captions arrive as fragments, so `clauseBuilder`
+  and `firstClauseBoundary` are reused exactly as the recorded path uses them.
+- **The manifest gained a clock, not a second manifest.** `startsAtUnixMillis`
+  is set for a live clip and `startSeconds` for a recorded one, and
+  `narrationClip.order()` sorts by whichever is present — the sort matters
+  because `nextClipAfter` buffers the *first* clip after the playhead.
+- **`translateLines` and `spokenClip` were split out** of the recorded path so
+  both callers share one cache partition and one tempo rule rather than growing
+  a second copy that drifts.
+
+### Two decisions about cost
+
+- **The toggle is absent, not disabled, when a broadcast has no captions.** The
+  server answers `liveCaptions` on the stream response — it genuinely varies,
+  and a control that fails on press for half of live streams is the dead button
+  §5 of the server charter refuses. A disabled switch invites a second press.
+- **A remembered preference does not start a broadcast narrating.** A recorded
+  pass ends; this one does not, so a switch left on from yesterday would
+  translate and speak for as long as the stream stayed open.
+
+### Measured, and it reversed the placement
+
+Run against Al Jazeera English on air, the pass produced Vietnamese from live
+English — and the two numbers beside the first lines settled a question the
+design had got wrong:
+
+| | |
+|---|---|
+| first line, behind the moment it was said | **33s** |
+| second | **44s** |
+
+That delay is not a fault to tune away; it is the sum of the design. A clause
+runs about eleven seconds, the clause *after* it must begin before there is a
+slot, then translation and speech. Thirty seconds is the floor.
+
+**And a viewer of a broadcast sits at the live edge, which is *now*.** A clip
+whose window closed twenty seconds ago never contains the playhead, so matching
+on the wall clock plays nothing at all — the placement was correct and
+unusable, right for the one viewer who has seeked back into the DVR window and
+wrong for everybody else.
+
+So a broadcast's lines are **said in turn as they arrive**. That is simultaneous
+interpreting, which is what narrating live speech has always been: the voice
+runs behind the picture and does not catch up. `startsAtEpochMillis` still
+decides the order and what is new; it no longer decides the moment, and
+`videoEpochMillis` was removed from the port rather than left as a reading
+nobody takes.
+
+- **The queue skips rather than trails.** A phone in a pocket for two minutes
+  comes back to a pile, and reading it in order puts the voice further behind
+  with every line. Anything more than 30s behind the newest line is passed over
+  — the same judgement the server makes when it drops one that arrived late.
+- **The countdown is in ticks, not on a clock.** The tick is the only time this
+  class has, and a wall clock inside it would be a second idea of "now" that
+  every test would have to fake separately.
+
+### Two faults the first run found
+
+- **A caption playlist is not a thirty-second window.** Measured: **2880
+  segments**, four hours of DVR. The first poll read all of it, produced 203
+  clauses, and then worked through them one at a time while the feed ran away.
+  A pass now places itself at the live edge and reads nothing from the first
+  playlist — the recorded pass's "start where the viewer is", arriving from the
+  other direction.
+- **A backlog must never block the poll.** Stale lines are dropped in one sweep
+  before any request is made, and at most one line is spoken per poll. Reaching
+  a stale line only after translating the ones in front of it is how a pass that
+  has fallen behind stays behind.
+
+### And the test that flattered the code
+
+`TestFeedJoinsACueSplitAcrossSegments` was written with a full stop in its
+sample text — one that does not exist. **YouTube's live ASR carries no
+punctuation at all**, so `firstClauseBoundary` never fires and every clause is
+closed by the word count instead. Inventing the data made the test pass on a
+path the real feed never takes.
+
+## A repeated row is a crash, not a repetition (2026-09-06)
+
+Reported as: on the Missed chip, scrolling far enough closes the app on its
+own. It was not memory and not the glass — 190 driven swipes on the simulator
+never fell over, and the machine's own footprint sat flat at ~360 MB.
+
+The phone's crash report is what settled it. `xcrun devicectl device info files
+--domain-type systemCrashLogs` lists a device's `.ips` files and `device copy
+from` pulls one off, which is worth writing down on its own: two days earlier
+the only crashes anybody had read were this Mac's simulator ones, and they were
+from an instrumented build nobody was running any more.
+
+```
+exception: EXC_CRASH / SIGABRT          (not EXC_BAD_ACCESS, so not Skia)
+lastExceptionBacktrace:
+  kfun:androidx.compose.foundation.lazy.LazyListMeasuredItemProvider#getAndMeasure
+  kfun:androidx.compose.ui.layout.LayoutNodeSubcompositionsState.Scope.subcompose
+```
+
+An unhandled Kotlin exception thrown **out of `subcompose` while measuring the
+list** — which is what a `LazyColumn` does when a key arrives twice.
+
+- **The server is not wrong.** `/api/feed/missed` pages by offset, so a video
+  ingested between two requests shifts the window and hands back a row that is
+  already on screen. Measured against the running gateway at 13:00 the seven
+  pages were clean, which is why this only ever happens while a scan is running
+  — reported at 07:18 and again at 07:19, and never since.
+- **`loadMore` was `current.videos + it.videos`.** A list that is keyed is a
+  promise of unique keys, and appending two pages the caller has not compared
+  is making that promise without checking it. `appendNew` keeps the row already
+  drawn — somebody may be looking at it — and drops the repeat.
+- **Both feeds that append had it**, Home and the channel page, and the search
+  screen's upstream half now has `distinctBy` for the same reason: those rows
+  come from yt-dlp, which this app does not get to promise anything about.
+- The regression test is at the ViewModel, not the list: the invariant is
+  *state has unique ids*, and it is checkable in milliseconds without a
+  measure pass. It was red before the fix — `[one, two, two, three]`.
+
+## The miniplayer answers a finger, and CoreAnimation was in the way (2026-09-06)
+
+Reported in one sitting: the bar acknowledges nothing when it is pressed, its
+round window sits off-centre, it is a different height from the tab bar it rests
+on, the two buttons are too far apart, and the video crops "like an animation"
+during the drag — carrying on after the finger has stopped.
+
+### The window was never off-centre by clearance, it was just off-centre
+
+`MINI_THUMB_START` was 14dp against `MINI_THUMB_PAD`'s 8, and the comment
+justifying it was sound about the wrong shape: a true capsule's left edge curves
+away from the corners of anything reaching its top and bottom, **so a square
+would be clipped**. This is a circle. A circle of radius `H / 2 − p` centred on
+the capsule's own left arc centre is *concentric* with that arc — the gap is
+exactly `p` the whole way round and nothing is clipped — and its bounding box
+therefore starts `p` from the left. So the six extra units were not clearance.
+One `MINI_THUMB_PAD` for all four sides now.
+
+- **The right end is an arc too, so what mirrors the window is its *centre*.**
+  The two buttons were 48dp boxes around 22dp glyphs, which left the X's glyph
+  13dp from the capsule's edge against the window's 8, and 26dp of nothing
+  between the two glyphs. `BAR_ROW_END` is written as the subtraction that puts
+  the last glyph's centre the same distance from the right as the window's is
+  from the left, so the two sides cannot drift apart.
+- **44dp wide and still 48 tall.** The row has width to spare, and 48dp of
+  *height* is what makes a near miss unlikely in the direction a thumb strays —
+  the gear on the player learned the same thing from the other side.
+- **`MINI_HEIGHT` is `Size.topBar`.** It was 64 against the tab bar's 56, and
+  eight units between two panes sharing an edge is the seam these same two bars
+  were unified to remove once already, in tint rather than in height. `MINI_GAP`
+  moved to `Size.miniGap` so `Size.miniPlayer` is built from both — the charter
+  records the web app learning four times that a bar's height belongs in one
+  place, and this is that rule applied to the space *around* one.
+
+### The title scrolls, and only when it has to
+
+`basicMarquee` measures the text against the space it was given and animates
+nothing when it fits, so the condition is the layout's rather than a boolean
+this composable would have to keep in step with the width. The channel keeps its
+ellipsis: two lines travelling the same way inside a 56dp bar is two things
+asking to be followed.
+
+### The press, and a knock rather than a tick
+
+`pressSquish` on the capsule and on each button, each with its own
+`MutableInteractionSource` so a press on pause does not squash the bar behind it
+— pressing pause has to look like pressing pause. The haptic is
+`rememberLandingKnock()`, not the tick: `Haptics.kt` draws that line as
+*arrival* against *a value moving through positions*, and nothing here is being
+chosen from several.
+
+**The squash on the bar is unverified.** `idb ui tap --duration` does not hold a
+touch — proved by raising `PRESS_SQUASH` to 20% and measuring: neither the bar
+nor a chip moved by a single pixel while held, and a chip certainly squashes. So
+whether the native video surface follows a `graphicsLayer` scale is still open,
+and `WatchScreen`'s own comment is the reason to doubt it: *"a scaled interop
+layer is not a resized one"*.
+
+### A quarter-second animation nobody wrote
+
+`playerLayer` is a sublayer this file adds with `addSublayer` — **not** a
+`UIView`'s backing layer. UIKit switches CoreAnimation's implicit animations off
+for the second kind and not the first, so every `setFrame` here started a
+default **0.25s** animation to the new value. The drag resizes the view on every
+frame, so every frame began a fresh quarter-second animation toward a target
+that had already moved: the picture *eased toward* the finger instead of
+following it, and carried on easing for a quarter of a second after the finger
+stopped. Reported exactly that way, and confirmed by the fix.
+
+`withoutImplicitAnimation` wraps the two `setFrame` sites and `videoGravity`,
+which animates for the same reason.
+
+- **Compose had the geometry right the whole time.** `dragOffset` is one to one,
+  `travelProgress` is linear and `lerp` is linear, each with a comment saying
+  why. Nothing in Kotlin was interpolating anything; a layer below it was.
+- **The lesson generalises past this file**: any `CALayer` added by hand carries
+  implicit animations, and a layer driven by a gesture must have them off. The
+  symptom is not a wrong value, it is the right value arriving late — which
+  reads as jank rather than as a bug.
+
+### The measurement that could not be made, recorded as such
+
+No automated loop caught this. `idb` cannot hold a touch mid-drag; a recording
+of the expand gesture was contaminated because autoplay had moved to a video
+still loading, so the black frames in it were a load rather than a lag. What
+identified the cause was reading for a mechanism that explains **both**
+symptoms — the lag *and* the tail after the finger lifts — and only the implicit
+animation does. A recomposition-per-frame theory explains the first and not the
+second, and stays on the shelf.
+
+### Media3 was drawing the captions too (2026-09-06)
+
+`useController = false` removes `PlayerView`'s *controls* and says nothing about
+its text. It keeps a `SubtitleView` and renders the selected track into it, so
+every cue was drawn twice — once by Media3 and once by this app's
+`SubtitleOverlay`, which is Compose and shared with iOS. The two disagree about
+where a line breaks, so the screen carried one sentence and most of the sentence
+before it, stacked.
+
+- **Only Android.** `AVPlayerLayer` draws no text at all.
+- **Found mid-drag, and that is what made it unmistakable.** Media3 sizes
+  captions in absolute `sp`, so a `PlayerView` shrunk to a third of the screen
+  still drew them at full size, spilling out of the picture and riding it down.
+  Doubled text on a full-width player reads as a rendering artefact; text that
+  does not scale with the thing it is on names its own cause.
+- **The track stays selected**, and only the view is hidden. Turning the track
+  off would stop the drawing by taking away what `SubtitleOverlay` draws from.
+- Set in `update` as well as `factory`, the lesson `videoGravity` cost on iOS:
+  a property assigned once at construction is one that reverts when the view is
+  rebuilt, with nothing reporting it.
+
+The drag itself was measured on Android in the same sitting and is **correct
+there**: holding the finger still mid-gesture, the picture's edges are
+pixel-identical at +0.5s and +1.5s while its content goes on playing. No easing,
+no tail. That is the control the iOS diagnosis needed and could not have —
+`adb shell input motionevent` holds a touch down, and `idb` has no equivalent.
+
+## Two rows of arithmetic (2026-09-06)
+
+### A pill with a word in it stood taller than one without
+
+Share and Save were 43.8dp against like/dislike's 40.0 — measured on Android at
+420dpi, 115px against 105. All three carry `vertical = 10.dp`, so the difference
+was the content: like/dislike is a 20dp glyph and nothing else, while a labelled
+pill also holds a `Text`, and a 14sp line left to the font measures about 24dp.
+The row takes the tallest thing in it.
+
+`GlassPill`'s label now carries `lineHeight = 20.sp` — the icon's height, so the
+two things beside each other measure the same. Measured after: all three pills
+1220..1324, exactly 105px on every one.
+
+- **In the design system, not at the call site.** Every labelled pill in the app
+  had this, and the playlist page's Play all and Shuffle are the same component.
+- **20 against 14 is a ratio of 1.43**, comfortably above what Vietnamese needs:
+  the diacritics stack above and below, and they are the first thing a tight
+  line height cuts.
+
+### The clock touched Previous, and the fixed number was at the wrong end
+
+The pill's bottom padding was 34dp, set to clear the seek bar's **32dp target**
+rather than its 3dp line. That reasoning missed something: this pill takes no
+touches at all — no `clickable`, and on iOS it crosses as
+`GlassItem(interactive = false)` because a readout is not a button. It cannot
+steal the bar's target. What it has to clear is the line that is *drawn*.
+
+What forced the change is at the other end of the picture. The discs are centred
+and a fixed size; the picture's height is `width × 9 / 16`. So the gap between
+them is a function of the screen's width in dp, and nothing about the clock:
+
+| screen | picture | gap, disc to pill |
+|---|---|---|
+| 411dp emulator | 231.4dp | 27.7dp |
+| ~360dp phone | 202.5dp | **13.3dp** |
+
+24dp now, which buys exactly 10dp at both ends. **A number fixed against the
+bottom cannot answer a squeeze coming from the top** — if this closes again on a
+narrower phone, the disc size is the term to look at, not this one.
+
+### Two sections, two spacers, one of them larger for no recorded reason (2026-09-07)
+
+Reported as a question rather than a bug: why is the gap above Comments bigger
+than the gap above Up next? It was, by 8dp, and the cause is two constants.
+
+`Spacer(Space.xl)` before the comments section and `Spacer(Space.lg)` before the
+rail. Both gaps also carry 8dp that is not theirs — `CommentsHeading` pads
+`vertical = Space.sm` *outside* its pane — so what reached the screen was 32dp
+against 24dp. Measured on the reported phone at 3x: 96px and 72px.
+
+Now `lg` in both places, measured after on a 2.625x emulator: 63px each, 24.0dp.
+
+- **The larger one looked deliberate and was not.** It has an `item` key of its
+  own, `"comments-gap"`, which reads as somebody adding a section break on
+  purpose. If that were the intent the rail would carry the same break, and it
+  never did. Nothing in the file gave a reason for either number.
+- **Padding outside a pane is a gap nobody counts.** The 8dp belongs to the
+  heading and shows up as space above *and* below the comments pane, so a spacer
+  written next to it is never the whole distance. `CommentSection` already
+  records the same trap for the space the section opens into.
+
+## The description was never there to draw (2026-09-07)
+
+Reported as: why does it not show the video description? It did not, and
+`DescriptionBox` was right — `video.description` was the empty string, so the
+box drew the view count and the date and stopped.
+
+The measurement chain, all of it against the running gateway:
+
+| | |
+|---|---|
+| `GET /api/videos/{id}` over the feed's first 24 | **0 of 24** had a description |
+| `catalog.videos` | **2761 of 43295** rows, 6.4% |
+| the reported video `l5XJnEpGpDo` | 0 characters in the database |
+| who ever writes the column | `ytdlp/downloader.go`, reached only by the **download** path |
+| the web app | reads the same field, so it was equally blank |
+
+So 6.4% is exactly the share that has been downloaded. A flat listing carries no
+description, and nothing else ever filled one in.
+
+**The work was in the server repository first**, as it was for narration, the
+missed chip and playlists: there was nothing here to call. `RefreshVideoMetadata`
+is a new RPC and `POST /api/videos/{id}/metadata` the route. Measured: first call
+`{"updated":true}` in 1.86s, 0 → 906 characters; second call
+`{"updated":false,"skipped":true}` in 16ms.
+
+- **The guard is on the server, not here.** One call is one full metadata fetch,
+  and that library has been blocked once by YouTube for asking too often — the
+  note on its `BackfillTopics` records the cost, which was every full metadata
+  request answered with "Sign in to confirm you're not a bot", taking stream
+  resolution down with it. The server can see the row, so it refuses in
+  milliseconds when a description is already there. A second guard here would be
+  a copy of the row going stale on the side that cannot check.
+- **`fillDescription` runs in its own coroutine.** The caller's block has
+  `awaitSubtitles` behind it and the viewer is waiting on that; a round trip to
+  YouTube in front of it would be the up-next rail's lesson in a new place.
+- **The id is checked before the state is written.** The fetch takes seconds and
+  pressing next takes one, so without it a video's description lands under the
+  next video's title.
+- **A failure is silence.** The page is whole without this, which is the same
+  judgement `loadComments` already makes.
+- **Six fakes stopped compiling**, which is the port doing its job: a method
+  added to `VideoRepository` cannot be forgotten by an implementation.
+
+Measured end to end on the emulator: opening *This is genuinely f***ed..*
+(`dtli77ZzhT0`) took its row from **0 to 582** characters and the box drew the
+text, clamped to two lines with `…more` under it.
+
+**The server's backfill is the right way to fill in the rest and is deliberately
+not what answers this.** Its pass is bounded, paced and prioritised because it
+walks forty thousand rows; a video somebody has just opened cannot wait for it.
+
+### A `remember` inside a lazy item is not state, it is a cache (2026-09-07)
+
+Reported: press "more", scroll down until the description is out of sight,
+scroll back, and it has collapsed to two lines again.
+
+`DescriptionBox` held `var expanded by remember(video.id)`, and that composable
+is an **item of the watch page's `LazyColumn`**. A lazy list disposes an item
+once it leaves the viewport, and every `remember` inside it goes with it, so
+scrolling back composes it fresh at `false`.
+
+**The same file already had the answer twice.** `commentsOpen` and
+`expandedReplies` are `rememberSaveable`, declared above the list rather than
+inside an item, which is why the comments section survives exactly the journey
+that lost the description. `descriptionOpen` now sits beside them.
+
+- **Hoisted rather than made saveable in place.** `rememberSaveable` inside the
+  item would also have worked — a lazy list keeps a `SaveableStateHolder` per
+  item key — but it would leave three pieces of the same page keeping the same
+  kind of state in two different ways, and the one that is different is the one
+  that will be copied next.
+- **No regression test, and that is the finding.** The bug is composition
+  lifetime inside a lazy list; §8 rules out Compose UI tests, and a ViewModel
+  test cannot reach a `remember`. What caught it is a driven emulator: expand,
+  six swipes down, eight back, screenshot. The script is the loop and it went
+  red before the fix and green after.
+- **The rule generalises**: anything inside an `item { }` that must outlive
+  scrolling belongs above the list. A `remember` there is a cache for as long as
+  the row happens to be on screen, not a place to keep an answer somebody gave.
+
+**And it opens the way the sections around it do.** `SECTION_SPRING` is the one
+spec the comments and the up-next rail already share, and its own comment gives
+the reason: two things a thumb's width apart that fold at different speeds read
+as two different controls. The description takes it through
+`animateContentSize` rather than `AnimatedVisibility`, because those two fold
+content that is either there or not while this is the *same* text at two
+heights — `maxLines` changes and the box has to travel between them. Measured
+at 30fps: the box passes through 330, 507 and 644px, none of which it rests at.
+
+## The queue was a list of ids the catalogue had never heard of (2026-09-08)
+
+Reported: open the Hoài Lâm channel, play `XSAw8ya7zxM`, press **next** —
+*"gateway answered 404 for /api/videos/DJv6T34qPAs"*.
+
+A channel's uploads come from YouTube, so most of its rows have no catalogue
+entry, and `ChannelViewModel.openVideo` has written the row before navigating
+since the day that fault was first reported. Its own doc comment then said of
+the rest of the page: *"It is a list of upstream ids and every one of them takes
+this same path when it is reached."* **Nothing took it.** `WatchSession.queue`
+was `List<String>`, and `advanceTo` handed the next id straight to
+`videos.video(id)`.
+
+So this is the fourth time the app has blamed YouTube for a video YouTube was
+serving — after `live`, after `local`, and after the channel page's own first
+row. The three before it were a tier declared and not read; this one is a claim
+in a comment that no type held anyone to.
+
+- **The queue carries what the decision needs**, not an id somebody has to look
+  the answer up for. `QueueItem` is the id, the address, and whether the row is
+  already there — `Video.sourceUrl` and `Video.inLibrary`, which have existed
+  for exactly this since the channel page was written.
+- **`ensureInCatalogue` runs inside `load`'s own `runCatching`.** A row that
+  could not be written is a video that cannot play, and that is the message the
+  screen is already for.
+- **The row just written is marked on its way out of `openVideo`.** Without it
+  the watch screen writes it a second time on arrival, and one call is one full
+  metadata fetch upstream — the same cost the server's own guard on
+  `refreshMetadata` exists to refuse.
+- **The playlist page needed no thought.** Its rows are catalogue rows, so
+  `asQueueItem` carries `inLibrary = true` and nothing is written.
+- **The regression test is at the ViewModel**, with a fake catalogue that
+  throws the gateway's own 404 for an id it has no row for. It was red on the
+  reported symptom — `Failed(message=gateway answered 404 for /api/videos/second)`
+  — before the fix. A test on `openVideo` alone would have stayed green
+  throughout, because that is the one path which was always correct.
+
+## The loading screen drew two pictures, one on top of the other (2026-09-08)
+
+Reported from the phone with a screenshot: the skeleton is pushed a whole
+picture's height down the page. Measured off that screenshot, at 1170 wide —
+**658px of black and then 658px of grey**, and 1170 × 9 / 16 is 658 to the
+pixel. Two 16:9 boxes stacked.
+
+The black one is the player's own slot. `WatchScreen` holds it open in every
+state, and that is load-bearing for the drag: *"the outer box holds the full
+16:9 slot open for the whole gesture, so nothing under the picture moves at
+all"*. `WatchSkeleton` then opened with a 16:9 shade box of its own, under a
+comment saying *"the picture keeps its 16:9 box in every state, so nothing
+below it moves when the video arrives"* — which was true, and was already
+true without it.
+
+- **Two comments, each correct, describing the same slot.** Neither file was
+  wrong on its own; they were wrong about each other. The skeleton draws only
+  the page *under* the video now, and says so where somebody would add a
+  picture back.
+- **The loop was a screen recording, not a screenshot.** Loading lasts a few
+  hundred milliseconds and `screencap` takes longer than that, so a burst of
+  stills missed it every time — fourteen frames, all of them the video already
+  playing. `screenrecord --time-limit 4` plus `ffmpeg -vf fps=15` catches it
+  without having to slow the network down, which the emulator's own
+  `adb emu network delay` did not do anyway.
+- **What the loop asserts is the symptom, not the fix**: walk the middle column
+  of every frame, and go red if two adjacent uniform bands are each 16:9 tall.
+  It named the bug on the reporter's own screenshot before any code was read —
+  `136..744 (0,0,0) then 744..1352 (19,19,19)` on the emulator — and is green
+  after, with the title bars now starting 42px under the picture.
+- **No unit seam, and that is the finding.** §8 rules out Compose UI tests and a
+  ViewModel cannot see a layout; the driven recording is the whole check.
+
+### And then it was a page nobody's app has (2026-09-08)
+
+Reported next, and it is the same failure one level up: with the extra picture
+gone, what was left was two bars, a circle and a third bar — a stand-in for a
+screen this app stopped being months ago.
+
+`FeedSkeleton` already carries the rule and its own scar: *"Every measurement
+here is `VideoCard`'s, and that is the whole point"*, written after a skeleton
+with its own idea of a card made the feed visibly change geometry the instant
+it loaded. `WatchSkeleton` had never been held to it.
+
+It now draws the page in the order the page is in — title, channel row with its
+Subscribe pill, the three action pills, the description pane, Comments, the
+up-next header, its two chips, and two rail rows with 168dp thumbnails — with
+every measurement taken from the composable it stands in for.
+
+- **The panes are drawn in the same shade as what is inside them.** A skeleton
+  that picks the text out more strongly than the pane says the wrong thing
+  about which of the two is the surface.
+- **The pills are the row's real widths**, not three of one size: a row of
+  equal pills is a different picture from the one that arrives.
+- **`SkeletonLine`, `SkeletonPill`, `SkeletonPane`.** Written out longhand this
+  was fifteen near-identical `Box` chains, which is how the next screen's
+  skeleton gets a corner radius nothing else has.
+
+The loop needed one thing said out loud: **the trigger has to be a cold video.**
+Opening one from the feed is often instant, so the run went green on a build
+that still had the bug — a loop green for the wrong reason, which is worse than
+a red one. Pressing the first row of the up-next rail is a video the app has
+not touched, and it always passes through Loading. Verified both ways against
+the previous commit: 3 red frames at `136..744 (0,0,0) then 744..1352
+(19,19,19)`, and green after.
+
+### A Column that runs out of room stacks what is left (2026-09-08)
+
+Reported as a light band inside the bottom rail thumbnail, with the right
+instinct attached — *"có phải là bug ko?"*. It was, and the band is what two
+translucent copies of one shape look like: `skeletonShade` is `Tokens.surface`
+at an alpha, so a second thumbnail drawn over the first reads brighter than
+either.
+
+Measured on the reported screenshot before any code was read: the band is
+`x 48..552` — 16dp of margin and then exactly 168dp — and 80px tall, sitting at
+the foot of a thumbnail whose own height is 168 × 9/16 = 94.5dp to the pixel.
+The same fault on the emulator was **4px**, which is why nobody saw it there.
+
+**A `Column` does not clip what does not fit.** It measures the children that
+are left with a maximum height of zero, and they then draw at their natural
+size anyway — on top of each other. So the overlap is exactly the overflow, and
+the two numbers say so: an 844dp phone overlaps by 80px where a 914dp emulator
+overlaps by 4.
+
+The experiment that settled it was one command: `adb shell wm density 320`.
+With everything smaller the whole skeleton fits, and the gap between the two
+thumbnails came back — 32px of background, no band at all. It is scrollable
+now, which is what the real page is.
+
+- **The loop is about the shape below a thumbnail.** What follows one is
+  background; a *brighter* band there is the next one lying on top of it. That
+  is the reported symptom rather than a restatement of the fix, and it went red
+  at `4px of doubled shade at y=2177` before the change and green after, with
+  the thumbnail measuring 248px — 94.5dp at 2.625 — and 42px of background
+  under it.
+
+## A video that has ended is not a stalled one (2026-09-09)
+
+Reported first as *"bấm pause rồi để đó, 5–10s nó tự play"*, and neither the
+Android emulator nor the iOS simulator would do it — a paused video sat still
+for twenty seconds on both. What made it findable was the reporter coming back
+with the real sequence: **let a video play to its end**, and a few seconds
+later it jumps back about four seconds and plays the tail again, over and over.
+
+The watchdog. `recoverIfStalled` knew two things about a picture that has
+stopped — *it broke* and *somebody pressed pause* — and a video that has simply
+run out is neither. `wantsToPlay` is still true, the playhead stops, and six
+seconds later the stream is reattached and started.
+
+Measured on the simulator with a tagged build:
+
+```
+[DEBUG-p1a3] recover id=3705 failed=false stalledFor=7.99 pos=1526.67
+[DEBUG-p1a3] recover id=3705 failed=false stalledFor=6.00 pos=1526.67
+```
+
+`failed=false` — nothing was wrong. And the four seconds are not a number
+anywhere in this app: `recoverIfStalled` seeks to the position it was handed,
+and **an HLS seek lands on the start of the segment containing it**.
+
+- **The loop is the seek bar, not the picture.** A pixel diff of the video was
+  the first attempt and it is too blunt: the replay is a few seconds of a
+  half-hour video, so the frame barely changes — measured, a mean difference of
+  0.90 where playing scores 4.10 and a still frame 0.00, which no threshold
+  separates honestly. The red hairline is drawn whether or not the controls are
+  showing and *is* the playhead: it fell 1169px → 1155 and climbed back, twice
+  inside a minute. After the fix, 110 samples over two and a half minutes, all
+  1169.
+  - And the end has to be *reached*, not guessed at. "Two equal samples in a
+    row" fires on a plateau while it buffers, so the check also requires the
+    fill to be at the right-hand edge — without that the run is green about a
+    video that never finished.
+- **`shouldRecoverStall` is a named pure function**, for the reason
+  `wholeSeconds` and `levelsFor` are: every one of its answers is a judgement
+  somebody has to be able to check, and nothing in the type system catches one
+  being wrong — the player reattaches either way, and the fault shows up as a
+  video behaving oddly a minute later. The bookkeeping stays with the platform,
+  which is the only side that knows when the playhead last moved.
+- **A broadcast is untouched**, because it declares no duration and therefore
+  never ends. That is the case the watchdog exists for, and the whole of §1:
+  iOS suspends an app within seconds of its sound stopping, so a stream that
+  stalls overnight is the app ending.
+- **The first report was not wrong, it was incomplete.** A pause a few seconds
+  before the end looks exactly like this, and so does walking away. Two hours
+  went into a symptom that could not be reproduced because the trigger named
+  was not the trigger.
+
+
+## The tab bar collapses, and every control answers a finger (2026-09-20)
+
+Asked for against Apple Music on iOS 26, video by video. Three changes, all in
+`ui/shell`, and the last one is the only design system in this app that is about
+*movement* rather than about paint.
+
+### The bar narrows to make room for the bar beside it
+
+Scrolling down does not merely hide the tabs any more: the row shrinks to
+`[the selected tab, as a circle] [miniplayer] [search]`, and scrolling back up
+opens it again. One number, `collapse`, animated by `App.kt` because the
+miniplayer is a *sibling* of the shell and has to walk into the berth on the
+same number — a spring living inside `AppShell` is a number the bar beside it
+cannot read. That is `barsHidden`'s own reasoning, applied a second time.
+
+- **The geometry is arithmetic in a `BoxWithConstraints`, not three states.**
+  `tabsWidth` lerps from the whole row to one circle, and everything else is a
+  share of it. Written as states, the halfway frame is whatever the transition
+  happened to interpolate, and the reference video's whole point is the halfway
+  frames.
+- **The berth is `Spacer(weight(1f))`, and it had to be.** It was arithmetic
+  first, and the gaps came out uneven — reported exactly that way — because the
+  *number of gaps* changes with `collapse`, so a sum written for the open row is
+  one gap short of the collapsed one. A weight has no count in it.
+- **The label's height is measured, not a constant.** `LABEL_HEIGHT = 10.dp`
+  was the first version and it clipped the descenders of "Playlists" and
+  "Settings" — reported as "Plavlists". `Modifier.layout` scales the height the
+  child *reports* by `1 - collapse` and `clipToBounds` does the rest, so the
+  icon centres in the circle without anything inventing a number the font owns.
+- **The lit pill leaves when the room it marks leaves.** A highlight behind a
+  tab that has narrowed to a circle is a second pill inside the first;
+  `alpha(1f - collapse)` is the whole fix.
+
+### The selection pill stretches between two springs
+
+One spring is a pill sliding; two springs of different stiffness are a pill that
+*stretches* — the leading edge arrives first and the trailing edge catches up.
+`lead` at 900 and `trail` at 380, both `DampingRatioNoBouncy`, with the pill
+drawn from `min` to `max + 1`. The ink crosses with it,
+`lerpColor(Tokens.text2, Tokens.brand, lit)`, so the label lights up as the pane
+reaches it rather than a frame after.
+
+### The tab glyphs are SF Symbols on both platforms
+
+`TabGlyph` is `expect/actual`. iOS asks `UIImage.systemImageNamed` at the
+display's own density and remembers the bitmap on `(name, density)`; Android
+draws five PNGs rendered from the same symbols by an AppKit script at 192pt.
+
+**This is a licence decision and it is the household's, stated here rather than
+implied.** Apple's terms restrict these glyphs by *platform*, not by
+distribution, and that was said once. The answer given was that this app is
+neither shipped to a store nor open-sourced, so the exposure is nil — and it is
+recorded so nobody rediscovers the question and quietly reverses it.
+
+### A press blooms, and it is one object everything shares
+
+Every control in the app grew a press on 2026-09-02, and that press was a
+*squash*. Measured against the reference video frame by frame — brightness and
+bounding box on frames 6 onward — a pressed Liquid Glass control **grows**. It
+was read backwards, corrected from the measurement, and the correction is the
+entry.
+
+`GlassPress` now carries a bloom: `PRESS_INSET` of 6dp past each edge, taken as
+the smaller of the two axis ratios so the scale stays uniform.
+
+- **A distance, not a ratio.** 6dp is a fifth of a small disc and a fiftieth of
+  a wide pill, so small controls feel springy and large ones barely move —
+  without anybody deciding per control that they should.
+- **Two springs, and the second one wobbles.** Down is `StiffnessHigh` with
+  `DampingRatioMediumBouncy`; up is `StiffnessMedium` with
+  `DampingRatioLowBouncy`, which is the "nhúc nhích" that was asked for. One
+  symmetric curve reads as an animation playing rather than as a material
+  responding.
+- **A pressed control is drawn over its neighbours.** `zIndex` flips on the way
+  down and back only when the release spring has finished — otherwise the pane
+  beside it bites the part that has bloomed. The tab capsule stopped clipping
+  for the same reason, and its comment says so.
+- **`Modifier.pressable` is the one call site.** Material, squash and click
+  folded together, because written apart the next control written gets the
+  material and no press — which is precisely how fifteen of them were silent.
+- **`PressGuardTest` scans every `clickable(` call site**, not every file: a
+  file-granularity check was fooled once by `WatchActions.kt`, which held a
+  compliant pill beside a bare `clickable` on a pill *half*. The window is ±34
+  lines and an exemption is a `press-guard: <reason>` comment in place.
+  **Proven to fail** — it was red on that exact line before the half was fixed.
+- **iOS's seven platform-drawn panes cannot go through it.** They are SwiftUI,
+  above the whole Compose scene, so a `graphicsLayer` on the Kotlin side reaches
+  a glyph that is no longer being rendered. `GlassPressStyle` in
+  `PlayerGlass.swift` is the same decision written twice, and both copies say
+  so: a SwiftUI response is 2π/√k, which is 0.06s and 0.16s.
+
+## The watch page is glass, and its own ground was hiding it (2026-09-21)
+
+Asked for in one sentence: the watch screen's background should be blurred like
+the miniplayer's, so the layer underneath shows through faintly. The material
+was already built — `GlassBackdrop` samples the recording every floating pane
+reads — so this is one call, and it was invisible for a day.
+
+**`WatchScreen` painted its own opaque `Tokens.bg` over it.** The glass was the
+layer's first child, correct, sampling correctly; the page's own `Column`
+carried `.background(Tokens.bg.copy(alpha = 1f - drag))` and covered every pixel
+of it. Two grounds, one of them glass, and the one on top winning — which is
+word for word the fault that line was *written* to fix, in the opposite
+direction, and its comment still described that older arrangement.
+
+Diagnosed by lowering the tint to 0.25 and finding the page still black: a tint
+that low cannot be black, so the sample was never reaching the screen. **A
+material that does not show is either the wrong tint or the wrong layer, and one
+cheap measurement separates them.**
+
+- **The ground belongs to the layer, not to the page.** `WatchLayer` draws it
+  and fades it with the drag; `WatchScreen` is transparent outside fullscreen.
+  Fullscreen keeps a solid one — there is no tab to show through and the picture
+  fills the screen.
+- **A third tint, `TINT_PAGE` at 0.86.** Both existing numbers were tried and
+  both are wrong here, in opposite directions: `TINT_MODAL` at 0.95 shows
+  nothing through at all, which is a solid page with an expensive way of being
+  black, and `TINT_GLASS` at 0.75 — the miniplayer's own tone, which is what was
+  asked for by name — turns out to be an *edge* number. Across a whole screen
+  the feed behind it stops being a hint of a layer underneath and becomes a
+  second page competing with the title, the pills and the comments. Reported
+  immediately as wanting it darker, and then **0.90** after seeing 0.86 on the
+  iPhone: the simulator's own screenshot is where that last step was chosen, so
+  it is the platform the material was designed against that settled it. "One
+  number, and it has to stay one" is a rule about panes read against each other
+  along a shared edge; this one shares none.
+- **The fade stays on the ground and never on the layer.** `graphicsLayer {
+  alpha }` on the Box applies to the picture too, and the picture travelling
+  into the bar must stay solid all the way down — the fault once reported as the
+  player disappearing instead of shrinking.
+- **The sheet is untouched.** It samples `sheetBackdrop`, which records this
+  page with its own `drawRect(Tokens.bg)` in front, so the settings sheet reads
+  the same as it always did.
+
+Measured on the emulator: the feed's thumbnails are visibly soft behind the
+channel row and the description pane, and a held drag at mid-gesture shows the
+video shrunk and solid over a feed that is sharp from the first pixel.
+
+
+## A release build, and the two things it showed (2026-09-21)
+
+Asked for on both platforms at once, which is why this is one entry: the same
+source produced an Android APK that could not be installed and an iOS archive
+that could, and neither fact was about the code.
+
+### Android had no release key, so `assembleRelease` made something inert
+
+`composeApp/build.gradle.kts` declared no `buildTypes` and no `signingConfigs`
+at all, so the release APK came out **unsigned** — a file that builds, reports
+success, and cannot be put on a phone.
+
+- **The key lives beside the toolchain, not in the repository.**
+  `/Volumes/Data2/dev/mytube-release.jks`, named by a gitignored
+  `keystore.properties`. §9 already treats Data2 as this machine's half of the
+  project; a key committed here is a key anybody who clones can sign with.
+- **Absent is a supported state.** A fresh clone still builds and the APK simply
+  comes out unsigned. The alternative considered and refused was falling back to
+  the debug key: that produces something which installs, says `release` on it,
+  and is signed by a key every Android SDK on earth has a copy of.
+- **`isMinifyEnabled = false`, written down rather than defaulted.** R8 strips
+  what it cannot see referenced, and this app reaches for three such things —
+  Ktor's serializers, Media3's session service through the manifest, and every
+  `expect/actual`. Each fails at *runtime*, on the build nobody exercises as
+  hard as the debug one, and §8's rule is that nothing is done because it
+  compiled. Nothing here is paying for the megabytes.
+- Measured: 14 MB, `apksigner verify` naming the household certificate, and it
+  launches. Installing it needed an **uninstall first** — a different signing
+  key is a different app to Android, so the debug install's stored server
+  address went with it.
+
+### And the release build is where three Material buttons were still hiding
+
+The first launch of the signed APK is a fresh install, which is the one state
+nobody had looked at for months: *"No server yet"* under a **blue** `Button` —
+Material's default primary, on the first screen anybody sees.
+
+The charter already records this being fixed once, on the setup screen: *"it
+stopped being Material… a screen with three kinds of button is a screen where
+none of them means anything."* That change reached the screen it was reported
+on. Five call sites elsewhere kept `androidx.compose.material3.Button`, all of
+them in states somebody only reaches when something has gone wrong — no server,
+a failed feed, a video that would not load.
+
+**A state nobody can reach on a good day is a state nobody has looked at.** They
+are `GlassButton(primary = true)` now, which is the brand's red, and
+`material3.Button` is gone from `ui/` entirely.
+
+### iOS archives and exports; only the phone is missing
+
+`xcodebuild archive` for `generic/platform=iOS` with `-allowProvisioningUpdates`,
+then `-exportArchive` with `method: debugging` — **not `development`**, which is
+the name Xcode 26 no longer takes. 12 MB `Mytube.ipa`, `Apple Development` over
+team `XW5H2HDYS8`, bundle `com.xtube.com`.
+
+- **`-sdk iphonesimulator` alone does not build for the simulator.** With no
+  destination it builds every arch the SDK knows, x86_64 included, and the
+  Compose resources task stops with `Unknown iOS simulator arch: 'x86_64'`.
+  `-destination 'platform=iOS Simulator,id=<udid>'` is what narrows it.
+- **`idb`'s tap does not reach this Compose scene.** Four taps on the simulator
+  did nothing at all, with and without activating the window. What works is the
+  charter's own earlier finding — a synthesised `CGEvent` click over the
+  Simulator window — and the calibration is one AppleScript call:
+  `position, size of window 1` gives `1197, 58, 390, 896` for an iPhone 16e, and
+  the screen's origin is that position plus the 52pt title bar. Verified rather
+  than assumed: a `screencapture -R` of that rectangle against a resized `simctl
+  io screenshot` came back at RMSE 0.029, the difference being the video still
+  playing.
+- **Not installed.** `devicectl list devices` reports *Nguyen Luc's iPhone* as
+  `unavailable`, so the `.ipa` is built, signed and waiting in `dist/`.
+
+
+## The weekly re-signing, and the build step that was causing half of it (2026-09-21)
+
+Asked as a question about the build — *"auto sign cái ios app, ko cần phải
+build lại vào mỗi tuần được ko?"* — and the build was only half of the answer.
+
+Measured off the archive's own `embedded.mobileprovision` before anything was
+said about it:
+
+| | |
+|---|---|
+| provisioning profile | created 17 Sep, expires **24 Sep** — seven days |
+| signing certificate | 30 Aug 2026 → 30 Aug 2027 — a year |
+| team | `XW5H2HDYS8`, `Luc Nguyen`, `IsXcodeManaged` |
+
+**Seven days is the free Apple ID's number.** A paid membership's
+Xcode-managed development profile lasts a year. So no flag and no
+`-allowProvisioningUpdates` changes it — the thing that expires is not
+something this repository owns.
+
+Three routes were put up and the household chose the free one:
+**AltServer on the Mac that already runs the gateway.** It re-signs over wifi
+rather than removing the seven days, and as of AltStore Classic 2.3
+(14 September 2026) *Remote AltServer* refreshes from anywhere on wifi rather
+than needing that Mac awake on the same network. Its floor is iOS 17.4 and
+this app's `MinimumOSVersion` is 16.0, so nothing here had to move.
+
+### What did change: the export step is gone
+
+`tools/ios-ipa.sh` archives and then **packages the IPA by hand** — a zip with
+`Payload/Mytube.app` in it, which is all an IPA is.
+
+- **`xcodebuild -exportArchive` signs, and that is the step that expires.** It
+  embeds the seven-day profile, so an export is a build step that starts
+  failing a week after it last worked for a reason that has nothing to do with
+  the code. That is precisely the complaint.
+- **AltStore re-signs whatever it is handed**, with the Apple ID on the phone.
+  So the signature the export was adding is one that gets thrown away.
+- **The archive still signs and that is fine**: the *certificate* signs there
+  and it is good for a year. It is the profile added on export that is good for
+  a week.
+- `cd` into the staging directory before zipping. An IPA carrying the whole
+  path from the root of the disk is one no installer opens.
+
+Verified: 12 MB, one top-level `Payload`, the binary and `Info.plist` where
+they belong.
+
+**The first install is still a GUI flow on the Mac with the phone plugged in**
+— AltServer's "Install AltStore", the Apple ID, Wi-Fi sync, trusting the
+profile, Developer Mode. Recorded as not automatable rather than forgotten.
+
+
+## A page has no rim, and one frame in which the layer is not there (2026-09-21)
+
+Two things reported off one screen recording of the phone, and only one of them
+is fixed.
+
+### The ground was wearing a pane's edges
+
+*"màn watch cho nó blur thôi, ko có viền đc ko"* — right, and the reason is a
+distinction this charter already draws and had not applied here. `GlassBackdrop`
+is built for something that **floats**: a bar, a capsule, a sheet. Its `lens`
+and its default highlight are what make those read as a *piece* of glass —
+light bending at the rim is how an eye is told where the material stops. A
+full-screen ground has no rim to bend at, so the same effects draw a bright
+line up both sides of the screen and a refracted band across the top and
+bottom, which reads as a frame somebody put around the page.
+
+`PageBackdrop` is `drawPlainBackdrop` — the library's own entry point for a
+sample with no shape furniture on it — carrying `GLASS_BLUR` and the tint and
+nothing else. `vibrancy` stays: it is not an edge, it is what stops a blurred
+thumbnail going grey.
+
+It is also cheaper by a whole `RuntimeShader`, which matters here in a way it
+does not for the panes: this one is the size of the screen and is redrawn on
+every frame of the drag.
+
+### The flicker is measured, iOS-only, and not yet fixed
+
+Reported as *"nó bị chớp chớp khi kéo xuống + lên"*. Measured off the reporter's
+own recording rather than described: mean luminance per frame, 30fps, and five
+frames spike **+0.09 (about 42% brighter)** and are undone by the very next
+frame — f002, f011, f016, f027, f063 of 70.
+
+Reading those frames says what the spike *is*: **the entire watch layer is
+missing for one frame.** Not the ground thinning, not the page fading — the
+Home feed, sharp, at full brightness, with no glass and none of the page's own
+title, pills or comments on it.
+
+What is known, and what is not:
+
+- **The check is the symptom, not a fix.** A one-frame spike that the next
+  frame undoes; a ground thinning across a drag moves both neighbours with it
+  and scores nothing.
+- **Android does not do it.** A held drag driven by `adb shell input
+  motionevent`, 171 frames down and back up: zero spikes. So this is not the
+  backdrop library being wrong about arithmetic; it is something about how the
+  iOS scene is composited.
+- **The simulator is a bad reproducer and that is recorded rather than worked
+  around.** Six runs of a `CGEvent` drag on the old build produced it **once**;
+  five runs of the new build produced none. That is not a difference anybody
+  should believe, so the `PageBackdrop` change is **not** claimed as the fix
+  even though it is the obvious suspect. The phone did it five times in 2.3
+  seconds; the phone is where this has to be measured.
+- **The loop's first version was green about a gesture that never happened.**
+  It dragged from the middle of the page, which is the `LazyColumn` — so the
+  list scrolled and the layer never moved. The drag has to start on the
+  picture. A loop that passes for the wrong reason is worse than one that fails.
+- **What the spike frame contains is the finding.** Read against its
+  neighbours it is `AppShell`'s own tree and nothing after it: the feed and the
+  chip row are there, and the watch layer *and the miniplayer* — both siblings
+  drawn later — are both gone. So this is not the ground fading early; it is a
+  frame in which the scene stopped being drawn part of the way through.
+- **One nested layer removed, on that reading.** The ground was a
+  `Modifier.graphicsLayer { alpha }` wrapped around a node that samples another
+  layer — an offscreen alpha layer containing a backdrop consumer. The fade now
+  goes through `drawPlainBackdrop`'s own `layerBlock`, so there is one layer
+  where there were two, and it is read at draw time rather than costing a
+  recomposition per frame. **Not claimed as the fix**: nothing here can
+  reproduce it, so the next recording from the phone is the check.
+- The remaining suspicion, untested: the watch page holds a **second**
+  `rememberLayerBackdrop` (`sheetBackdrop`, for the settings sheet) and records
+  it on every frame whether or not that sheet is open — so a drag frame is two
+  layer recordings plus a consumer plus an interop view being resized. That is
+  the cheapest thing to remove if the next recording still flickers.
+
+
+## What blooms is what is painted (2026-09-21)
+
+Four things reported in one message, and three of them turned out to be one
+sentence: **a press must move the thing that is drawn.**
+
+Every press in this app scales the node it is written on. For a control that
+draws its own pane — a chip, an action pill, a card — that node *is* the pane,
+so the right thing always happened. For a control whose pane is drawn by
+something above it, the node holds a glyph and nothing else, so all a press
+could ever move was the glyph. Three places had that shape and all three were
+reported at once:
+
+| | reported |
+|---|---|
+| the tab bar | *"bấm vào item thì ko zoom icon, phải zoom toàn bộ cái tabbar như media mini player"* |
+| like / dislike | *"bấm vào Like dislike thì icon zoom, nó phải zoom cái button cơ"* |
+| the player's controls | *"Same với mấy cái buttons trên Media player"* |
+
+The first of those is also the clearest statement of the rule, and it names the
+one bar that already did it right: the miniplayer, where the press is on the
+capsule because the capsule is what is painted.
+
+### `LocalPressHost`
+
+A container claims the bloom, every `pressable` inside routes its interactions
+there instead of squashing itself, and the container wears the movement for all
+of them. **Nothing at the call sites changed** — a control keeps asking for a
+press exactly as it did, and where it sits decides what grows. Three containers
+claim it: `GlassPane`, the like/dislike pill, and the tab capsule.
+
+- **`PressGuardTest` went red on this, correctly, and was then taught.** Taking
+  `pressSquish` off `TabItem` left a bare `clickable`, which is precisely what
+  that guard exists to catch. `LocalPressHost` is now one of the things that
+  counts as answering a finger — the press still exists, it is worn one level
+  up. That failure is this guard's proof for the release.
+- **iOS had the same fault in its own half.** `GlassPressStyle` scaled
+  `configuration.label`, which is the glyph; `.glassEffect()` is applied to the
+  stack around it, so the glass never moved. It is `PaneTouchStyle` now, which
+  reports the press upward and draws nothing, and the pane carries the scale.
+
+### And the bloom was being bitten by the rows that hold it
+
+*"Nút All | From XXX, bấm vào nó zoom lên nhưng bị cut off bên trái và phải."*
+Two scrolling rows, two axes, one cause: **a scroll container clips at its
+viewport, and neither had left the bloom anywhere to go.**
+
+- `ChipRow` is a `LazyRow` whose viewport was exactly one chip tall, so a
+  pressed chip had its rounded top and bottom sliced flat. Measured by holding
+  a touch: the changed box reached the chip's own edges and no further, while
+  the sides had 16dp of `contentPadding` and used it.
+- The up-next rail's filter chips are a `horizontalScroll` Row starting at x=0,
+  so the bloom went straight into the clip at both ends — which is the report,
+  on the other axis.
+
+Both now carry `PRESS_INSET` as padding inside the scroll. It is the distance
+the press blooms by, so it is the distance that has to be there.
+
+### The measurement that made all of this cheap
+
+`adb shell input motionevent DOWN` holds a touch, which `input tap` cannot, and
+which no iOS tool here can do at all. Hold, screenshot, diff against the resting
+frame, take the bounding box of what moved — and the box *is* the answer:
+
+| | before | after |
+|---|---|---|
+| Like | 55x55 — the icon's own bounds to the pixel | 289x117 — the pill |
+| Share (already correct) | 277x117 | unchanged |
+| the player's chevron | the glyph | 152x126 — the disc |
+
+**Pause the video first.** The first attempts measured a bounding box the size
+of the whole crop window, because the picture behind the controls changes every
+frame and a diff cannot tell that from a control growing.
+
+
+### Installing over a running app does not replace what is running (2026-09-21)
+
+`devicectl device install app` swaps the bundle on disk and leaves any running
+process alone — including a suspended one, which on iOS is most of them. So an
+install with no launch after it can be followed by a session on the *old*
+binary, and the fix that was just measured on the simulator gets reported as
+still broken.
+
+It cost a round trip here. `--terminate-existing` on the launch, or a terminate
+before it, and the check is that the app comes back under a **different bundle
+path**: `6B7CAC77-…` before, `27C1FA53-…` after. The version string says nothing
+— `CFBundleShortVersionString` has been 1.0 since the project began.
+
+
+## The tab bar never leaves (2026-09-21)
+
+Reported as *"Chip và bottombar luôn luôn hiện, ko auto hide khi scroll nữa"*
+and fixed as one thing, which was half right and had to be split.
+
+**What was wrong.** `barsHidden` was computed once —
+`if (barsShowing || collapsing) 0f else 1f` — and handed to *both* bars, so the
+term that exists to keep the **bottom** bar (the miniplayer rests on it, and
+sliding it away takes the player with it) pinned the top bar and the chip row
+as well. Anything playing, and neither ever left again. Measured through
+Compose's own semantics: with the miniplayer up the chip "All" sat at y=147
+before three flings and y=147 after; with it closed, both nodes were gone.
+
+**What was then wrong in the other direction.** Splitting them made the tab bar
+slide off the bottom whenever nothing was playing — and seen on the phone that
+was immediately reversed: *"tao muốn khi ko mini player, nó vẫn hiện dù
+scroll"*. The reason it reads wrong is that this bar is not chrome over the
+content, it is **how somebody leaves the page**. A reader half way down a feed
+who wants Settings should not have to flick back up to find the way there. It
+is also what this app's own reference does — Apple Music's tab bar collapses
+around a playing track and never disappears.
+
+So the rule is two sentences and they are not the same sentence:
+
+| | |
+|---|---|
+| the top bar and the chip row | leave whenever the reader is moving down |
+| the tab bar | **never leaves**; it narrows for a player, or stays whole |
+
+- **`bottomHidden` was deleted rather than pinned to false.** A value nothing
+  can ever set is a value somebody will one day wire up again.
+- `barsHidden` stays as a `0f` constant where the miniplayer's offset and the
+  drag's landing point read it, so the day that bar earns a reason to leave it
+  is one value to change rather than four call sites to find.
+- **`barTravel` is a named pure function with a test**, for the reason
+  `wholeSeconds` and `shouldRecoverStall` are: nothing in the type system
+  catches a float handed to one consumer too many — both bars took a `Float`
+  and both were happy. The test was red on exactly the reported case before the
+  first fix, and its assertions changed with the second.
+
+
+### A press on the collapsed bar was opening it by accident (2026-09-21)
+
+Reported the day the bar learned to collapse: *"khi cái menu bị collapse lại,
+bấm Home → nó tự expand ra rồi scroll list lên top"*, and the wanted rule stated
+with it — open the bar, move nothing; scroll to the top only when the bar is
+already whole and the press lands on the tab already selected.
+
+The loop is Compose's semantics again, two nodes and no pixels: `text="Playlists"`
+exists only while the bar is whole, so its presence *is* "expanded"; and
+`text="Continue watching"` is the feed's first heading, so its return *is* the
+scroll-to-top. Red on the first run, twice in a row.
+
+**The interesting half is why the fix could not be a deleted `if`.**
+`rememberBarsVisible` returned `atTop || !hidden`, so the only two ways to put
+the bars back were reaching the top of the list or scrolling 48dp against the
+grain. **Nothing could simply tell them to come back.** So the press was opening
+the bar *by scrolling the list to the top* — the open was a side effect of the
+journey, not something anybody had written.
+
+Measured rather than assumed: with the scroll taken away and nothing else
+changed, the list stayed where it was and the bar **stayed collapsed**. That is
+the whole reason `BarsVisibility.reveal()` exists.
+
+- **The accumulator resets on a reveal.** `travelled` is not a number about the
+  past, it is how close the list is to flipping the bars — and after a reveal
+  the honest answer is "not at all", or the next nudge downward takes them
+  straight back off.
+- **`tabPress` is a named pure function**, like `barTravel` beside it: three
+  outcomes, one per state the bar can be in when the press lands. The test was
+  red on exactly the two reported cases before the rule changed.
+
+
+### The third row that clipped a bloom, and the guard that ends it (2026-09-22)
+
+*"2 chips Off | EN (auto) ở Player settings đang bị crop"* — on press, and the
+same fault as `ChipRow` and the up-next rail: `PlayerSettingsPanel`'s subtitle
+row is a `horizontalScroll` whose content began at x=0, so "Off" bloomed into
+the clip and came back with a slice off its left end.
+
+Three times is enough, so `ScrollRoomGuardTest` makes it a build failure: **a
+horizontally scrolling row in `ui/` carries `padding` or `contentPadding`,
+whatever is inside it.** Deliberately blunter than "…if it holds something
+pressable": a chip is its own composable defined elsewhere in the file, so no
+window around the row can see the press, and a guard that cannot see the thing
+it is about is a guard that passes for the wrong reason. Padding on a skeleton
+row costs nothing.
+
+**Proven to fail, and the first failure was the guard's own bug.** It flagged
+`ChipRow`, whose `contentPadding` sits eleven lines below the `LazyRow(` under a
+comment explaining what it is for. Comments are dropped from the window now, and
+the window counts lines of code.
+
+Measured after: holding "Off" changes a 157x125 box starting at x=68, outside
+the chip's own left edge of 84 — it grows outward instead of being cut.
+
+### And the page takes the sheet's tint (2026-09-22)
+
+*"tăng cái tint lên hay gì đó cho màn watch như cái bottomsheet, tao muốn thấy
+mờ mờ như bottonsheet"*. `TINT_PAGE` lasted one day and is gone: a number named
+after the same look as another number, four hundredths apart, is two places for
+one decision. The ground is [TINT_MODAL] now.
+
+Worth writing down because it sounds backwards — 0.95 shows *more* through than
+0.90 seemed to. The sheet reads as glass because of what is behind it, not
+because of its tint: it floats over the watch page, which is nearly black, so
+its own rows win easily and the shapes underneath still show. This ground floats
+over the **feed**, whose thumbnails are bright, and at 0.90 the two competed —
+which is a muddier picture than a darker one.
+
+
+## Drag across the tab bar to pick a tab (2026-09-22)
+
+The third of three things asked for against iOS 26's own tab bar, and the only
+one that needed designing rather than fixing. Eleven decisions were settled
+before a line was written, and the one that mattered most was settled by a
+**screen recording of the real thing** — which arrived after the design was
+agreed and reversed part of it.
+
+### What the reference actually does
+
+The video is a 1170x324 strip of a real iOS 26 tab bar, 692 frames. Read frame
+by frame rather than described:
+
+| | |
+|---|---|
+| on touch | the capsule **grows and lights up**, with a prismatic fringe along its curve |
+| dragging | the selected pill is a **bubble**: its rim carries a full spectrum and the smear travels with it |
+| the glyph | **filled** while the pill is on it, **outline** the moment it leaves |
+
+Measured: the capsule's left edge moves 22px at 3x, which is **7.3pt** — close
+enough to this app's existing `PRESS_INSET` of 6dp that no second number was
+invented.
+
+### The rules, and where they live
+
+- **The pill follows the thumb; the screen waits for the release.** This app
+  holds one scroll position per tab and a tab switch rebuilds the content, so a
+  live switch would build Playlists, then Settings, then Playlists again inside
+  one gesture. `shownIndex` is the dragged tab while a finger is down and the
+  selected one otherwise, which is a one-line change: the two springs and every
+  `lit` derived from them come along, and *that* is what makes the glyph fill
+  and the ink cross with the pill rather than after it.
+- **`tabAt` and `dragOutcome` are named pure functions**, beside `barTravel`
+  and `tabPress` and for their reason: nothing in the type system catches an
+  off-by-one in "which tab is under this thumb", and a drag that commits the
+  tab *beside* the one under the finger is invisible in a screenshot. Both were
+  red before they were right — `tabAt` on a finger sliding off the end, and
+  `dragOutcome` on the case the whole gesture turns on.
+- **The three outcomes are not two.** Landing elsewhere is a switch. A thumb
+  that wobbled past the slop threshold and never left its tab is still a
+  **press**, and keeps its scroll-to-top — routed through `onSelect` so it
+  reaches `tabPress`. Going somewhere and coming back is a **cancel**, and
+  cancels nothing else: changing your mind must not scroll a feed to the top.
+  Both of the last two end where they started, and only one of them went
+  anywhere; `leftItsTab` is the whole difference.
+- **Collapsed, the drag does not exist.** The capsule is one circle and the
+  other two tabs are zero wide, so there is nowhere to drag *to* — and a press
+  there already means "open the bar". The recogniser returns before reading
+  anything.
+- **The capsule's press is emitted by the gesture, not inherited.** A tab's own
+  `clickable` cancels its press the moment this recogniser consumes a move, so
+  the bar would have deflated half way through the drag. `PressInteraction` is
+  emitted into the same source the tabs feed, and the capsule cannot tell which
+  of them sent it.
+- **One tick per crossing.** `Haptics.kt` draws that line: a value moving
+  through positions, which is a tick, against something arriving, which is the
+  knock.
+
+### `selectionLens`, and the one place the reference cannot be followed
+
+The pill was `background(Tokens.text at 0.12f)` — a flat wash that moved. It
+samples now, with the `chromaticAberration` the bars already carry and the
+chip's smaller refraction, keeping the wash because that is what says *lit*.
+
+**The glyph does not distort, and cannot.** In the recording it does: the pill
+is a lens over the whole bar. Here the pill samples the layer `AppShell`
+records — the page *behind* the bar — and the tabs are drawn over that, not into
+it. Refracting them would mean recording the bar's own contents and putting a
+consumer inside that recording, which is the Skia stack overflow this charter
+has paid for twice. So the pill bends the feed behind it and the glyph rides on
+top. Said before it was built rather than discovered after.
+
+`BarBackdrop` also takes a press now, so the capsule's *material* answers a
+finger and not only its size — which, measured off the video, is the louder half
+of what happens when a thumb lands.
+
+**And then the pill was too much glass to read.** Reported at once: *"cái pill
+cho nó đục đục tí đc ko? do ko nhìn rõ icon + text"*.
+
+The pill samples the raw recording rather than the capsule's tinted result, so
+it needs a tint of its own whatever the capsule wears: `TINT_GLASS` under the
+wash, which knocks the sample back to the bar's own level and leaves the pane it
+always was with the refraction added.
+
+**Then it was taken too far, and the how is the lesson.** `TINT_MODAL` with
+`vibrancy` removed went in next — the darker tone a surface somebody *reads*
+takes, and on paper this pane qualifies, since it carries a glyph and a word. On
+screen it read as a hole punched in the bar: the glass was gone and only the rim
+was left. Shown side by side, the first one was chosen.
+
+**Two variables changed in one build**, so the first measurement could not say
+which of them had done what — and the answer turned out to be that neither
+needed doing as hard as both together. The two screenshots settled it in one
+message; the build that produced them could not.
+
+### The bar tells accessibility which tab is on, which it never did
+
+Found because the loop needed to know which tab was selected and there was no
+way to ask — the same gap a person using TalkBack or VoiceOver had. Measured
+with `uiautomator dump` at each step:
+
+- unmerged, `selected` reached the platform tree on **no node at all**;
+- merged, it arrives — but Compose puts the flag and the name on **two sibling
+  nodes**, and moving the modifier to either end of the chain does not join
+  them. Recorded rather than fought; both facts are in the tree now.
+- `isSelected`, not `selected`, as the parameter name: inside a `semantics`
+  lambda the bare name is the property itself, so `this.selected = selected`
+  reads the receiver rather than the argument.
+
+### Three loops went red for the wrong reason, and that is the lesson
+
+None of these were the app:
+
+1. **The screen-detector looked for `text="Server"`**, a string this app does
+   not contain, and reported "Home?" for a screen that was plainly Settings.
+2. **Content markers cannot answer while the feed is scrolled** — "Continue
+   watching" is off screen, so Home was unidentifiable in exactly the state the
+   cancel case needs. That is what sent me to the semantics above.
+3. **Adjacent tabs share an edge**, and a closed upper bound matched the tab
+   *before* the right one: the loop reported Playlists for a drag that had
+   landed on Settings. Half-open now. The app had been correct the whole time,
+   and one `println` of the drag's own arithmetic said so — `x=688 w=828 at=2`.
+
+And both guards learned the same thing in one sitting: **a comment must not
+change a verdict.** `ScrollRoomGuardTest` failed on `ChipRow`, whose
+`contentPadding` sat eleven lines below the `LazyRow(` under a comment
+explaining it; `PressGuardTest` then failed on a tab whose `LocalPressHost` had
+been pushed out of the window by twenty lines of comment added above it. Both
+count lines of code now — with one asymmetry worth stating: `PressGuardTest`
+reads the **press from the code and the exemption from the prose**, because
+`press-guard:` is deliberately written in a comment where the exception is.
+Dropping comments from both broke three surfaces that had said perfectly clearly
+why they do not move.
+
+
+## Three from one round, and two loops that lied (2026-09-22)
+
+### The chip row stays, which it has now been asked both ways
+
+*"cái chips ở màn home mày chặn ko cho nó hide khi scroll nhé"* — and a day
+earlier the opposite, as a bug report that they were **not** hiding. Both are
+reasonable and this is the one that survives contact: on Home the top bar *is*
+the chip row, and the chips are the feed's filter. This charter already records
+why they were pinned into the bar in the first place — *"a filter that scrolls
+away means changing your mind costs a journey back to the top"* — which is an
+argument against hiding them that was sitting there the whole time.
+
+`barTravel.topHidden` is `false` now. **Kept as a field rather than deleted**,
+unlike `bottomHidden`: a rule that has been asked for in both directions inside
+two days is worth being able to state either way, and the test says which way it
+is.
+
+### Collapsing the watch screen reveals the bars
+
+*"ở màn watch bấm hide thì ban đầu nó sẽ nằm lên trên sau đó auto move xuống
+tabbar"* — the miniplayer lands on a whole bar and then the capsule shuts
+underneath it on its own.
+
+The cause is an ordering, not a number. `collapsing` is
+`!barsShowing && playerRestsOnBar`, and while the video is expanded the second
+term is false — so `collapse` is pinned at 0 however far the feed was scrolled.
+Press hide and both terms turn true in the same frame, so the spring runs 0 → 1
+against a picture that has only just arrived. The drag has the same problem one
+level worse: `landingFromBottomPx` is computed from a **whole** bar, so a bar
+that narrows on arrival puts the picture down beside itself.
+
+`collapseWatch()` is the one way to put an open video on the bar, and it
+reveals the bars first. A function rather than four `copy(minimised = true)`
+calls — the back gesture, the chevron, the drag and opening a channel all
+collapse a video, and three of them would have forgotten the reveal.
+`openChannel` exists for that reason too.
+
+### The description grew its text instead of its box
+
+`.glassControl(shape).then(pressable(…))`. Written in that order the squash sits
+**inside** the node that paints the pane, so a press grew the writing and left
+the box where it was. Measured by holding a touch: the changed box was 540x258 —
+the text block — inside a pane 996 wide. Afterwards it starts at the pane's own
+left edge and is 380 tall.
+
+It is `pressableGlassControl` taken apart rather than called, because this box
+has targets *inside* it: "…more" opens it, "Show less" closes it, and the box
+itself takes clicks only while closed. `LocalPressHost` is provided around the
+content so whichever of the three is hit, the pane is what moves.
+
+**And then the pane bloomed into a clip, which I called a success.** The squash
+went *inside* `animateContentSize`, and that modifier reports an animated size
+and clips its content to it — so the pane grew into a box that would not let it
+out and its four rounded corners came back flat. It is outside it now.
+
+The finding is how that shipped. `press.sh` measures a **bounding box**, and a
+bounding box is the same whether the shape inside it is a rounded rectangle or
+one with its corners sliced off. It reported the pane growing, which was true,
+and I read that as correct. The person who found it was looking at the very
+screenshot I had attached to say it was fixed.
+
+A numeric check was attempted and abandoned rather than left half-working: a
+brightness threshold over the pane's corner is fighting a *textured* page —
+the glass ground samples the feed — and two attempts found the pane's top edge
+on the window's first row. **For a question about shape, the instrument is a
+magnified before-and-after crop**, and that is what settled it: at rest a
+rounded corner in both builds, and under a finger square in the old one and
+round in the new.
+
+**This is the fourth place the same seam has failed**, after the tab bar, the
+like pill and the player's controls — and the second time `pressableGlassControl`'s
+own comment turned out to be about it. That comment warned of a control getting
+the material and *no* press; this is the material and the press landing on
+different nodes.
+
+### Both new loops went red while the app was right
+
+Worth more than the fixes.
+
+- **`labels=0` is ambiguous.** The watch layer covers the tab bar, so a chevron
+  tap that missed looks exactly like a bar that collapsed. The loop said RED
+  twice on a build whose own log said `showing=false → true`, which is the
+  reveal working. It proves it left the watch screen now — `content-desc="Like"`
+  gone — and retries the chevron up to three times, finding it in the tree each
+  time rather than assuming a position, because a tap on the picture only
+  *reveals* the controls and they fade.
+- **A fresh launch does not mean nothing is playing.** The playback service
+  survives `am force-stop`, so a miniplayer from the previous run was still on
+  the bar and every scroll collapsed the capsule — which fired the loop's own
+  setup check on a state that was correct. It closes any stale miniplayer first.
+
+That is three loops in two days that were green or red for the wrong reason.
+The pattern in all of them is the same: **a signal that is absent in two
+different situations cannot tell them apart.** A missing label, a missing
+heading, a missing node — each time the fix was to assert the *other* half of
+the state as well.
+
+
+## The search row moves to the bottom, and Android was counting the keyboard twice (2026-09-22)
+
+Asked for as a layout change against a screenshot of Slack's search, with
+*"kiểm tra android version luôn nha"* attached — and that instruction is the
+reason this entry is mostly about Android.
+
+### What changed
+
+- **No chevron at the top.** `DetailBack` was the same arrow the saved shelf and
+  a channel draw, and on this screen it was in the wrong place: the thumb that
+  opened search is at the bottom of the phone, the field is at the bottom of the
+  phone, and the one control for leaving was at the top.
+- **The way out is an X in the row**, on the right, where the reference puts
+  it. Its own circle, and it closes the **screen**; the mark inside the pill still empties the query. Two
+  actions must not share a surface, so they do not share a circle either — and
+  §7 made the difference explicit the moment it was needed: `strings.clear`
+  had to be added beside `strings.close`, in both languages, or nothing
+  compiled. The charter's rule that **the way out has to be on the screen** —
+  Android's system back leaves the app, iOS has none — is still met. It moved;
+  it did not go.
+- **Air above the keyboard**, `GLASS_MARGIN` rather than a number of its own,
+  because it is the same margin the row already keeps at its sides. `Space.md`
+  was tried first and measured 12dp against the sides' 16 — the kind of
+  four-unit difference nobody can name and everybody can see.
+
+### The Android fault: `adjustNothing` is the other half of `imePadding`
+
+On Android the row floated a few hundred pixels above the keyboard with the
+miniplayer in the gap, where on iOS it sat flush. Both wrong, differently.
+
+`AndroidManifest.xml` declared no `windowSoftInputMode`, so the window resized
+for the keyboard **and** `enableEdgeToEdge` dispatched the inset — the parent
+already stopped at the keyboard's top, and `imePadding()` then lifted the row by
+a keyboard again. `android:windowSoftInputMode="adjustNothing"` makes the window
+keep its size, which is what `imePadding()` assumes, and Android now matches iOS.
+
+**The measurement that settled it was a red background.** Every indirect reading
+disagreed with itself:
+
+| | |
+|---|---|
+| `uiautomator` hint bounds | y=685, then y=964 on the next dump |
+| `positionInRoot` on the row | `1391..2400` — a box whose top is below where the pill was drawn |
+| a red background on that node | rows **834..1508**, and 1508 is the keyboard's top |
+
+The last one is the only one that cannot be wrong about which node it is, and it
+says the parent had already stopped at the keyboard. Two of the three others
+sent me chasing a floating row that was a measurement artefact.
+
+- **`uiautomator` bounds of `[0,0][0,0]` do not mean "not drawn".** The back
+  chevron, the Idle title and its subtitle all reported zero bounds while a
+  screenshot showed all three on screen. I read that as three broken nodes and
+  it was three bad readings.
+- **A pixel-only detector for the pill was built twice and abandoned.** "The
+  first bright row above the keyboard" caught the keyboard's own top edge and
+  reported a 1px gap for a pill 300dp higher; looking for a band 48dp tall then
+  found nothing, because the pill is *glass* and differs from the page it floats
+  on by a few grey levels. Recorded so nobody builds it a third time — for this
+  screen the honest instruments are Compose's own coordinates and a marker
+  colour.
+
+
+## Three about the search screen's bottom row (2026-09-22)
+
+Asked for after the row moved down there, and the first one is a reversal
+inside the same message: the miniplayer had been excluded from search
+altogether and then kept.
+
+### The miniplayer arrived narrowed on screens with no tab bar
+
+The narrowed capsule exists to open a berth **in the tab bar** for the player to
+walk into, and there is no tab bar on a channel, a playlist or search. The
+player read the same `collapse` anyway, so on those pages it sat as a
+half-width bar with nothing beside it.
+
+The fix is to put the **bars** back rather than force `collapse` to zero off
+Home, and the second half of the request is what decides that: *"nếu quay về
+lại home vẫn expand"*. Forcing the fraction would leave `hidden` still set
+underneath, so returning to Home would snap the capsule shut again. Revealing
+means the state is genuinely open and the next scroll is what closes it.
+`LaunchedEffect(route) { bars.reveal() }` — one place, where four call sites
+would each have had to remember.
+
+### The keyboard could not be dismissed before anything was typed
+
+It watched `results.isScrollInProgress`, which is a fact about the **results
+list** — and on the screen's opening state there is no list, so a drag did
+nothing. Reported with the miniplayer as the distinguishing detail; the
+miniplayer was a coincidence and the results were the difference.
+
+`hideKeyboardOnDrag` is an **observer on the root**: it reads the `Initial`
+pointer pass and consumes nothing, so the list underneath still gets every
+pixel. That is the shape the overflow menu's dismiss already established here —
+*one is a lid, the other a doorbell* — and it fires once per gesture, because
+what the caller needs to know is that a drag started.
+
+### The row is the miniplayer's height
+
+`Size.topBar`, not 48dp. The old number came with a good argument — this is the
+one control the screen exists for, and a chip's 40 is sized for a row of chips —
+and 56 serves that argument better. The real reason is the one the tab bar and
+the miniplayer already share: two floating panes stacked up the same edge of the
+same screen, and eight units between two of those is the seam this app has
+unified twice, once in tint and once in height.
+
+### Four detectors for one height, and the reason none worked
+
+Worth more than the change. The row's pill **is not clickable** — only the
+`BasicTextField` inside it is — so its height does not appear in the clickable
+tree at all, and four attempts went looking for it there:
+
+| | |
+|---|---|
+| two shell versions | returned an empty string; the loop went RED on its own arithmetic |
+| a python version | found a 126px square and called the row 48dp — that node was the **miniplayer's own X button**, which is 48dp square and sits above the row |
+| the same, filtered to "below the capsule" | found nothing |
+
+"The square one" was not a unique description until "below the capsule" was
+added, and by then the thing being described was not in the tree. The height is
+answered by a crop of the row, where the two capsules' edges are flush, and by
+both being laid out from one constant. **A check that keeps failing for its own
+reasons is worse than no check**, so it was removed from the loop and the reason
+written where it was.
+
+
+## The drag aimed at Home's arithmetic on a screen with no tab bar (2026-09-22)
+
+*"khi kéo video xuống, video ko rơi đúng vào chỗ mini player"*, recorded on the
+**search** screen: the shrinking picture came down straddling the gap between
+the miniplayer and the search row instead of arriving in the bar's round window.
+
+Two expressions have to agree about one number to the pixel — the **padding**
+that places the bar, and the **landing point** the watch layer aims the picture
+at. This charter said so the day the drag was written: *"they have to land on
+the same pixel, because `landingFromBottomPx` is built from those same three
+terms."* They drifted anyway, because only one of them ever learned that the
+search screen has no tab bar and a field row instead:
+
+| | the bar's padding | the drag's landing |
+|---|---|---|
+| Home | nav inset + tab bar | nav inset + tab bar + bar height |
+| search | nav inset + **field row** | nav inset + bar height |
+
+So on search the picture was aimed a whole field row low — and it got worse the
+same day, when that row grew from 48dp to `Size.topBar` plus its margins, from
+48 to 88dp of error.
+
+`miniPlayerBottomInset` is the one term now, with both call sites reading it and
+a test for its three answers. The rule the comment carried was right and a
+comment was not enough to keep it: **when two places must agree about a number,
+the number is a function.** That is the same conclusion `barTravel`, `tabPress`
+and `tabAt` reached, each after the same kind of drift.
+
+Measured by holding a drag at its end with `input motionevent` and looking at
+where the picture sits: inside the bar's round window on search, and inside it
+on Home, which is the regression that mattered.
+
+
+### The miniplayer's gap belongs to the miniplayer (2026-09-22)
+
+*"khoảng cách mini player vs search bar như khoảng cách nó với bottom bar luôn
+nha."* It was 22dp on search where the tab bar shows 6.
+
+`MINI_GAP` is applied **inside** `MiniPlayer`, as part of its own bottom
+padding, so the six units between the bar and whatever is under it travel with
+the bar to every screen. What the search row's reservation has to be is
+therefore the distance to the row's *top* edge and nothing more:
+`SEARCH_FIELD_GAP + SEARCH_FIELD_HEIGHT`. The row itself pads only downward,
+against the keyboard.
+
+**The first version added `Size.miniGap` to that sum and was a double count** —
+caught before it shipped, and only because the constant was read rather than
+assumed. That is the third double-counted inset on this one screen in a day,
+after the keyboard being both resized and inset, and the field row being in the
+padding but not the landing point. A number that is already applied somewhere
+is the hardest kind to see.
+
+
+### The caret came back to the front of a surviving query (2026-09-22)
+
+*"bấm search gõ text, xong bấm close, rồi bấm search quay lại, cái dấu nháy nó
+trỏ ở đầu text search thay vì sau text."*
+
+A `String`-valued `BasicTextField` focuses at position **zero**. The query
+survives the close — the ViewModel holds it — so reopening put the cursor in
+front of it and the next letter landed at the front.
+
+**This charter already recorded the same fault, in the rename alert**, where
+"test" became "xtest", and the fix there was a `TextFieldValue` overload on
+`GlassTextField`. The lesson was encoded in the design system's field, and this
+row does not use it: it is a pill with a magnifier and a clear button in it, so
+it drives `BasicTextField` directly. That is how a lesson gets paid for twice —
+and the general form is worth keeping: **a fix that lives in a component is only
+as wide as that component's callers.**
+
+- **The caller still owns the text; the row owns the caret.** Synced from a
+  `LaunchedEffect` rather than during composition, and only when the two differ
+  — typing updates the local value first and the query follows, so the common
+  case does nothing.
+- **Not `remember(query)`.** That is the obvious one-liner and it drags the
+  caret to the end on every keystroke, which makes it impossible to type in the
+  middle of a word. Checked rather than argued: tapping between the `o` and the
+  `n` of "iphone" and typing produced `iphoZne`.
+
+The loop reads a **typed character's position**, not the caret's pixels: type
+one letter and read the field back, where the start gives `xiphone` and the end
+gives `iphonex`. A cursor is a few pixels wide and blinks; the text it produces
+is unambiguous.
+
+Its own first version tapped the wrong X. Both the search row's close and the
+miniplayer's carry `content-desc="Close"`, and with the keyboard up the row is
+lifted above it while the bar stays behind the keyboard — so "the lowest one"
+was the miniplayer's, and taking it closed the video and left the loop
+reporting that the query had not survived. The row's is the one sharing the
+field's band of the screen.
+
+
+## Four version numbers, none of them agreeing (2026-09-22)
+
+Found while cutting a tag. There are four places this project says which
+version it is, and they had drifted apart with nothing to notice:
+
+| | |
+|---|---|
+| newest git tag | `v0.1.1` |
+| `versionName` | `0.1.0` |
+| `versionCode` | `1`, never moved |
+| `CFBundleShortVersionString` / `CFBundleVersion` | `1.0` / `1`, never moved |
+
+**Nothing in the app shows the number**, which is why nothing caught it — and
+it had already cost something real earlier the same day: with the iOS string
+stuck at `1.0` there was no way to tell which build was on the phone, so a fix
+measured on the simulator was reported as still broken because the running
+binary was the previous one. The bundle *path* had to be used as a proxy.
+
+The rule now: **one number per release and all four say it.** `versionName` is
+the tag without its `v`; `versionCode` and `CFBundleVersion` are the release
+count, which has to rise for a platform to accept an install over the last one.
+
+Read back rather than assumed: `aapt2 dump badging` reports
+`versionCode='2' versionName='0.1.2'`, and `dumpsys package` agrees after the
+install.
+
+## Two right changes that together drew no captions at all (2026-09-22)
+
+Reported in one sentence: *"trên Android bật sub thì nó ko hiện"*. The track was
+there, the sheet offered **Off / VI (auto)**, the menu showed it chosen, and the
+picture carried nothing.
+
+Neither change that caused it was wrong, and they were made on different days:
+
+| | |
+|---|---|
+| `VideoSurface.android.kt` | hides Media3's `SubtitleView` — it and `SubtitleOverlay` disagreed about line breaks and drew every cue twice, stacked |
+| `ExoVideoPlayer.rendersSubtitles` | `true`, and `WatchViewModel.loadCues` reads that as *"the player has this covered"* and never fetches the .vtt |
+
+So the view that would draw a caption was hidden, and the code that would fetch
+one was told not to bother. **Both ways of putting words on the screen were
+removed by two changes that each fixed something.** Android draws them from the
+Compose overlay now, which is what hiding the view was for, and
+`SubtitleGuardTest` holds the two files to each other: *if the view is hidden,
+the flag is false*.
+
+- **No unit seam, and the reason is the shape of the fault.** It is a
+  contradiction between two files; a ViewModel test is green throughout, because
+  its fake player answers `false` — which is the case that works.
+
+### A guard that reads source at run time is a task Gradle thinks is up to date
+
+The guard was written, proved to fail, and then **did not run**: `jvmTest`
+reported success on a tree whose `rendersSubtitles` had been flipped back to the
+value that shipped the bug. All five guards here — architecture, untranslated,
+press, scroll-room and this one — scan the tree with `File(...).readText()`, and
+none of that is a declared input. It is worst for `androidMain`, which `jvmTest`
+does not compile, so nothing else invalidates the task either.
+
+`tasks.withType<Test> { inputs.dir(src) }` is what makes a guard a guard rather
+than a test that sometimes happens to run.
+
+### The loop lied three times, and each lie is a fact about this app
+
+- **The clock is text.** `0:14 / 25:26` ticks every second, so a plain
+  before/after diff of the semantics tree calls it new — the first run reported
+  GREEN and what it had found was the player's clock.
+- **A remembered preference means a toggle has no known direction.** Subtitles
+  are a per-device preference, so the app opens with them *on*; the loop's one
+  tap turned them off and reported RED on a build that draws them perfectly
+  well. A one-sided check cannot tell *"turning it on did nothing"* from *"it was
+  already on and I turned it off"* — so both states are read, and the run is
+  green only when the words are in one and gone in the other.
+- **The watch screen is a layer, so the feed is in the tree behind it.** Reading
+  prose inside the player's rectangle picked up a Home card's meta line at those
+  very coordinates. What is behind does not change when CC is pressed, so the
+  loop takes what is in *every* sample of both states as the background and
+  subtracts it.
+
+Measured both ways on the phone's own release build: with the shipped
+contradiction, nothing over the picture in either state; with the fix, a caption
+in one and none in the other.
+
+## One margin under the player's clock and zoom (2026-09-22)
+
+Reported as the padding around the clock pill and the zoom button being too
+large. Measured from Compose's own coordinates before anything was changed —
+`Modifier.padding` is part of the row's own node, so its bounds *are* the box
+and all three gaps come off one probe each:
+
+| | |
+|---|---|
+| left | 8.0dp |
+| right | 8.0dp |
+| **under** | **24.0dp** |
+
+One edge three times deeper than the other two. It is `Space.sm` on all three
+sides now, and the two numbers it replaces were each answering something real
+that did not need this much room:
+
+- **34 cleared the seek bar's 32dp *target*.** The wrong thing to clear: this
+  pill takes no touches at all — no `clickable`, and on iOS it crosses as
+  `GlassItem(interactive = false)` because a readout is not a button — so it
+  cannot steal that target. What it has to clear is the 3dp line that is drawn.
+- **24 bought room at the other end**, where the transport discs are centred in
+  a picture whose height is `width × 9 / 16`: 27.7dp of gap on a 411dp emulator
+  against 13.3dp on a 360dp phone. Moving the row *down* is what opens that gap,
+  so 8 serves that argument better than 24 did.
+
+Fullscreen keeps its own arithmetic, computed from the same three terms the bar
+is placed with — there the bar is not the picture's bottom edge but a floating
+control inset from the screen.
+
+- **The loop measures the three gaps, not the fix.** Red at `left 8.0 right 8.0
+  under 24.0 — the gap under is 3.0x the gap at the sides`, green at 8/8/8, both
+  on the phone's own release build.
+- **Compose's coordinates answer both platforms at once.** The report was *"nó
+  xảy ra trên cả iOS + Android"*, and this is one layout with one set of
+  numbers — so a measurement on the emulator is a measurement of the iOS build's
+  arithmetic too. Pixels would not have been: on iOS 26 these two panes are
+  drawn by SwiftUI from rectangles Kotlin computed.
+
+### What it is not: the two panes are different heights, deliberately
+
+The same measurement showed the clock pill at 32.4dp against the zoom's 48.0,
+and that is not a fault to even out. The zoom is a **button** and 48dp of height
+is what keeps a near miss unlikely — the same rule the miniplayer's own buttons
+follow, and the reason `ControlButton` grew sideways rather than downward when
+the gear was reported as hard to hit. The clock is a readout and has no target
+to protect. Evening them would either shrink a control below the platforms'
+minimum or grow a readout into the picture.
+
+## Four from one round, and three of them were a hole (2026-09-23)
+
+Reported together, and three of the four are the same shape: **something was
+drawn and nothing underneath it was claimed.** A screen that needs the display
+awake and never asks; a form that needs room and never takes it; a pill that
+looks like a field and answers nowhere but the line of text inside it.
+
+### The screen slept on top of a playing video
+
+*"trên android khi bật video, để lâu màn hình vẫn tự động tắt"*, in both modes.
+Nothing in this app has ever asked for the display —
+`grep -r 'keepScreenOn\|idleTimer' composeApp/src iosApp` came back empty.
+
+The trap is that something *is* holding a lock, and it is the wrong one.
+Measured with a video playing:
+
+```
+Wake Locks: size=2
+  PARTIAL_WAKE_LOCK  'ExoPlayer:WakeLockManager'
+  PARTIAL_WAKE_LOCK  'AudioMix'
+fl=LAYOUT_IN_SCREEN LAYOUT_INSET_DECOR SPLIT_TOUCH HARDWARE_ACCELERATED …
+```
+
+Media3's lock keeps the **CPU** awake so the sound survives the screen going
+off, which is §1 of this project's entire reason for existing. It says nothing
+about the display, and the window's flags carried no `KEEP_SCREEN_ON` at all.
+Neither platform can tell that the picture is moving: no touch arrives for
+twenty minutes of a film, so the display timeout fires over somebody watching.
+
+- **`KeepScreenOn` is `expect/actual`**, beside `ApplyFullscreen` and for its
+  reason: no object with methods, only a call into whatever owns the platform's
+  window. A composable because finding that owner is the work, and the **state**
+  rather than an event, so a screen torn down mid-video cannot leave a display
+  pinned on — `ApplyFullscreen`'s lesson about being left sideways, in a form
+  nobody would see until the battery was gone.
+- **The window flag, not a wake lock of this app's own.** The system releases a
+  window flag the moment the app stops being what is on screen; a
+  `SCREEN_BRIGHT_WAKE_LOCK` needs a permission and has to be released by hand
+  from every path out, and the path that gets forgotten leaves a phone lit in a
+  pocket. iOS's `idleTimerDisabled` is process-wide, so it is set from the state
+  and put back on dispose for the same reason.
+- **Playing, not open.** A paused video is a still frame and somebody who paused
+  to read the comments has left the phone to its own timeout. Measured both
+  ways: pause and the flag goes, press play and it comes back.
+- **The expanded player, not the miniplayer.** The bar plays on across tabs and
+  with the screen off — that is the feature — so holding the display awake for
+  it would be this app spending battery on the one case it exists to make cheap.
+- The loop reads the window's flags, and its first version read *ExoPlayer's*
+  wake lock as "is it playing". That lock is held while paused too, so the loop
+  could not tell a fault from the correct answer. It reads the player's own
+  Play/Pause button now.
+
+### The clock and the zoom button cleared the wrong thing in fullscreen
+
+*"ở mode zoom nó có khoảng cách với timer slider dưới hơi cao"* — 40.0dp against
+the 8.0dp the same row keeps windowed, measured through Compose's own
+coordinates on a landscape emulator: row bottom 933px, seek line 1038px.
+
+The sum was `navigationInset + Space.lg + SEEK_TARGET + Space.sm`, and
+`SEEK_TARGET` is the bar's 32dp **touch target** while the line is drawn along
+that target's **bottom** edge. So the row stood off the whole target and the
+viewer saw the target as empty space. The same mistake the windowed number made
+twice before — *"what it has to clear is the line that is drawn"* — in the one
+place that had not been corrected.
+
+- **Two places had to agree about one number and drifted**, so the number is a
+  function: `seekLineFromBottom(navigationInset)` is read by the bar's padding
+  and by `controlRowBottom`, and `PlayerControlRowTest` asserts the invariant
+  the bug broke — *the gap above the line is the same margin in both modes*. It
+  was red on exactly `Space.sm + SEEK_TARGET` before the change. This is the
+  conclusion `miniPlayerBottomInset`, `barTravel` and `tabAt` each reached after
+  the same drift, and a comment already saying so was not enough.
+- **Compose's coordinates answer both platforms at once**, which is what the
+  report needed — *"xảy ra cả Android + ios"* — since on iOS 26 these two panes
+  are drawn by SwiftUI from rectangles Kotlin computed.
+
+#### And lowering the row uncovered a dead half nobody had reported
+
+With the row 8dp above the line, the 48dp zoom button overlaps the bar's 32dp
+target by 24. The bar is written after the controls, so it was hit-tested first
+and **won** — which was already true windowed, and measured: a tap at the zoom
+button's own centre did nothing at all while one 35px higher entered fullscreen.
+Half of that button had never worked.
+
+`zIndex(1f)` on the controls block puts them above the bar for touches as well
+as paint. Nothing is painted over — the line is below every pane, and the knob
+only exists while `scrubbing`, which is one of the conditions that takes the
+block off the screen — and a `Box` and a `Row` with no `clickable` consume
+nothing, so the bar keeps everything between and around the two panes.
+
+### The server-address form had no room and nowhere to go
+
+*"ko có scroll lên trên Android, keyboard nó đè luôn input text, nghi ngờ ios
+cũng thế"* — and it is one screen, so the suspicion was right.
+
+Measured on a 1080x2400 emulator with the keyboard up, its top edge at y=1517:
+Save at **1575..1638**, the one control the screen exists to reach, entirely
+underneath it. The form had neither `imePadding` nor a scroll.
+
+**Two halves and neither is correct alone.** The manifest declares
+`adjustNothing`, so the window keeps its size and the inset is dispatched to be
+applied in the layout — the search row's own comment records what happens when
+both are done, which is the keyboard counted twice. This was the other side of
+that coin: neither done at all. And even lifted, a short phone has less room
+above a keyboard than this form needs.
+
+`BoxWithConstraints` plus `heightIn(min = maxHeight)` keeps both. A
+`verticalScroll` measures its content against an unbounded height, so
+`Arrangement.Center` inside one has nothing to centre in and the form would sit
+at the top of a fresh install — which is the look this screen was given on
+purpose. The minimum puts the viewport's height back: centred while it fits,
+scrolling the moment it does not. Verified at 680dpi, where it genuinely
+overflows: `scrollable=true`, and Save reachable at 1056..1158 under a keyboard
+whose top is 1180.
+
+### The search pill was a hole in the shape of a field
+
+*"ở màn search, bấm vào search field thì cái item dưới nhận action"*, and it did.
+
+Only the `BasicTextField` answered. A single-line one is as tall as a line plus
+the platform's minimum target and as wide as the box it is given, so inside a
+56dp pill with a magnifier at its left, the icon, the pill's padding and a strip
+above and below the text belonged to nothing — and neither did the gap before
+the close circle or the margins at both edges of the floating row. Driven and
+measured: a tap 50px left of the field's own node opened the video that happened
+to be under the pill.
+
+- **The pill is the field**, all of it, focusing it and asking for the keyboard.
+  `press-guard:` rather than a bloom — what answers the finger is the caret
+  arriving, and a pill that grew under a thumb placing a cursor is the wrong
+  acknowledgement for the gesture.
+- **The row is the floor of a bar**, exactly as `AppShell` draws one and for the
+  same reason. It had every reason to have been written that way the day the row
+  was moved to the bottom, and the charter's own note from that day records the
+  clue nobody read: *"the row's pill is not clickable — only the
+  `BasicTextField` inside it is — so its height does not appear in the clickable
+  tree at all"*, written down as an obstacle to measuring rather than as the
+  fault it was.
+
+### Driving Android found three of its own
+
+None of these were the app, and each cost a wrong verdict first.
+
+- **Gboard's clipboard panel is not in the app's window.** `uiautomator dump`
+  showed the Save button present and clickable while a screenshot showed a
+  clipboard suggestion card covering the bottom half of the screen. Four taps
+  went nowhere and were read as a broken button. **When a control that is in the
+  tree does not respond, take a screenshot before reading any code.**
+- **A video that has ended is not one that is paused, and not one that is
+  playing.** A loop opened an 8-second video, pressed play, and reported RED on
+  a build that was correct — the flag had been cleared because the video
+  finished between the two readings.
+- **Disabling the IME does not retract its inset.** `ime disable` plus a
+  force-stop left `mInputShown=true` and an 883px inset still being dispatched,
+  so the search row floated mid-screen and every coordinate taken from it was
+  about a keyboard that was not there.
+
+## The fullscreen title and its channel did not share a left edge (2026-09-23)
+
+Reported from the phone with a screenshot: *"cái title và cái description trên
+màn zoom mode nó ko đều kìa"*. Measured off that screenshot — title at x=398,
+channel at x=365, **33px, 11pt apart** on an iPhone 16e at 3x.
+
+Nothing was misplaced. A probe printing what Kotlin publishes to the platform
+settled it in one line:
+
+```
+[DEBUG] title         x=119.0  w=413.0
+[DEBUG] title-channel x=119.0  w=104.0
+```
+
+**The same edge, to the point.** So the gap opened while SwiftUI drew text
+inside a rectangle Compose had measured — `GlassPane`'s whole contract is that
+Compose owns the layout and the platform owns the paint, and this is the seam
+between them failing in the only way it can.
+
+`.frame(width:height:)` centres by default, and the rectangle is Compose's
+measurement in **Compose's** font metrics. SwiftUI renders the same string
+narrower — unambiguous on the clock, where a 74pt frame held 65.3pt of text and
+the words sat 4.3pt in, half the 8.7pt surplus to the tenth. Every line
+therefore drifts right by half a difference that **grows with its own length**,
+which is nothing on `CNN` and 12pt on a seventy-character headline.
+
+- **It hid because a long title truncates.** A truncated line fills its frame and
+  lines up perfectly; only a title that *fits* has a surplus to be centred in.
+  Four videos in a row on the simulator truncated, and each one measured green.
+- **Leading everywhere was the first fix and it is wrong for the clock.** That
+  pill would have gone from 14.4pt of padding on each side to 10 and 18.7 —
+  trading an invisible fault for a visible one. So the choice crosses as
+  `alignStart`, decided by the caller, because the caller is the one that knows
+  whether anything is stacked beside it. Two call sites set it: the fullscreen
+  title and the channel under it.
+- **A symbol ignores it.** Compose centres those already — an icon lives in a
+  box the size of its *button*, not of its glyph.
+
+Measured after, on a title that fits: title 360px, channel 361px, both ~1pt into
+a frame at 357 — which is the glyphs' own left side bearing. The clock's text
+still sits 4.0pt in, unchanged.
+
+### The loop, and what it took to make it honest
+
+`panealign.py` reads the two left edges out of a screenshot and compares them.
+Three things had to be fixed in the instrument before it told the truth, all of
+them the same lesson in different clothes — **a fixed threshold cannot tell a
+glyph from the picture behind the glass**:
+
+- Its window reached past the pane, where the video is often brighter than the
+  text, and it reported the title starting left of its own frame.
+- The pane's rim is a bright diagonal a few pixels wide that reaches further
+  left than any glyph, so the leftmost lit pixel in a row was the rim.
+- `CNN` is short enough that a minimum run length written for the title threw
+  the channel's band away entirely, and the script then said "one band" on an
+  image with two lines plainly in it.
+
+The window is given per image now and kept inside the glass, where the ground is
+flat. Red on the reporter's own screenshot, green on the simulator after.
+
+## The tab bar borrowed the system's inset and kept no margin of its own (2026-09-23)
+
+Asked as a question from an Android phone — *"hình như Android cái bottom
+tabbar ko có padding đúng ko?"* — and the answer is half yes. It cleared the
+navigation inset, which is right for a row of touch targets, and added nothing
+on top of it. So the frame around the one bar that is always on screen was
+whatever the phone happened to say:
+
+| | sides | bottom |
+|---|---|---|
+| Android, gesture navigation | 16dp | **24dp** |
+| Android, three buttons | 16dp | **48dp** |
+| iPhone 16e | 16pt | **34pt** |
+
+Measured through the tab bar's own semantics rather than from pixels, and the
+overlay switch (`cmd overlay enable …navbar.threebutton`) is what made the
+middle row measurable without a second device.
+
+**On gesture navigation the inset is exactly the strip the gesture pill is drawn
+in**, so the capsule was resting straight on top of it with nothing between —
+which is what "no padding" looks like. And on a device reporting no inset at all
+the bar would sit on the screen's edge.
+
+This is the fault `GlassSheet` was corrected for, and the tab bar was the last
+floating pane still carrying it. That note says it already: *"It used to be
+GLASS_MARGIN at the sides and the navigation inset below… beside the platform's
+sheet that produced 34dp below against 16 at the sides, and an uneven frame is
+what the eye actually reads."*
+
+- **`Size.miniGap`, not a new constant.** The miniplayer keeps exactly this gap
+  between itself and whatever is under it, the two bars rest on each other, and
+  one number is what stops them drifting — the lesson this charter has now
+  recorded for a bar's height, its tint, and the space around it.
+- **Three places had to move together**, because three read "the tab bar's
+  bottom is the navigation inset": the bar's own padding, `tabContentPadding`
+  (a list that stops at the bar's pane stops six units low, and the last row of
+  a feed is the one nobody can reach), and `miniPlayerBottomInset`, which is
+  both where the bar is drawn and where the drag aims the shrinking picture.
+- **The gap does not lerp away with `collapse`.** The term beside it does — the
+  player moves into the row next to the tab circle — but a narrowed bar is still
+  a bar at the same height, and dropping its margin would put the player 6dp
+  low, resting on the thing it floats above. `BarTravelTest` holds that case
+  separately.
+
+Measured after, on the emulator: 16dp at both sides, **30.1dp** below; the
+miniplayer 5.9dp above the bar with no overlap; and a drag held at its end puts
+the picture inside the bar's round window.
+
+## Below Android 11 nothing at all answered the keyboard (2026-09-23)
+
+Reported after an Android 10 phone was tried, and the version is the whole
+finding: *"tao test thì bị lỗi keyboard trên mỗi Android 10 thôi, vào search bấm
+vào search thì keyboard hiện ra và che luôn search, tương tự server address"*.
+
+Both screens, and only those two, because both are the only ones that move for a
+keyboard. Measured on an API 29 emulator — the same element positions with the
+keyboard up as with it down, to the pixel:
+
+| | no keyboard | keyboard up |
+|---|---|---|
+| Server address | y 979 | y 979 |
+| Check | y 1368 | y 1368 |
+| Save | y 1515 | y 1515 |
+
+`mInputShown=true` throughout, and the keyboard's top edge at ~1550. **Nothing
+moved.** On API 36 the same form shifts up by a keyboard.
+
+**Two mechanisms, and this app had neither on Android 10.** `WindowInsets.ime`
+arrived in **API 30**; below it the platform reports no such inset, so
+`imePadding()` adds zero. And the manifest declares `adjustNothing`, which is
+right from 30 up — the search row's own note records what happens when the
+window resizes *and* the inset is applied, which is the keyboard counted twice.
+Under 30 that leaves the window not resizing and nothing to apply.
+
+So `MainActivity` asks for `SOFT_INPUT_ADJUST_RESIZE` when `SDK_INT < R`, which
+is the mechanism that predates the inset. The two cannot double-count, because
+the inset that would be the second term is exactly the one that does not exist
+there. Measured after, same emulator: the form rises 371px and Save lands at
+1144..1207, clear of the keyboard; the search row sits on it the way it does
+everywhere else. API 36 takes no new code path and measured unchanged.
+
+- **`adjustNothing` in the manifest, overridden in code.** The manifest cannot
+  say "it depends on the version", and the value that belongs there is the one
+  that is right for every phone the household will buy next.
+- **The charter's earlier entry was true and incomplete.** It said
+  *"`android:windowSoftInputMode="adjustNothing"` makes the window keep its
+  size, which is what `imePadding()` assumes, and neither is correct without the
+  other"* — correct, and it never asked which Android versions have the other.
+
+### Two things about driving old emulators
+
+- **`-gpu swiftshader_indirect` dies on rotation.** Entering fullscreen killed
+  both emulators mid-run with `Failed to find ColorBuffer`. `-gpu host` survives
+  it.
+- **The glass is not glass below Android 12.** `blur` needs API 31 and `lens`
+  needs 33, so on Android 10 the bars and the watch page's ground are a flat
+  tint with the content behind them perfectly sharp — measured, the feed's
+  headline reads through the page at 54 against a ground of 43. The tint is
+  doing its job; what is missing is the blur that destroys the letterforms.
+  Recorded rather than fixed: it is the documented fallback, and the household's
+  phones are newer.
+
+## The AltStore install is guided rather than automated (2026-09-23)
+
+The entry above ends *"The first install is still a GUI flow on the Mac with the
+phone plugged in — AltServer's 'Install AltStore', the Apple ID, Wi-Fi sync,
+trusting the profile, Developer Mode. Recorded as not automatable rather than
+forgotten."* That is still true of the clicking and it was never the whole
+story: the parts around it are checkable, and checking them is most of what
+makes the flow survivable.
+
+`tools/altstore-setup.sh` walks the seven steps. What it does *not* do is the
+one thing that matters most: **the Apple ID password is typed into AltServer's
+own dialog and the script never asks for it.** It says so on the screen where
+somebody might otherwise offer it.
+
+What it does instead is answer, from the Mac, the questions a person would
+otherwise have to guess at:
+
+- whether the IPA is older than the source — `versionName` against the built
+  `CFBundleShortVersionString`, with an offer to rebuild, because AltStore
+  spends seven days on whatever it is handed
+- whether the Mac can see the phone, after the Finder step
+- whether AltServer is running, and starting it if not — it has no window and
+  no Dock icon, which is the first thing that confuses anybody
+- **whether AltStore actually arrived**, by polling
+  `devicectl device info apps` for `com.rileytestut.AltStore` rather than
+  asking. A wizard that asks what it could check is one that believes a tired
+  yes.
+- whether the app is on the phone afterwards, and what version
+- and it offers to add AltServer to Login Items, which is what makes the weekly
+  refresh happen without anybody thinking about it
+
+Three faults were fixed by reading it rather than running it, and all three are
+the same kind — a shell that exits or lies where nobody would look:
+
+- `[[ -f pid ]] && { kill … }` as a stage's last command **exits the script**
+  under `set -e` when the file is not there, which is the ordinary case.
+- `( cd X && python3 -m http.server & echo $! )` records the *subshell's* pid,
+  not the server's, because `&` binds to the whole AND-list. The little server
+  would then have outlived the wizard.
+- `open_url "x-apple-finder://"` is a scheme nobody verified. `open -a Finder`
+  is the one that exists.
+
+## Pinch to fill the screen, and the crop that was never asked for (2026-09-26)
+
+Reported from the phone: in fullscreen, a two-finger pan makes the video cover
+the whole device — *"nhưng khi thả ra thì nó trở về original size"*.
+
+The first finding is that **the app has no pinch gesture at all**. Nothing in
+`composeApp/src` or `iosApp` calls `detectTransformGestures`, and there is no
+`UIPinchGestureRecognizer` on the iOS side. So whatever was filling the screen
+was not a zoom, and the number of fingers was incidental — a *one*-finger drag
+did exactly the same thing.
+
+`WatchScreen` drew the picture as `fill = drag > 0f`. That expression is right
+everywhere it was written for: outside fullscreen the picture is travelling into
+the miniplayer's round window, and a 16:9 frame fitted inside a circle is a
+stripe with two black caps, so it crops from the first pixel of the gesture. In
+fullscreen there is no journey — the box is `fillMaxSize` and never shrinks — so
+the same expression meant *any* drag cropped the picture to the whole screen,
+and the spring back to zero handed it straight back.
+
+Measured on the emulator, as the width of the letterbox at each side of a
+2400x1080 screen:
+
+| | |
+|---|---|
+| at rest | **240px** — a 16:9 picture on a 20:9 screen |
+| while the finger was down | **0** |
+| two seconds after it lifted | **240** again |
+
+- **Two questions, and one number was answering both.** `fill` is now
+  `if (fullscreen) zoomedToFill else drag > 0f`. The drag keeps the crop it was
+  written for and fullscreen gets a state of its own, because covering the
+  screen there is something somebody asks for and expects to keep.
+- **It is a fact about this sitting, not a device preference.** Subtitles,
+  narration and autoplay are answers meant for every video; this one is about
+  *this* film on a phone held sideways, and a 2.39:1 film cropped to a handset
+  loses a third of every shot. Remembering it would mean a choice made for one
+  video quietly cutting the edges off the next. It is given back on the way out
+  of fullscreen from **one** place — a `LaunchedEffect(fullscreen)` — because
+  two call sites leave fullscreen and the second one is the one that forgets.
+- **`detectTransformGestures` could not be used**, and the reason is the whole
+  design of this screen. That detector reports a pan for a *single* finger too
+  and consumes what it reads, so it would have taken away the one-finger drag
+  that collapses the video into the miniplayer — and the two are indistinguishable
+  from the outside: the video would simply stop being draggable in fullscreen.
+  `pinchToFill` waits for a **second** pointer before it consumes anything, which
+  leaves the drag, the tap that shows the controls and the double tap that seeks
+  exactly as they were. Once two fingers are down it consumes every change, and
+  that is what stops the collapse drag running underneath a pinch: the fingers'
+  centroid moves as they open.
+- **The accumulator starts where the picture already is.** `calculateZoom`
+  reports the change since the previous event, so the gesture keeps its own
+  total; starting that total at 1 would make undoing a fill cost 11% when asking
+  for it cost 12%, while the same reversal *within* one gesture costs the whole
+  26%. Starting it at the threshold the current state sits on makes both the same
+  movement, and leaves the clamp as the only thing holding the memory.
+- **`fillFromPinch` is a named pure function with a test**, for the reason
+  `wholeSeconds`, `barTravel` and `shouldRecoverStall` are ones: both directions
+  compile, and a threshold the wrong way round shows up as a gesture that feels
+  sticky rather than as anything that fails.
+
+### Two fingers on an emulator
+
+`adb shell input` is one pointer — `motionevent` has no second — so the pinch is
+written straight at the panel's multi-touch protocol with `sendevent`, which
+needs `adb root`. Two things cost time and are worth keeping:
+
+- **This panel declares no `BTN_TOUCH`.** `getevent -pl` lists only
+  `BTN_TOOL_RUBBER` and `BTN_STYLUS` under KEY, with `ABS_MT_PRESSURE` under
+  ABS — so pressure is what says a finger is down, and the `BTN_TOUCH` every
+  tutorial sends is silently dropped.
+- **The rotation to use is not the rotation reported.** The panel stays portrait
+  while the app is landscape, and Android reported `ROTATION_90` while the
+  mapping that actually lands is the other one. Found by injecting a tap at the
+  exit-fullscreen button's own coordinates and checking whether the app left
+  fullscreen — a landmark with an unambiguous answer, rather than a derivation.
+- **`getevent` buffers when its output is redirected**, so a partial capture
+  read a moment later looks like events being dropped by the kernel. It was the
+  file, not the input core.
+
+Measured after: pinch out and the bars go to 0 and **stay** 0 two seconds after
+the fingers lift; pinch in and 240px comes back; a one-finger drag in fullscreen
+leaves 240px throughout; and a drag past the threshold still collapses the video
+into the miniplayer.
+
+## The scrub bar grew a picture (2026-09-27)
+
+Reported as: dragging shows no image of the moment being aimed at, with the
+suspicion that yt-dlp was at fault. It was not, and the charter's own note from
+2026-08-31 had the shape of it right — *"the server has no storyboard… it is a
+change in both repositories"* — while being wrong about what that costs. There
+are no sprites to cut at ingest: YouTube publishes the whole ladder and yt-dlp
+has always extracted it. The server repository's entry holds the measurements.
+
+**What was here**: a readout, centred over the picture, saying the time. That
+was the whole of it, and the charter's own words for this fault elsewhere fit —
+*a readout is not a control* — except that here the readout was right and
+incomplete.
+
+- **The still covers the player.** It was a 90dp card floating in the middle
+  first, and that was reported in one sentence — *"ủa nó ko fill player như
+  youtube ở mobile hả"* — which is right, and the reason is that a card reads as
+  a thumbnail *about* the video rather than as the video moving. Somebody
+  scrubbing is looking for a scene, and a scene is easiest to recognise at the
+  size it is normally watched.
+- **So the rung had to go up, and that is a decision in the other repository.**
+  Filling a 1080-pixel picture from a 160-pixel tile is a 6.75x enlargement:
+  blocky, not soft. The server copies the 180-tall rung now, at 3.4x, and pays
+  for it in disk. The card version did not need that and the full-bleed version
+  cannot do without it — one change forced the other, which is worth saying
+  because the two look unrelated in a diff.
+- **Shaped like the picture, which is not the same as fitted.** The first
+  version always fitted, with the right argument attached: a portrait upload is
+  letterboxed in the same 16:9 box while it plays, so a still cropped to fill
+  would be a different shape from the picture it replaced. True, and it answers
+  the wrong question — the shape to match is whatever the *video* was asked to
+  do, and in fullscreen the viewer can pinch it out to cover the screen.
+  Reported from the phone: *"ở mode zoom, dùng 2 ngón tay pan ra để cho nó fit
+  với màn hình, khi drag timer thì nó ko khít như video"*. Measured on the
+  emulator at the time: the video's black bars were **0px** and the preview's
+  **240px**.
+  - `scrubPreviewScale` is a named pure function with a test, for the reason
+    `fillFromPinch` and `barTravel` are ones: `min` and `max` both compile, both
+    draw a picture, and the wrong one is only visible beside the frame it stands
+    in for.
+  - **The clip is an intersection, and both halves of it are load-bearing.**
+    Fitted, the cell is smaller than the box and the clip stops the tiles around
+    it bleeding into the letterbox; filled, the cell is larger and the clip stops
+    it spilling over the page below.
+- **Opaque.** A translucent still over a moving video is two frames of the same
+  film at once, unreadable in exactly the moment it has to be read.
+- **The clock moved to the foot of the picture.** Centred was right while the
+  middle was empty — this charter's own reason, that it is where the eye already
+  is. It is not empty any more, and a pill over the middle of a frame hides the
+  subject of the one picture somebody is reading. It takes `controlRowBottom`,
+  so it sits exactly where the corner clock sits.
+- **`zIndex(-1f)`, and it is load-bearing.** The seek bar is written *before*
+  this block, so a still filling the picture covers it. The bar is the one
+  control that must survive its own gesture: it is what says where the finger
+  is, and hiding it under the answer leaves nothing to aim with.
+- **`frameAt` is a named pure function with a test**, for the reason
+  `wholeSeconds`, `barTravel` and `fillFromPinch` are ones: nothing in the type
+  system catches an off-by-one, and getting it wrong does not fail — it draws a
+  confident picture of the wrong scene for the whole video. Read column-major
+  instead of row-major and every moment shows the still five places away.
+- **Clamped to the last cell of the last sheet.** The last sheet is usually only
+  partly filled, so a moment near the end lands in a cell that exists while the
+  one after it does not. Without the clamp the final seconds of every video have
+  no picture — exactly where somebody hunting the closing scene drags to.
+- **`StoryboardState`, not a nullable board.** Most of this library has no
+  ladder, so "not asked yet" and "this video has none" are two answers the bar
+  draws the same thing for, and a state makes that a decision rather than a
+  coincidence. A `Ready` board is already known to be drawable, so no screen
+  asks twice.
+- **Its own port.** `StreamRepository` answers "how can this be played" — asked
+  when somebody presses play, may involve talking to YouTube, and can answer
+  differently a minute later. This asks what a *control* can draw, once per
+  video, and its answer never changes. `NarrationRepository` is the other
+  on-demand server asset and is not the place either: that one drives a job.
+- **Every failure is "no preview".** A 404 means no ladder, which is most of the
+  library; a refused connection means the video is not playing either and the
+  screen already says so. The cost is stated rather than hidden: a preview that
+  fails for a reason worth knowing fails silently, and the gateway's log is
+  where it is written.
+- **Asked for on opening the video, not on first touching the bar.** The first
+  ask is the slow one, and the moment somebody wants a preview is the moment
+  they are already dragging. The up-next rail's rule, applied to a control.
+- **A broadcast is skipped**: no zero and no end, which is why narration refuses
+  one too.
+
+### The crop is a drawing instruction, because a layout could not be
+
+The obvious construction is the browser's: the sheet as a child sized to the
+whole grid, shifted by a negative offset, clipped by a box one cell wide. It was
+built first, and it **fails past a distance**.
+
+Measured, with the node reporting its full `2100x1181` and Coil reporting
+`Success`: a shift of one tile (`-420px`) drew the right still; `-1260px` on the
+same sheet a moment later drew **black**. Both `Modifier.offset` and a
+`graphicsLayer` translation behave the same way, and the black is total rather
+than partial. Whatever culls it lives below Compose.
+
+A preview that works for the first column of every sheet is worse than none, so
+the crop is now `drawBehind { clipRect { translate { painter.draw() } } }` —
+no layer to place and nothing to cull. It is also the cheaper of the two for
+what this does: the still changes on every frame of a drag, and this costs a
+redraw where a modifier carrying a new offset costs a relayout.
+
+- **`requiredSize` was a real fix and not this one.** `Modifier.size` is coerced
+  into the parent's constraints, so the sheet was first squashed to one cell and
+  then shifted by an offset measured for a sheet five times wider. It is gone
+  with the layout approach, and the lesson stands for the next thing that has to
+  be larger than the box clipping it.
+
+### Measured on the emulator, on the release build
+
+Open a video, hold a drag on the bar, screenshot: the picture is replaced by
+the still of the moment under the finger, the time pill sits at its foot, the
+red bar is still drawn along the bottom, and the still **changes with the
+position**. The sheets are copied on opening the video.
+
+The loop is a held touch (`adb shell input motionevent DOWN`, which `input tap`
+cannot do) plus a screenshot, and it was read as an image rather than scored:
+the first three attempts at a numeric check compared crops of crops, because
+**macOS is case-insensitive and `a.png` had quietly overwritten `A.png`** — the
+same trap this charter records from the KLIB hunt. For a question about what is
+drawn, the instrument is the picture.
+
+### Driving a pinch on the emulator, and a rotation that lies
+
+Reproducing that took two things this charter had recorded in harder forms.
+
+- **Two fingers go through `ABS_MT_SLOT` on one device.** The emulator lists a
+  device per finger (`virtio_input_multi_touch_1..11`) and only the first is
+  routed: measured, a tap injected on `event1` reveals the controls and the same
+  tap on `event2` does nothing at all. `event1` declares slots 0..10, so both
+  fingers belong on it. Measured after: the video's bars went 240px → 0.
+- **The rotation to use is not the rotation reported.** `dumpsys` says
+  `ROTATION_90` and the mapping that actually lands is ROTATION_270's —
+  `(X, Y) → (1080 − Y, X)`. Found by injecting a tap at the exit-fullscreen
+  button and checking whether the app left fullscreen, which is a landmark with
+  an unambiguous answer.
+- **In fullscreen the bar follows the controls, so the loop has to reveal them
+  first.** A run that skipped it measured "both fill" on a drag that never
+  registered — green for the wrong reason, and the reason the loop now asserts
+  the overlay is up before it believes either number.
+
+### The web app has it too, from the same numbers
+
+`storyboardFrame` in `web/src/features/watch/domain/storyboard.ts` is the same
+function in TypeScript, with the same tests, and the still is a
+`background-position` on one `<div>` — so the browser holds one decoded sheet
+however many stills come off it. There the gesture is **hover**, before anything
+is pressed, which is why the bar tracks the pointer separately from the range
+input's value: reading that would follow the playhead rather than the cursor.
+
+**The taller rung reaches the web as a sharper picture, not a bigger one.** A
+pointer hovering a bar wants nothing like a full-player still, so the scale
+there now allows going *below* 1: the same 160x90 box, drawn from a 320-pixel
+tile at half size. Measured after: `background-size: 480px 270px` in a box still
+160x90.
+
+Measured with Playwright against the running gateway: storyboard 200, a preview
+element carrying `/media/4xil_0qwrKY/storyboard/0.webp` at
+`background-position: -320px -180px` over `background-size: 800px 450px`, drawn
+160x90 above the bar with the time under it.
+
+**`npx tsc --noEmit` does not check that project.** It exits 0 on a file with an
+unresolved identifier in it; `tsc -b`, which is what `npm run build` runs, finds
+it. An unresolved `mediaURL` nearly shipped behind a green typecheck.
+
+## A QA pass over the whole app, and three it found (2026-10-03)
+
+A tester working from the charter wrote `docs/qa/test-cases.md` (122 cases) and
+ran what the iOS Simulator allows; three bugs came back, all three fixed, and a
+second pass confirmed them with no new ones. Not run, and recorded as such:
+pinch, sound, the lock screen and rotation — the simulator has one pointer and
+no ears.
+
+- **Back from a channel opened inside a channel did nothing.** Channel → video →
+  the channel's name, and `openChannel` remembered the route it was on — a
+  channel — as where back should lead. Back then landed on a channel, and from
+  there on itself, on a page with no tab bar. `channelOrigin` keeps the first
+  origin: "one level, deliberately" was the right rule, and the level it kept
+  has to be one that is not a channel.
+- **The playlist page went stale two ways.** The header read `itemCount` from
+  the first answer, so removing the last row left "1 video" over an empty page;
+  and the page is composed under the watch layer, so a save from the watch
+  screen's sheet reached it by no arrival of its own. `remove` moves the count
+  with the row, and the sheet bumps `playlistEdits`, which both playlist screens
+  refresh on. *Arrival* is not the only way a page's contents change, which is
+  the general form of the second half.
+- **A YouTube result with a custom thumbnail was a grey box**, and that was the
+  server: it stripped the query from every still, and `hq720_custom_N.jpg` is a
+  404 without the signature YouTube handed out. Fixed there; its changelog has
+  the measurement.
+
+### One sighting that would not come back
+
+While the simulator was being set up, a screenshot six seconds after a cold
+launch showed **Settings** with profile **KuTeo**, and a tap a minute later
+landed on **Home** — while the device's stored profile is Tuấn Khanh, which
+only the profile page writes. Four cold launches from Settings afterwards,
+sampled through the accessibility tree every 0.4s, and a ten-frame screenshot
+burst, all went straight to Home with nothing before it. No loop, so no cause
+is claimed. The cheapest explanation is a stale picture of an older session
+shown while a freshly installed Debug build was still starting; the thing to
+check, if it is ever seen on the phone, is whether the profile name changes
+with it.
+
+### Driving the simulator, written down at last
+
+This charter has described synthesised `CGEvent` clicks three times and never
+kept the code. `tools/sim-touch.swift` is it — tap, drag with a hold at the end,
+long press, all in device points, finding the Simulator window itself — and
+`tools/sim-ui.py` reads every element's label and centre from `idb ui
+describe-all`, which *does* see this Compose scene where `idb`'s tap does not.
+Together they are the loop the test cases were run with.
+
+- **Labels before coordinates.** The first tap of this pass landed on a feed card
+  instead of a Settings row, because the app had moved from Settings to Home
+  between the screenshot and the tap. Finding the element by label at the moment
+  of the tap is what made every later step trustworthy.
+- **A process started from a tool's shell dies with that shell.** Swapping the
+  ingest service with `nohup … &` left it dead a second later; it has to start in
+  a session of its own (`start_new_session=True`), with the environment read
+  from the old process through `sysctl KERN_PROCARGS2` rather than retyped.
+
+## A whole-project review, and four it found (2026-10-03)
+
+Two reviewers read the whole tree at v0.1.10 against this charter, one for the
+rules it states and one for the behaviour it asks for. Five findings came back
+marked HIGH; four were confirmed by reading and fixed, one was not HIGH.
+
+- **The last video's narration played over the next one.** `advanceTo`
+  cancelled the poll and never told the player, which outlives the video and so
+  kept its clips — lines of one video at that video's times, ducking the next
+  until its own pass started after its captions. `player.narrate(emptyList())`
+  on the way out; red in `WatchQueueTest` first.
+- **Android ignored `autoPlay = false`.** `ExoVideoPlayer.start` called
+  `play()` on every load, so the port's contract — `load` buffers, `play` is
+  separate — held on iOS only, and the restored miniplayer started talking on
+  launch. `play`/`pause` record the intent, `load` clears it, and `start` sets
+  `playWhenReady` from it — *set*, because `playWhenReady` survives
+  `setMediaItem`. Remembered rather than forwarded because the first load lands
+  before the service connection does. Measured: PLAYING on launch before,
+  PAUSED after, and a video opened from the feed still plays.
+- **"(auto)" was English in the Vietnamese sheet.** `trackLabel` held it as a
+  literal; it takes `Strings` now, like every formatter. The untranslated guard
+  cannot see a literal outside a composable, which is the gap it slipped
+  through.
+- **A broken playback said nothing.** Both players wrote `PlaybackState.error`
+  and nothing in `ui` read it. `failed` names the case — an error with nothing
+  playing and nothing buffering, so a recovery in progress is not one — both
+  players clear the error once playing resumes, and the watch screen draws
+  "could not play" with Try again *in place of* the controls: over them, on iOS
+  26, it would sit under the SwiftUI discs.
+  - **Not reproduced end to end.** Cutting the emulator's network only buffers:
+    Media3 keeps retrying past two minutes and never reports. The overlay was
+    verified by forcing the state on both platforms, and Try again by the
+    gateway logging one more stream request per press.
+
+**Not HIGH, and why:** English fallbacks in ten ViewModels' error states. Only
+Home and Watch draw that text, and there it is a diagnostic — usually the
+exception's own message — under a translated title. The MEDIUM and LOW findings
+(a `ui → data` import of `ServerNotConfigured`, defaulted flags on
+`WatchSession`, wire spellings reaching `UnavailableCopy`, playlist and channel
+ViewModels piling up in the activity store, three screens without previews,
+`X-User-Id` attached by hand at forty call sites) are recorded here and not
+fixed in this round.
+
+## The glass forgot the page after a detail page, and six MEDIUMs (2026-10-03)
+
+### Only the arriving page records
+
+Reported with exact steps: Home → Search → close, and every pane on Home — the
+tab bar, the miniplayer, the search button — turned flat grey and stayed that
+way. QA then found the same on Channel back, Watch history back,
+Subscriptions back and Search → channel → back, on iOS and on Android alike.
+
+All pages share one `LayerBackdrop`, and the library's `LayerBackdropNode`
+clears that backdrop's coordinates in `onDetach` — read off the bytecode,
+since the artifact ships without sources. A page leaving by an animated
+transition detaches *after its exit animation*, by which time the arriving
+page has set them, so the leaving page wiped them and nothing set them again:
+the arriving page's node only reports a position when it moves, and scrolling
+a list does not move it.
+
+`LocalGlassSourceActive` is provided by the route switch as `current ==
+route`, and both `glassSource()` and `AppShell`'s recording withdraw when it is
+false. The leaving page detaches as the transition starts, before the arriving
+page is placed.
+
+- **Why some pages never showed it** — Saved, a playlist, Voice, Language — is
+  not established. The fix does not depend on it: no page records while it is
+  leaving.
+- **The loop is a tab-bar PSNR against a fresh-launch shot** of the same page:
+  `inf` when the glass still shows Home, 17–27 dB when it does not. A baseline
+  taken after other navigation can already be broken, which QA found by having
+  a whole pass come out green.
+- **Measured**: all five paths `inf` on iOS after, and the Search case twice on
+  Android; the miniplayer by eye, since its marquee defeats a pixel compare.
+
+### Six MEDIUMs from the review, each red first
+
+- **Progress after a seek back.** `position - lastReported` went negative and
+  nothing was reported until the playhead passed the old place; and the
+  baseline was the stored position even when a finished video restarted at
+  zero. `progressDue` is a distance in either direction.
+- **Off, then close, left the server narrating.** The switch is not evidence of
+  a pass — off leaves it running on purpose — so the close button now cancels
+  the pass this sitting *asked for*.
+- **Search said the library was unreachable while somebody typed.** A search
+  cancelled by the next keystroke was caught by `runCatching` as a failure.
+  Cancellation is rethrown, as `WatchViewModel` already did.
+- **Home: the last answer won, not the last question.** `loadMore` wrote back a
+  snapshot from before its request (a "not interested" row returned) and `load`
+  kept no job (a slow chip landed over the one moved to). Every chip switch
+  abandons what is in flight, a page is merged into the state as it is now, and
+  a switch clears the `loadingMore` an abandoned request can no longer clear —
+  a third test, written when the first fix uncovered it.
+- **The save sheet reported success over a refusal.** Only accepted changes
+  become the baseline, refused rows are put back, and the sheet stays open
+  saying so.
+- **The server address stopped the video.** The watch ViewModel lived under
+  `session != null && browsing`; it is held whenever there is a session and
+  `browsing` only decides what is drawn. No unit seam — measured on the
+  emulator by counting the gateway's `stream offered`: 110 → 111 before, 107 →
+  107 after.
+
+### A QA pass picked a profile it was told not to
+
+The glass pass left the simulator as KuTeo, which is what changed the
+playlists it saw. Put back through the Profile page. And `simctl spawn defaults
+write com.xtube.com …` does **not** reach an app's own preferences — it reported
+the new value back while the app went on reading the old one from its
+container.
