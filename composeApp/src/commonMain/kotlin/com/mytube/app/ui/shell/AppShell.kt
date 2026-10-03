@@ -161,7 +161,12 @@ fun AppShell(
     // over whichever screen is showing, including screens that are not this one
     // — and a state created here would be invisible to it.
     val backdrop = LocalBackdrop.current
-    val source = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier
+    // Withdrawn on the way out, like every page's — see [LocalGlassSourceActive].
+    val source = if (backdrop != null && LocalGlassSourceActive.current) {
+        Modifier.layerBackdrop(backdrop)
+    } else {
+        Modifier
+    }
 
     // Measured by the bar and read by every list under it. It is no longer a
     // constant: the bar is the status inset plus a slot, and on a tab that fills

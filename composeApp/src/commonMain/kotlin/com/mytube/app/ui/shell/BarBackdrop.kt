@@ -543,6 +543,7 @@ fun Modifier.selectionLens(
 @Composable
 fun Modifier.glassSource(): Modifier {
     if (LocalGlassRecording.current) return this
+    if (!LocalGlassSourceActive.current) return this
     val backdrop = LocalBackdrop.current ?: return this
     return this.layerBackdrop(backdrop)
 }
@@ -554,6 +555,17 @@ fun Modifier.glassSource(): Modifier {
  * is drawn on its own and records for itself.
  */
 val LocalGlassRecording = androidx.compose.runtime.compositionLocalOf { false }
+
+/**
+ * Whether this page is the one arriving, and so the one allowed to record.
+ *
+ * False for a page on its way out. All pages share one backdrop, and the
+ * library's recording node clears that backdrop's position in `onDetach` — so
+ * a leaving page whose node outlived the transition wiped the position the
+ * arriving page had just set, and every floating pane sampled nothing from
+ * then on. Provided by the route switch in `App`; true everywhere else.
+ */
+val LocalGlassSourceActive = androidx.compose.runtime.compositionLocalOf { true }
 
 /**
  * The same material, for a control that sits **on** the page rather than being

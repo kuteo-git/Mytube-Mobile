@@ -89,6 +89,7 @@ import com.mytube.app.ui.settings.VoiceScreen
 import com.mytube.app.ui.shell.AppShell
 import com.mytube.app.ui.shell.GlassMenu
 import com.mytube.app.ui.shell.LocalBackdrop
+import com.mytube.app.ui.shell.LocalGlassSourceActive
 import com.mytube.app.ui.shell.LocalMiniPlayerShowing
 import com.mytube.app.ui.shell.LocalNativeGlass
 import com.mytube.app.ui.shell.NativeGlassBridge
@@ -754,6 +755,15 @@ fun App(
                     },
                     label = "route",
                 ) { current ->
+                // Only the page arriving records. Every page shares one
+                // backdrop, and a page's recording node clears that backdrop's
+                // position when it detaches — which, for the page leaving, is
+                // after its exit animation, so *after* the arriving page had
+                // registered. Measured: Home → Search → close left every pane on
+                // Home sampling nothing, flat grey for good. Withdrawing the
+                // leaving page's recording as the transition starts puts its
+                // detach before the arriving page is placed.
+                CompositionLocalProvider(LocalGlassSourceActive provides (current == route)) {
                 // Only the screens that *have* a back. On Home the strip would
                 // be a gesture that does nothing, which is worse than none: a
                 // reader who finds it once expects it everywhere.
@@ -1101,7 +1111,8 @@ fun App(
                     )
                 }
                 }
-                }
+                                }
+}
 
             // The chrome the miniplayer sits on, in pixels. Read once: the drag
             // gesture and the bar itself must be built from the same numbers, or
