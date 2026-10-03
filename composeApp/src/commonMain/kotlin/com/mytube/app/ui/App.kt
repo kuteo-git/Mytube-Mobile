@@ -1174,7 +1174,13 @@ fun App(
                 route is Route.Voice || route is Route.Language ||
                 route is Route.History || route is Route.Profile
 
-            if (session != null && browsing) {
+            // The ViewModel is held whenever something is playing; `browsing`
+            // only decides whether it is *drawn*. Both lived under one `if`, so
+            // opening the server address from Settings disposed the ViewModel —
+            // on iOS `release()` pauses — and coming back reloaded the video from
+            // its last report. Not drawing the bar over that form is right; ending
+            // the video somebody is listening to is not.
+            if (session != null) {
                 // `remember` and a DisposableEffect, not `viewModel()`. That
                 // helper stores a ViewModel in the *activity's* store, where it
                 // outlives the screen entirely: every video opened would leave
@@ -1232,6 +1238,8 @@ fun App(
                 LaunchedEffect(watch, voiceLevel, duckLevel) {
                     watch.applyNarrationLevels(voiceLevel, duckLevel)
                 }
+
+                if (browsing) {
 
                 // How far the drag toward the bar has got, reported by the
                 // watch layer. It lives here because the bar the picture is
@@ -1490,6 +1498,7 @@ fun App(
                     }
                 }
 
+                }
             }
 
             // The save sheet, drawn last and therefore on top.
