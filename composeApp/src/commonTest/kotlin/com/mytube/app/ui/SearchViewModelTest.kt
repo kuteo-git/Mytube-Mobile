@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -43,6 +45,30 @@ class SearchViewModelTest {
 
     @AfterTest
     fun tearDown() = Dispatchers.resetMain()
+
+    /**
+     * A search replaced by the next keystroke is not a failure.
+     *
+     * Found by review: the request in flight is cancelled when somebody keeps
+     * typing, and `runCatching` caught the cancellation like any other error —
+     * so the page said the library could not be reached, until the next answer
+     * landed, for a search nobody was waiting on any more.
+     */
+    @Test
+    fun aSearchCancelledByTypingIsNotAFailure() = runTest(dispatcher) {
+        val repo = FakeVideos(local = listOf(video("a")), upstream = listOf(external("b")), answerAfterMillis = 1_000)
+        val model = SearchViewModel(repo)
+
+        model.type("nothing")
+        advanceTimeBy(400)
+        model.type("nothing phone")
+        runCurrent()
+
+        assertIs<SearchState.Searching>(model.state.value)
+        assertIs<UpstreamState.Searching>(model.upstream.value)
+        advanceUntilIdle()
+        assertIs<SearchState.Ready>(model.state.value)
+    }
 
     @Test
     fun asksBothHalvesForEveryQuery() = runTest(dispatcher) {
@@ -350,6 +376,8 @@ class SearchViewModelTest {
         private val ensureFails: Boolean = false,
         private val resolved: String = "",
         private val resolveFails: Boolean = false,
+        /** How long each search takes to answer, so one can be in flight. */
+        private val answerAfterMillis: Long = 0,
     ) : VideoRepository {
         var searchCalls = 0
             private set
@@ -365,6 +393,7 @@ class SearchViewModelTest {
 
         override suspend fun search(query: String): List<Video> {
             searchCalls++
+            if (answerAfterMillis > 0) kotlinx.coroutines.delay(answerAfterMillis)
             if (searchFails) throw IllegalStateException("the library said no")
             return local
         }
@@ -372,6 +401,7 @@ class SearchViewModelTest {
         override suspend fun discover(query: String, limit: Int): List<ExternalVideo> {
             discoverCalls++
             limitsAsked += limit
+            if (answerAfterMillis > 0) kotlinx.coroutines.delay(answerAfterMillis)
             if (discoverFails) throw IllegalStateException("could not reach YouTube")
             return upstream.take(limit)
         }

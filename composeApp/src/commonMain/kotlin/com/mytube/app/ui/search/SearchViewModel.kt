@@ -6,6 +6,7 @@ import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.VideoRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -146,7 +147,12 @@ class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
         // with a spinner on every keystroke makes a list that is mostly
         // still correct flicker away while somebody refines a word.
         if (_state.value !is SearchState.Ready) _state.value = SearchState.Searching
-        _state.value = runCatching { videos.search(text) }.fold(
+        _state.value = runCatching { videos.search(text) }
+            // A search replaced by the next keystroke is cancelled, and
+            // `runCatching` catches that like any error — which drew "could not
+            // reach the library" over a query nobody was waiting on any more.
+            .onFailure { if (it is CancellationException) throw it }
+            .fold(
             onSuccess = { SearchState.Ready(text, it) },
             onFailure = ::asState,
         )
@@ -156,7 +162,9 @@ class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
         val text = _query.value
         val asked = upstreamLimit
         if (_upstream.value !is UpstreamState.Ready) _upstream.value = UpstreamState.Searching
-        _upstream.value = runCatching { videos.discover(text, asked) }.fold(
+        _upstream.value = runCatching { videos.discover(text, asked) }
+            .onFailure { if (it is CancellationException) throw it }
+            .fold(
             onSuccess = {
                 UpstreamState.Ready(videos = it, hasMore = it.size >= asked)
             },
