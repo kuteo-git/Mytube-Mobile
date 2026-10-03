@@ -126,6 +126,44 @@ class WatchQueueTest {
     }
 
     /**
+     * Closing cancels a pass this sitting started, even with the switch off.
+     *
+     * Switching narration off leaves the pass running on purpose — it is
+     * writing lines the next viewing would pay for again — so the switch is not
+     * evidence that nothing is running. The close button checked it anyway, and
+     * off-then-close left the server translating to the end of a video nobody
+     * was watching. Found by review.
+     */
+    @Test
+    fun `closing cancels the pass even after narration was switched off`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"))
+        val narration = NarratedOnly("first")
+        val model = open(videos, queue = emptyList(), narration = narration)
+        model.toggleNarration()
+        advanceUntilIdle()
+        model.toggleNarration()
+        advanceUntilIdle()
+
+        model.stop()
+        advanceUntilIdle()
+
+        assertEquals(listOf("first"), narration.stopped)
+    }
+
+    /** And asks nothing of the server when no pass was ever started. */
+    @Test
+    fun `closing without narration cancels nothing`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"))
+        val narration = NarratedOnly("first")
+        val model = open(videos, queue = emptyList(), narration = narration)
+
+        model.stop()
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), narration.stopped)
+    }
+
+    /**
      * Retry must not buy the write twice.
      *
      * `load()` runs `ensureInCatalogue` every time, and `retry()` is `load()`.
@@ -340,8 +378,11 @@ class WatchQueueTest {
 
     /** A pass that has finished for [videoId] and has nothing for anything else. */
     private class NarratedOnly(private val videoId: String) : NarrationRepository {
+        val stopped = mutableListOf<String>()
         override suspend fun start(videoId: String, fromSeconds: Double) {}
-        override suspend fun stop(videoId: String) {}
+        override suspend fun stop(videoId: String) {
+            stopped += videoId
+        }
         override suspend fun state(videoId: String) = Narration(
             NarrationStatus.Done,
             done = 1,

@@ -339,6 +339,15 @@ class WatchViewModel(
     /** The position last sent to the server, so the next report can be spaced. */
     private var lastReported = 0.0
 
+    /**
+     * The video this sitting asked the server to narrate, or empty.
+     *
+     * What the close button cancels. Not the switch: switching narration off
+     * leaves the pass running on purpose, so `narrating == false` says nothing
+     * about whether the server is still spending on this video.
+     */
+    private var passAskedFor = ""
+
     /** The poll watching the server's narration pass, cancelled when it ends. */
     private var narrationPoll: Job? = null
 
@@ -639,6 +648,7 @@ class WatchViewModel(
             val from = current.playback.positionSeconds
             runCatching { narration.start(current.video.id, from) }
                 .onFailure { return@launch }
+            passAskedFor = current.video.id
             while (true) {
                 val state = runCatching { narration.state(current.video.id) }.getOrNull()
                 if (state != null) {
@@ -754,7 +764,7 @@ class WatchViewModel(
      */
     private fun stopNarrationPass() {
         val current = _state.value as? WatchState.Playing ?: return
-        if (!current.narrating) return
+        if (passAskedFor != current.video.id) return
         narrationPoll?.cancel()
         narrationPoll = null
         viewModelScope.launch(NonCancellable) {
