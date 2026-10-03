@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.update
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -100,6 +102,23 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
     private val _state = MutableStateFlow<HomeState>(HomeState.Loading)
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
+    /**
+     * The page being fetched, and the next page being fetched.
+     *
+     * Kept so a new load can cancel both. Without them the answer that arrived
+     * *last* won, not the one asked for last: a slow chip somebody had already
+     * left landed over the one they moved to, and a next page for the old list
+     * was appended to the new one.
+     */
+    private var loading: Job? = null
+    private var loadingMore: Job? = null
+
+    /** Whatever is in flight is for a page nobody is looking at any more. */
+    private fun abandonFetches() {
+        loading?.cancel()
+        loadingMore?.cancel()
+    }
+
     init {
         load(Chip.All, showLoading = true)
     }
@@ -123,6 +142,11 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
             // taken off it.
             remember(current)
 
+            // Every way off this chip, the cached one included: going back to a
+            // list held in the drawer fetches nothing, so without this a slow
+            // answer for the chip just left lands on top of it.
+            abandonFetches()
+
             val seen = cache[chip.key]
             if (seen != null) {
                 // Straight back to what was there, then refreshed underneath.
@@ -138,6 +162,9 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
                     continueWatching = seen.continueWatching,
                     nextPageToken = seen.nextPageToken,
                     switching = false,
+                    // The next page that was loading belonged to the chip just
+                    // left and was abandoned above, so nothing will clear this.
+                    loadingMore = false,
                 )
                 // **And then, usually, nothing.**
                 //
@@ -164,6 +191,7 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
                 continueWatching = emptyList(),
                 nextPageToken = "",
                 switching = true,
+                loadingMore = false,
             )
             load(chip, showLoading = false)
             return
@@ -250,8 +278,8 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         if (current.selected == Chip.Live) return
 
         _state.update { current.copy(loadingMore = true) }
-        viewModelScope.launch {
-            _state.value = runCatching {
+        loadingMore = viewModelScope.launch {
+            val page = runCatching {
                 // The one place the kind of chip decides where a page comes
                 // from. Everything else reads a token it was handed.
                 if (current.selected == Chip.Missed) {
@@ -259,19 +287,25 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
                 } else {
                     videos.feed(topic = topicOf(current.selected), pageToken = current.nextPageToken)
                 }
-            }.fold(
-                onSuccess = {
-                    current.copy(
-                        videos = current.videos.appendNew(it.videos),
-                        nextPageToken = it.nextPageToken,
+            }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+            // Merged into the state as it is *now*, not into `current`: a row
+            // taken off with "not interested" during the wait would otherwise be
+            // written back by the copy read before it. A page that failed to
+            // arrive leaves what is on screen alone — replacing a working list
+            // with an error because the *next* page failed takes away what the
+            // viewer had.
+            _state.update { now ->
+                if (now !is HomeState.Ready) return@update now
+                if (page == null || now.selected != current.selected) {
+                    now.copy(loadingMore = false)
+                } else {
+                    now.copy(
+                        videos = now.videos.appendNew(page.videos),
+                        nextPageToken = page.nextPageToken,
                         loadingMore = false,
                     )
-                },
-                // A page that failed to arrive leaves what is already on screen
-                // alone. Replacing a working list with an error because the
-                // *next* page failed takes away what the viewer had.
-                onFailure = { current.copy(loadingMore = false) },
-            )
+                }
+            }
         }
     }
 
@@ -280,11 +314,14 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         if (showLoading) _state.value = HomeState.Loading
         else if (refreshing && previous != null) _state.update { previous.copy(refreshing = true) }
 
-        viewModelScope.launch {
-            _state.value = runCatching { fetch(chip, previous) }.fold(
-                onSuccess = { it },
-                onFailure = ::asState,
-            )
+        abandonFetches()
+        loading = viewModelScope.launch {
+            _state.value = runCatching { fetch(chip, previous) }
+                .onFailure { if (it is CancellationException) throw it }
+                .fold(
+                    onSuccess = { it },
+                    onFailure = ::asState,
+                )
         }
     }
 
