@@ -5436,3 +5436,70 @@ exception's own message — under a translated title. The MEDIUM and LOW finding
 ViewModels piling up in the activity store, three screens without previews,
 `X-User-Id` attached by hand at forty call sites) are recorded here and not
 fixed in this round.
+
+## The glass forgot the page after a detail page, and six MEDIUMs (2026-10-03)
+
+### Only the arriving page records
+
+Reported with exact steps: Home → Search → close, and every pane on Home — the
+tab bar, the miniplayer, the search button — turned flat grey and stayed that
+way. QA then found the same on Channel back, Watch history back,
+Subscriptions back and Search → channel → back, on iOS and on Android alike.
+
+All pages share one `LayerBackdrop`, and the library's `LayerBackdropNode`
+clears that backdrop's coordinates in `onDetach` — read off the bytecode,
+since the artifact ships without sources. A page leaving by an animated
+transition detaches *after its exit animation*, by which time the arriving
+page has set them, so the leaving page wiped them and nothing set them again:
+the arriving page's node only reports a position when it moves, and scrolling
+a list does not move it.
+
+`LocalGlassSourceActive` is provided by the route switch as `current ==
+route`, and both `glassSource()` and `AppShell`'s recording withdraw when it is
+false. The leaving page detaches as the transition starts, before the arriving
+page is placed.
+
+- **Why some pages never showed it** — Saved, a playlist, Voice, Language — is
+  not established. The fix does not depend on it: no page records while it is
+  leaving.
+- **The loop is a tab-bar PSNR against a fresh-launch shot** of the same page:
+  `inf` when the glass still shows Home, 17–27 dB when it does not. A baseline
+  taken after other navigation can already be broken, which QA found by having
+  a whole pass come out green.
+- **Measured**: all five paths `inf` on iOS after, and the Search case twice on
+  Android; the miniplayer by eye, since its marquee defeats a pixel compare.
+
+### Six MEDIUMs from the review, each red first
+
+- **Progress after a seek back.** `position - lastReported` went negative and
+  nothing was reported until the playhead passed the old place; and the
+  baseline was the stored position even when a finished video restarted at
+  zero. `progressDue` is a distance in either direction.
+- **Off, then close, left the server narrating.** The switch is not evidence of
+  a pass — off leaves it running on purpose — so the close button now cancels
+  the pass this sitting *asked for*.
+- **Search said the library was unreachable while somebody typed.** A search
+  cancelled by the next keystroke was caught by `runCatching` as a failure.
+  Cancellation is rethrown, as `WatchViewModel` already did.
+- **Home: the last answer won, not the last question.** `loadMore` wrote back a
+  snapshot from before its request (a "not interested" row returned) and `load`
+  kept no job (a slow chip landed over the one moved to). Every chip switch
+  abandons what is in flight, a page is merged into the state as it is now, and
+  a switch clears the `loadingMore` an abandoned request can no longer clear —
+  a third test, written when the first fix uncovered it.
+- **The save sheet reported success over a refusal.** Only accepted changes
+  become the baseline, refused rows are put back, and the sheet stays open
+  saying so.
+- **The server address stopped the video.** The watch ViewModel lived under
+  `session != null && browsing`; it is held whenever there is a session and
+  `browsing` only decides what is drawn. No unit seam — measured on the
+  emulator by counting the gateway's `stream offered`: 110 → 111 before, 107 →
+  107 after.
+
+### A QA pass picked a profile it was told not to
+
+The glass pass left the simulator as KuTeo, which is what changed the
+playlists it saw. Put back through the Profile page. And `simctl spawn defaults
+write com.xtube.com …` does **not** reach an app's own preferences — it reported
+the new value back while the app went on reading the old one from its
+container.
