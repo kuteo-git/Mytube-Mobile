@@ -13,7 +13,7 @@ thoại đi quanh nhà.
   <img src="docs/screenshots/demo.gif" width="30%" alt="Cuộn feed trong khi miniplayer vẫn chạy, mở lên, phụ đề trên hình, bảng cài đặt, rồi thu lại" />
 </p>
 <p align="center">
-  <em>Quay trên iPhone. <a href="docs/screenshots/demo.mp4">Cùng đoạn đó, chất lượng đầy đủ.</a></em>
+  <em>Quay trên simulator iPhone 16e, bản v0.1.11. <a href="docs/screenshots/demo.mp4">Cùng đoạn đó, chất lượng đầy đủ.</a></em>
 </p>
 
 <p align="center">

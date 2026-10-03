@@ -13,7 +13,7 @@ while walking around the house with a phone in a pocket.
   <img src="docs/screenshots/demo.gif" width="30%" alt="Scrolling the feed while the miniplayer keeps playing, expanding it, subtitles over the picture, the settings sheet, then collapsing back" />
 </p>
 <p align="center">
-  <em>Recorded on an iPhone. <a href="docs/screenshots/demo.mp4">Same clip at full quality.</a></em>
+  <em>Recorded on the iPhone 16e simulator, v0.1.11. <a href="docs/screenshots/demo.mp4">Same clip at full quality.</a></em>
 </p>
 
 <p align="center">
