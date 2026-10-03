@@ -93,6 +93,38 @@ class SavePlaylistViewModelTest {
     }
 
     /**
+     * A refused add is put back, and the sheet does not claim it worked.
+     *
+     * Found by review: every request's failure was swallowed, the new ticks
+     * became the baseline and `onDone` closed the sheet — so a playlist the
+     * server never got the video into stayed ticked, which the charter calls a
+     * control that lies.
+     */
+    @Test
+    fun aRefusedAddIsUntickedAndTheSheetStaysOpen() = runTest(dispatcher) {
+        val repo = FakePlaylists(
+            lists = listOf(playlist("pl_music"), playlist("pl_news")),
+            refuseAddTo = setOf("pl_news"),
+        )
+        val model = SavePlaylistViewModel(SaveTarget("v1"), repo)
+        advanceUntilIdle()
+
+        model.toggle("pl_music")
+        model.toggle("pl_news")
+        var closed = false
+        model.save { closed = true }
+        advanceUntilIdle()
+
+        val ready = assertIs<SaveSheetState.Ready>(model.state.value)
+        assertEquals(setOf("pl_music"), ready.ticked)
+        assertTrue(ready.saveFailed)
+        assertFalse(closed)
+        // What did land is the new baseline: pressing Save again sends nothing
+        // for it rather than adding it twice.
+        assertFalse(model.hasChanges(ready))
+    }
+
+    /**
      * The pinned row and the playlist rows are independent.
      *
      * The saved shelf is not a playlist — it is the pinned set — so it travels
@@ -264,6 +296,8 @@ class SavePlaylistViewModelTest {
     private class FakePlaylists(
         private val lists: List<Playlist>,
         private val ensured: String = "",
+        /** Playlists whose add the server refuses. */
+        private val refuseAddTo: Set<String> = emptySet(),
     ) : VideoRepository {
         val askedAbout = mutableListOf<String>()
         val added = mutableListOf<Pair<String, String>>()
@@ -278,6 +312,7 @@ class SavePlaylistViewModelTest {
         }
 
         override suspend fun addToPlaylist(playlistId: String, videoId: String) {
+            if (playlistId in refuseAddTo) throw IllegalStateException("gateway answered 500")
             added += playlistId to videoId
         }
 

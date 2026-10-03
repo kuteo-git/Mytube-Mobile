@@ -224,6 +224,12 @@ fun BoxScope.SavePlaylistSheetContent(
                     }
 
                     Spacer(Modifier.height(Space.lg))
+                    // The rows have already been put back to what the library
+                    // holds; this says why the sheet did not close.
+                    if (state.saveFailed) {
+                        Text(strings.someChangesNotSaved, color = Tokens.text2, fontSize = 14.sp)
+                        Spacer(Modifier.height(Space.sm))
+                    }
                     GlassButton(
                         label = strings.savePlaylist,
                         onClick = onSave,

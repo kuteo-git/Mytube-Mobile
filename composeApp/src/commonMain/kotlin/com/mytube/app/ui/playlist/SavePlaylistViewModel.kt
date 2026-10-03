@@ -40,6 +40,11 @@ sealed interface SaveSheetState {
         val creating: Boolean,
         val newName: String,
         val saving: Boolean,
+        /**
+         * The last Save had a change the server refused. Those rows are put
+         * back to what the library holds, and the sheet stays open to say so.
+         */
+        val saveFailed: Boolean = false,
     ) : SaveSheetState
 }
 
@@ -176,27 +181,38 @@ class SavePlaylistViewModel(
             onDone(ready.savedTicked)
             return
         }
-        _state.value = ready.copy(saving = true)
+        _state.value = ready.copy(saving = true, saveFailed = false)
         viewModelScope.launch {
             val videoId = resolveVideoId()
             if (videoId.isEmpty()) {
-                update { it.copy(saving = false) }
+                update { it.copy(saving = false, saveFailed = true) }
                 return@launch
             }
 
+            // What the library holds afterwards, built only from what it
+            // accepted. Every failure used to be swallowed and the ticks taken
+            // as the truth, so a refused add stayed ticked and the sheet closed
+            // as though it had worked — a control that lies.
+            var landed = original
             for (id in ready.ticked - original) {
-                runCatching { videos.addToPlaylist(id, videoId) }
+                if (runCatching { videos.addToPlaylist(id, videoId) }.isSuccess) landed = landed + id
             }
             for (id in original - ready.ticked) {
-                runCatching { videos.removeFromPlaylist(id, videoId) }
+                if (runCatching { videos.removeFromPlaylist(id, videoId) }.isSuccess) landed = landed - id
             }
+            var pinned = originallySaved
             if (ready.savedTicked != originallySaved) {
-                runCatching { videos.setSaved(videoId, ready.savedTicked) }
+                if (runCatching { videos.setSaved(videoId, ready.savedTicked) }.isSuccess) pinned = ready.savedTicked
             }
-            original = ready.ticked
-            originallySaved = ready.savedTicked
-            update { it.copy(saving = false) }
-            onDone(ready.savedTicked)
+            original = landed
+            originallySaved = pinned
+            val refused = landed != ready.ticked || pinned != ready.savedTicked
+            update {
+                it.copy(saving = false, ticked = landed, savedTicked = pinned, saveFailed = refused)
+            }
+            // Told only when everything landed. Closing over a refusal would
+            // say the opposite of what the rows now show.
+            if (!refused) onDone(pinned)
         }
     }
 

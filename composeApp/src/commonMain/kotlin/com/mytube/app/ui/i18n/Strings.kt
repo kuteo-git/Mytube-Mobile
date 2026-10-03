@@ -217,6 +217,8 @@ interface Strings {
     val playlistName: String
     val createPlaylist: String
     val savePlaylist: String
+    /** Above Save when the library refused part of it; the rows show what it holds. */
+    val someChangesNotSaved: String
 
     /** Taking a video off *this* playlist page, said on the page itself. */
     val removeFromPlaylist: String
@@ -430,6 +432,7 @@ object EnglishStrings : Strings {
     override val playlistName = "Playlist name"
     override val createPlaylist = "Create"
     override val savePlaylist = "Save"
+    override val someChangesNotSaved = "Some changes were not saved"
     override val removeFromPlaylist = "Remove from playlist"
     override val renamePlaylist = "Rename"
     override val deletePlaylist = "Delete playlist"
@@ -607,6 +610,7 @@ object VietnameseStrings : Strings {
     override val playlistName = "Tên playlist"
     override val createPlaylist = "Tạo"
     override val savePlaylist = "Lưu"
+    override val someChangesNotSaved = "Một số thay đổi chưa được lưu"
     override val removeFromPlaylist = "Bỏ khỏi playlist"
     override val renamePlaylist = "Đổi tên"
     override val deletePlaylist = "Xoá playlist"
