@@ -57,6 +57,17 @@ const val PHONE_MAX_HEIGHT = 720
 private const val PROGRESS_EVERY_SECONDS = 10.0
 
 /**
+ * Whether the playhead is far enough from the last report to report again.
+ *
+ * A *distance*, in either direction. As `position - lastReported` it was
+ * negative after a seek back, so nothing was reported until the playhead passed
+ * the old position again — and Continue watching pointed at a place the viewer
+ * had left.
+ */
+internal fun progressDue(position: Double, lastReported: Double): Boolean =
+    kotlin.math.abs(position - lastReported) >= PROGRESS_EVERY_SECONDS
+
+/**
  * How often the narration pass is asked how it is getting on.
  *
  * Three seconds. The pass produces a line every second or so, and each answer
@@ -796,7 +807,7 @@ class WatchViewModel(
 
     private fun reportIfDue(playback: PlaybackState) {
         if (!playback.isPlaying) return
-        if (playback.positionSeconds - lastReported < PROGRESS_EVERY_SECONDS) return
+        if (!progressDue(playback.positionSeconds, lastReported)) return
         report(force = false)
     }
 
@@ -812,7 +823,7 @@ class WatchViewModel(
         // apart, with the playhead in the same place. The second is the same
         // fact and is not sent.
         if (playback.positionSeconds == lastReported) return
-        if (!force && playback.positionSeconds - lastReported < PROGRESS_EVERY_SECONDS) return
+        if (!force && !progressDue(playback.positionSeconds, lastReported)) return
         lastReported = playback.positionSeconds
 
         val position = playback.positionSeconds
@@ -926,7 +937,12 @@ class WatchViewModel(
                             stream.isLive || startAtBeginning -> 0.0
                             else -> video.watchPositionSeconds.toDouble()
                         }
-                        lastReported = resumeAt
+                        // Where playback really starts, which is not always
+                        // where it was left: a video watched to the end opens
+                        // at zero. Counting from the old position instead held
+                        // every report back until the playhead got there again.
+                        val startAt = if (video.isInProgress) resumeAt else 0.0
+                        lastReported = startAt
                         player.load(
                             PlayingMedia(
                                 url = stream.url,
@@ -963,7 +979,7 @@ class WatchViewModel(
                             // `isInProgress` still gates it: a video watched to
                             // the end has its position saved near the end, so
                             // resuming would run out immediately.
-                            if (video.isInProgress) resumeAt else 0.0,
+                            startAt,
                         )
                         if (autoPlay) player.play()
 
