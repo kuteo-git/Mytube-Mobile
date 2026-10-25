@@ -3,6 +3,7 @@ package com.mytube.app.player
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.NarrationClip
+import com.mytube.app.domain.player.isWaitingForBytes
 import com.mytube.app.domain.player.shouldRecoverStall
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
@@ -34,6 +35,7 @@ import platform.AVFoundation.AVPlayerItemStatusReadyToPlay
 import platform.AVFoundation.status
 import platform.AVFoundation.error
 import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
+import platform.AVFoundation.AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate
 import platform.AVFoundation.addPeriodicTimeObserverForInterval
 import platform.AVFoundation.removeTimeObserver
 import platform.AVFoundation.currentItem
@@ -140,6 +142,7 @@ class AvVideoPlayer : VideoPlayer {
         lastRecovery = 0.0
         movedAt = now()
         movedTo = -1.0
+        holdUntilPlayed()
         startWatchdog()
         _state.update { PlaybackState(isLive = media.isLive) }
         val nsUrl = NSURL.URLWithString(media.url) ?: run {
@@ -245,6 +248,20 @@ class AvVideoPlayer : VideoPlayer {
     private var lastRecovery = 0.0
 
     /**
+     * Whether the playhead has moved, while playing, since the item was loaded
+     * or sought — the picture has started. See [isWaitingForBytes].
+     */
+    private var playedSinceLoad = false
+
+    /** The playhead at the last tick, NaN until the first after a load or seek. */
+    private var lastTickSeconds = Double.NaN
+
+    private fun holdUntilPlayed() {
+        playedSinceLoad = false
+        lastTickSeconds = Double.NaN
+    }
+
+    /**
      * The watchdog's own clock, and it cannot be the player's.
      *
      * `addPeriodicTimeObserverForInterval` is driven by the **playback clock** —
@@ -322,6 +339,7 @@ class AvVideoPlayer : VideoPlayer {
         lastRecovery = now()
 
         val url = NSURL.URLWithString(media.url) ?: return
+        holdUntilPlayed()
         av.replaceCurrentItemWithPlayerItem(AVPlayerItem(url))
         if (!isLive && position > 0) seekTo(position)
         // The track has to be chosen again: it belonged to the item that died.
@@ -411,19 +429,34 @@ class AvVideoPlayer : VideoPlayer {
         wantsToPlay = true
         movedAt = now()
         av.play()
+        // Said now rather than on the next tick: the tick runs on the playback
+        // clock, which has not started, so a video opening showed no spinner
+        // until it was already playing — black, for as long as the first
+        // segment took.
+        _state.update { it.copy(isBuffering = buffering()) }
     }
 
     override fun pause() {
         wantsToPlay = false
         av.pause()
+        _state.update { it.copy(isBuffering = buffering()) }
     }
+
+    private fun buffering(): Boolean = isWaitingForBytes(
+        wantsToPlay = wantsToPlay,
+        waitingToPlay = av.timeControlStatus == AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate,
+        playedSinceLoad = playedSinceLoad,
+        itemFailed = av.currentItem?.status == AVPlayerItemStatusFailed,
+    )
 
     override fun seekTo(seconds: Double) {
         // 600 is the timescale Apple's own samples use: it divides evenly by the
         // common frame rates, so a seek lands on a frame boundary rather than
         // between two.
         av.seekToTime(CMTimeMakeWithSeconds(seconds, 600))
-        _state.update { it.copy(positionSeconds = seconds) }
+        // The picture at the new place has not arrived yet.
+        holdUntilPlayed()
+        _state.update { it.copy(positionSeconds = seconds, isBuffering = buffering()) }
     }
 
     override fun stop() {
@@ -479,6 +512,16 @@ class AvVideoPlayer : VideoPlayer {
         ) { time ->
             val item = av.currentItem
             val duration = item?.duration?.let { CMTimeGetSeconds(it) } ?: 0.0
+            // Two ticks in a row with the clock moving forward is a picture
+            // being drawn; AVPlayer's own Playing is not (see
+            // `isWaitingForBytes`).
+            val at = CMTimeGetSeconds(time)
+            if (av.timeControlStatus == AVPlayerTimeControlStatusPlaying &&
+                !lastTickSeconds.isNaN() && at > lastTickSeconds
+            ) {
+                playedSinceLoad = true
+            }
+            lastTickSeconds = at
             // A failed item is otherwise completely silent: the picture stays
             // black, the clock stays at zero, and nothing anywhere says why.
             // Read from this tick rather than through KVO — the observer is
@@ -533,6 +576,9 @@ class AvVideoPlayer : VideoPlayer {
                     // not reach a progress bar: NaN/NaN draws as nothing at all.
                     durationSeconds = if (duration.isNaN()) it.durationSeconds else duration,
                     isPlaying = av.timeControlStatus == AVPlayerTimeControlStatusPlaying,
+                    // The tick also fires as playback starts or stops, which
+                    // is every moment this changes.
+                    isBuffering = buffering(),
                 )
             }
             // The lock screen is told from the same tick. iOS interpolates
