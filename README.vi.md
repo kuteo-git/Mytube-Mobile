@@ -2,12 +2,12 @@
 
 [English](README.md) · **Tiếng Việt**
 
-Ứng dụng Android và iOS gốc cho [Local Mytube](https://github.com/kuteo-git/Mytube),
+Ứng dụng Android, Android TV và iOS gốc cho [Local Mytube](https://github.com/kuteo-git/Mytube),
 thư viện phim tự dựng chạy trên một máy Mac ở nhà.
 
 Nó tồn tại để phát tiếng khi màn hình đã tắt, việc mà trình duyệt không làm được.
 Trên máy tính thì web app vẫn tốt hơn và vẫn là bản chính; cái này để cầm điện
-thoại đi quanh nhà.
+thoại đi quanh nhà — và, cùng một APK đó, xem trên TV bằng remote.
 
 <p align="center">
   <img src="docs/screenshots/demo.gif" width="30%" alt="Cuộn feed trong khi miniplayer vẫn chạy, mở lên, phụ đề trên hình, bảng cài đặt, rồi thu lại" />
@@ -25,6 +25,22 @@ thoại đi quanh nhà.
   <img src="docs/screenshots/player-settings.png" width="30%" alt="Bảng cài đặt của trình phát: phụ đề, giọng Việt kèm tiến độ, tự phát" />
   <img src="docs/screenshots/miniplayer.png" width="30%" alt="Miniplayer vẫn chạy sau khi kéo màn hình xem xuống" />
   <img src="docs/screenshots/settings.png" width="30%" alt="Cài đặt: địa chỉ máy chủ, hồ sơ, lịch sử, kênh đăng ký, giọng đọc, ngôn ngữ" />
+</p>
+
+### Trên TV
+
+Cùng một APK, chạy trên Android TV và Google TV, bố cục cho remote.
+
+<p align="center">
+  <img src="docs/screenshots/tv-home.jpg" width="48%" alt="Trang chủ trên TV: các kệ video dưới thanh rail hẹp, thẻ đang chọn nổi lên với viền trắng" />
+  <img src="docs/screenshots/tv-player.jpg" width="48%" alt="Trình phát toàn màn hình khi hiện điều khiển: thanh tua, nút phát, phụ đề, thuyết minh, thích, lưu, và Tiếp theo dọc phía dưới" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/tv-menu.jpg" width="48%" alt="Giữ OK trên một thẻ để mở menu: Lưu vào playlist" />
+  <img src="docs/screenshots/tv-search.jpg" width="48%" alt="Tìm kiếm với bàn phím trên màn hình và micro, kết quả thư viện bên phải" />
+</p>
+<p align="center">
+  <em>Emulator Android TV, 1920×1080, bản v0.1.12.</em>
 </p>
 
 ## Nó làm được gì
@@ -47,6 +63,11 @@ thoại đi quanh nhà.
   hàng trong catalogue được ghi trước, nên trình phát không bao giờ mở vào chỗ
   trống.
 - **Tiếng Anh và tiếng Việt**, chọn theo từng máy.
+- **TV**, cùng một APK trên Android TV và Google TV: thanh rail thay cho thanh
+  tab, trang chủ dạng kệ, trình phát toàn màn hình tua bằng D-pad có ảnh xem
+  trước, Tiếp theo nằm dưới điều khiển, giữ OK để mở menu của thẻ, tìm kiếm với
+  bàn phím trên màn hình và giọng nói, và câu hỏi *Ai đang xem* chỉ hỏi một lần,
+  đổi trong Cài đặt.
 
 ## Nó cần gì
 
@@ -81,6 +102,9 @@ phủ là khâu link cho iOS và `iosSimulatorArm64Test`, ghi ra là chưa phủ
 lặng lẽ bỏ qua.
 
 - **Android**: `./gradlew :composeApp:assembleDebug`.
+- **Android TV**: cùng APK đó. `tools/tv-install.sh <adb serial>` cài bản release
+  đã ký và biên dịch trước luôn — cài kiểu sideload thì app chạy thông dịch cho
+  đến lúc TV tự bảo trì ban đêm, và giật cho đến lúc đó.
 - **iOS**: mở `iosApp/iosApp.xcodeproj`, dựng với SDK iOS 26. Framework Kotlin do
   một build phase biên dịch, và phase đó `source env.sh`. Thiếu dòng ấy thì bản
   dựng trong Xcode hỏng trong khi bản dựng ở terminal chạy tốt, đọc lên như một

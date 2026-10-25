@@ -2,12 +2,13 @@
 
 **English** · [Tiếng Việt](README.vi.md)
 
-A native Android and iOS client for [Local Mytube](https://github.com/kuteo-git/Mytube),
+A native Android, Android TV and iOS client for [Local Mytube](https://github.com/kuteo-git/Mytube),
 a self-hosted media library that runs on a Mac at home.
 
 It exists to play audio with the screen off, which a browser cannot do. The web
 app is better on a desktop and stays the primary client; this is what gets used
-while walking around the house with a phone in a pocket.
+while walking around the house with a phone in a pocket — and, from the same
+APK, on the television, with a remote.
 
 <p align="center">
   <img src="docs/screenshots/demo.gif" width="30%" alt="Scrolling the feed while the miniplayer keeps playing, expanding it, subtitles over the picture, the settings sheet, then collapsing back" />
@@ -25,6 +26,22 @@ while walking around the house with a phone in a pocket.
   <img src="docs/screenshots/player-settings.png" width="30%" alt="The player's settings sheet: subtitles, Vietnamese voice with the pass's progress, autoplay" />
   <img src="docs/screenshots/miniplayer.png" width="30%" alt="The miniplayer, still playing over the feed after the watch screen was dragged down" />
   <img src="docs/screenshots/settings.png" width="30%" alt="Settings: server address, profile, history, subscriptions, voice, language" />
+</p>
+
+### On the television
+
+The same APK, on Android TV and Google TV, laid out for a remote.
+
+<p align="center">
+  <img src="docs/screenshots/tv-home.jpg" width="48%" alt="Home on a television: shelves under a narrow rail, the focused card lifted with a white rim" />
+  <img src="docs/screenshots/tv-player.jpg" width="48%" alt="The full-screen player with its controls up: seek bar, transport, captions, narration, like, save, and up next along the bottom" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/tv-menu.jpg" width="48%" alt="Holding OK on a card opens its menu: Save to playlist" />
+  <img src="docs/screenshots/tv-search.jpg" width="48%" alt="Search with the on-screen keyboard and a microphone, library results on the right" />
+</p>
+<p align="center">
+  <em>Android TV emulator, 1920×1080, v0.1.12.</em>
 </p>
 
 ## What it does
@@ -48,6 +65,11 @@ while walking around the house with a phone in a pocket.
 - **Search**, which reaches the library *and* YouTube. Opening an upstream result
   writes its catalogue row first, so the player never lands on nothing.
 - **English and Vietnamese**, chosen per device.
+- **The television**, from the same APK on Android TV and Google TV: a rail
+  instead of the tab bar, Home as shelves, a full-screen player with D-pad
+  seeking over a storyboard preview, up next under the controls, a held OK for a
+  card's menu, search with an on-screen keyboard and voice, and *Who's watching*
+  asked once and changed in Settings.
 
 ## What it needs
 
@@ -82,6 +104,9 @@ therefore does not cover is iOS linking and `iosSimulatorArm64Test`, recorded as
 uncovered rather than quietly dropped.
 
 - **Android**: `./gradlew :composeApp:assembleDebug`.
+- **Android TV**: the same APK. `tools/tv-install.sh <adb serial>` installs the
+  signed release and compiles it ahead of time — sideloaded, it would run
+  interpreted until the television's nightly maintenance, and stutter until then.
 - **iOS**: `iosApp/iosApp.xcodeproj`, built against an iOS 26 SDK. The Kotlin
   framework is compiled by a build phase that sources `env.sh`. Without it the
   Xcode build fails where the terminal build succeeds, which reads as a broken
