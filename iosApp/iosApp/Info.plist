@@ -19,9 +19,9 @@
 	     at 1.0 is why a build on the phone could not be told from the one
 	     before it. -->
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.12</string>
+	<string>0.1.13</string>
 	<key>CFBundleVersion</key>
-	<string>12</string>
+	<string>13</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 
