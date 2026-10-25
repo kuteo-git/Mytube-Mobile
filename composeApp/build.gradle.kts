@@ -181,6 +181,12 @@ android {
             // client on the house wifi — nothing here is paying for the few
             // megabytes shrinking would save, and §8's rule is that nothing is
             // called done because it compiled.
+            //
+            // **And it was measured slower.** On the household's Chromecast an
+            // R8 build scrolled Home at a p50 of 48ms against 22ms, five runs
+            // of five, alternated with this build — though its main thread did
+            // a fifth less work: its frames waited in `queueBuffer` 2.6 times
+            // as long. Cause not found; see the changelog, 2026-10-25.
             isMinifyEnabled = false
         }
     }

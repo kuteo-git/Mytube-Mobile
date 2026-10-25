@@ -5650,14 +5650,16 @@ traces read with `trace_processor`.
   launcher's key service enabled as accessibility services, and with either on
   Compose diffs its semantics tree after every frame — 1.3s of a 14s Home trace
   (`checkForSemanticsChanges`, `sendAccessibilitySemanticsStructureChangeEvents`).
-- **Not done, a decision:** the release is not run through R8
-  (`isMinifyEnabled = false`, §9). The remaining main-thread time is Compose's
-  own; R8 is what strips its source-information and trace calls. One trial
-  build: it built with no keep rules of its own, shrank the APK from 14.4MB to
-  3.9MB, launched and loaded Home on the TV — and measured *worse* (p50 46ms),
-  in a run where the TV had 241MB free and its swap full. The control run on
-  the plain build lost its frames to the TV going to sleep. Inconclusive; to be
-  measured again A/B/A with the TV kept awake. `composeApp/proguard-rules.pro`
-  is the trial's, otherwise empty.
+- **R8 was measured, and it is slower here.** Same source, minified and not,
+  each compiled `speed`, alternated on the Chromecast with the screen held on
+  (`stay_on_while_plugged_in`, restored after): R8 five runs of five at a Home
+  p50 of 46–48ms and ~34% janky frames; the plain build 22ms and 6–9% in three
+  of four (the fourth came straight after an R8 install). Traced side by side,
+  R8's main thread ran a fifth *less* (2.8s against 3.5s of 14s) and the GPU
+  work per frame was the same op for op — but its frames waited in
+  `queueBuffer` 1343ms against 520ms (`waitForever` 424ms): presented more
+  slowly, not drawn more slowly. Not a refresh-rate switch (60Hz throughout)
+  and not overdraw (same view). Cause not found; `isMinifyEnabled` stays false,
+  and the build file now says why in numbers too.
 
 400 tests, all green.

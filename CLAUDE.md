@@ -334,7 +334,8 @@ Everything on the external volume; `source env.sh` before working.
   Xcode Kotlin build phase sources it too — Xcode inherits no `JAVA_HOME`.
 - **compileSdk 36** because `androidx.navigationevent` refuses anything older.
 - **Android release**: signed when `keystore.properties` exists, unsigned
-  otherwise (never the debug key); `isMinifyEnabled = false` on purpose.
+  otherwise (never the debug key); `isMinifyEnabled = false` on purpose — and
+  an R8 build measured slower on the TV (p50 48ms vs 22ms, changelog 2026-10-25).
 - **The television is installed with `tools/tv-install.sh <serial>`**, which
   compiles ahead of time: a sideloaded APK runs interpreted until the TV's
   nightly maintenance, and that was half of its jank.
