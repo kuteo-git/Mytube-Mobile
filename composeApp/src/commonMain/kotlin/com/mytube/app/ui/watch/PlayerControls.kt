@@ -518,8 +518,27 @@ fun PlayerControls(
                 // disappears against whatever happens to be behind it, and the
                 // middle of the frame is the one place that cannot be relied on
                 // to be dark.
+                //
+                // **Not while the player is buffering.** The loading badge sits
+                // in the middle of the picture too, and the discs covered it:
+                // on iOS 26 they are drawn by SwiftUI above every Compose pixel,
+                // and on Android this composable is drawn after the badge.
+                // Reported from the phone as the spinner hidden behind pause,
+                // previous and next. The badge takes the middle, as the play
+                // button's place is taken by the spinner on YouTube; the top
+                // row stays, so there is still a way out of a video that never
+                // starts.
+                val showTransport = !playback.isBuffering
+                CompositionLocalProvider(
+                    LocalGlassVisible provides (LocalGlassVisible.current && showTransport),
+                ) {
+                AnimatedVisibility(
+                    showTransport,
+                    modifier = Modifier.align(Alignment.Center),
+                    enter = fadeIn(tween(CONTROLS_FADE_MILLIS)),
+                    exit = fadeOut(tween(CONTROLS_FADE_MILLIS)),
+                ) {
                 Row(
-                    Modifier.align(Alignment.Center),
                     horizontalArrangement = Arrangement.spacedBy(28.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -548,6 +567,8 @@ fun PlayerControls(
                         enabled = hasNext,
                         onClick = { onPlayNext(); lastTouch++ },
                     )
+                }
+                }
                 }
 
                 // The clock as a pill at the bottom left, fullscreen opposite.

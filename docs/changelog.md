@@ -5663,3 +5663,22 @@ traces read with `trace_processor`.
   and the build file now says why in numbers too.
 
 400 tests, all green.
+
+## The loading badge is no longer under the transport discs (2026-10-25)
+
+Reported from the iPhone: while a video loaded, the "Loading video" badge sat
+behind pause, previous and next. Both live in the middle of the picture. On
+iOS 26 the discs are `GlassPane`s drawn by SwiftUI above every Compose pixel,
+so nothing Compose does to the badge's z-order can lift it over them. On
+Android `PlayerControls` is composed after the badge, so it covered it too.
+
+- **While `playback.isBuffering`, the middle row is not shown.** It fades with
+  the controls' own duration, and `LocalGlassVisible` is and-ed so the
+  platform panes leave at the start of the fade, the same as the rest. The
+  top row (collapse, captions, settings) and the bottom row stay, so a video
+  that never starts still has a way out. YouTube does the same: the spinner
+  takes the play button's place.
+- **Not verified on the simulator.** Neither `tools/sim-touch.swift` nor
+  `idb ui tap` reached the simulator that day (idb: "Failed to initialize IO
+  ports for device IO client"), so no picture of the fix was taken. It has to
+  be seen on the phone.
