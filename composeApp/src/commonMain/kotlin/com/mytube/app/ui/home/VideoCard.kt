@@ -112,7 +112,6 @@ fun VideoCard(
      */
     opening: Boolean = false,
 ) {
-    var menuOpen by remember { mutableStateOf(false) }
     // Pressed state, read here rather than left to the default ripple.
     //
     // Measured off the YouTube app: pressing a card fills the **meta row** with
@@ -173,18 +172,7 @@ fun VideoCard(
             )
 
             if (video.durationSeconds > 0) {
-                Text(
-                    text = formatDuration(video.durationSeconds),
-                    color = Tokens.text,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(Space.sm)
-                        .clip(RoundedCornerShape(Radius.badge))
-                        .background(BadgeBackground)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                )
+                DurationBadge(video.durationSeconds)
             }
 
             if (opening) OpeningOverlay()
@@ -194,20 +182,7 @@ fun VideoCard(
             // hairline at zero on every card would be noise, and one at the far
             // end on a finished video is a fact nobody needs on a feed.
             if (video.watchedFraction > 0.01) {
-                Box(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(Tokens.line),
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth(video.watchedFraction.toFloat().coerceIn(0f, 1f))
-                            .fillMaxHeight()
-                            .background(Tokens.brand),
-                    )
-                }
+                WatchedBar(video.watchedFraction)
             }
         }
 
@@ -273,7 +248,7 @@ fun VideoCard(
             // The overflow button. On the web it appears on hover or focus;
             // a phone has neither, so it is always there — which is what the
             // web app itself shows on a phone.
-            VideoCardMenu(video, strings, onSave, saveLabel, onNotInterested)
+            VideoCardMenu(strings, onSave, saveLabel, onNotInterested)
         }
 
         // The gap between cards. Smaller than the web's 40px because the meta
@@ -324,7 +299,6 @@ object Radius {
  */
 @Composable
 fun VideoCardMenu(
-    video: Video,
     strings: Strings,
     onSave: (() -> Unit)?,
     saveLabel: String = "",
@@ -420,6 +394,47 @@ fun BoxScope.OpeningOverlay() {
     }
 }
 
+/** A video's length, in the corner of its picture. */
+@Composable
+fun BoxScope.DurationBadge(seconds: Int) {
+    Text(
+        text = formatDuration(seconds),
+        color = Tokens.text,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(Space.sm)
+            .clip(RoundedCornerShape(Radius.badge))
+            .background(BadgeBackground)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+    )
+}
+
+/**
+ * How far through, drawn in brand red across the bottom of a picture.
+ *
+ * Whether to draw it is the caller's: a feed card only for a video somebody has
+ * started, Continue watching always.
+ */
+@Composable
+fun BoxScope.WatchedBar(fraction: Double) {
+    Box(
+        Modifier
+            .align(Alignment.BottomStart)
+            .fillMaxWidth()
+            .height(3.dp)
+            .background(Tokens.line),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(fraction.toFloat().coerceIn(0f, 1f))
+                .fillMaxHeight()
+                .background(Tokens.brand),
+        )
+    }
+}
+
 object Size {
     /** In a card. The watch page uses 40 and a comment 24. */
     val avatar = 36.dp
@@ -449,16 +464,6 @@ object Size {
      */
     val miniPlayer = topBar + miniGap
     val chip = 32.dp
-
-    /**
-     * The pinned chip row, including the padding above and below it.
-     *
-     * Named here because two places need it and they must not disagree: the row
-     * itself, and the feed's top inset, which has to clear it. The charter
-     * records the web app learning four separate times that a bar's height
-     * belongs in exactly one place.
-     */
-    val chipRow = chip + 24.dp
 }
 
 /** `--badge-bg`: rgba(0,0,0,0.80). */

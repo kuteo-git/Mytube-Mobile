@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.ui.home.Space
+import com.mytube.app.ui.shell.SkeletonLine
 import com.mytube.app.ui.home.avatarColourFor
 import com.mytube.app.ui.home.formatRelative
 import com.mytube.app.ui.i18n.LocalStrings
@@ -318,28 +319,17 @@ private fun CommentSkeleton() {
                 Box(Modifier.size(24.dp).clip(CircleShape).background(shade))
                 Spacer(Modifier.width(Space.md))
                 Column(Modifier.weight(1f)) {
-                    Bar(shade, 0.35f)
+                    SkeletonLine(shade, 0.35f, 12.dp)
                     Spacer(Modifier.height(Space.sm))
-                    Bar(shade, 0.9f)
+                    SkeletonLine(shade, 0.9f, 12.dp)
                     Spacer(Modifier.height(6.dp))
                     // Shorter, so three of these read as paragraphs rather than
                     // as a table.
-                    Bar(shade, 0.6f)
+                    SkeletonLine(shade, 0.6f, 12.dp)
                 }
             }
         }
     }
-}
-
-@Composable
-private fun Bar(shade: Color, width: Float) {
-    Box(
-        Modifier
-            .fillMaxWidth(width)
-            .height(12.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(shade),
-    )
 }
 
 @Composable

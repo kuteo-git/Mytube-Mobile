@@ -1,8 +1,8 @@
 package com.mytube.app.ui.playlist
 
+import com.mytube.app.ui.toScreenState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.VideoRepository
@@ -123,12 +123,7 @@ class PlaylistViewModel(
             _state.value = runCatching { videos.playlist(playlistId) }.fold(
                 onSuccess = { PlaylistState.Ready(it.playlist, it.videos) },
                 onFailure = {
-                    when (it) {
-                        is ServerNotConfigured -> PlaylistState.NeedsServer
-                        else -> PlaylistState.Failed(
-                            it.message ?: "could not reach the library",
-                        )
-                    }
+                    it.toScreenState(PlaylistState.NeedsServer, PlaylistState::Failed)
                 },
             )
         }

@@ -1,6 +1,5 @@
 package com.mytube.app
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.fail
 
@@ -51,7 +50,7 @@ class ScrollRoomGuardTest {
                 // eleven lines below the `LazyRow(` under a comment saying
                 // exactly what it was for.
                 val chain = lines.drop(index)
-                    .filter { !it.trim().startsWith("//") && !it.trim().startsWith("*") }
+                    .filterNot(::isComment)
                     .take(WINDOW)
                     .joinToString("\n")
                 if (!ROOM.containsMatchIn(chain) && !EXEMPT.containsMatchIn(chain)) {
@@ -74,12 +73,6 @@ class ScrollRoomGuardTest {
             )
         }
     }
-
-    private fun uiSources(): List<File> =
-        File("src/commonMain/kotlin/com/mytube/app/ui")
-            .walkTopDown()
-            .filter { it.isFile && it.extension == "kt" }
-            .toList()
 
     private companion object {
         /** A row that scrolls sideways, however it was asked for. */

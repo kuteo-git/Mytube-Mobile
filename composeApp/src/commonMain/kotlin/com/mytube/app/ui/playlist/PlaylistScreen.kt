@@ -216,11 +216,13 @@ fun PlaylistContent(
                             strings = strings,
                             onClick = { onOpenVideo(video.id, queue) },
                             opening = false,
-                            menu = videoMenu(
-                                strings,
-                                onSave = { onRemove(video) },
-                                saveLabel = strings.removeFromPlaylist,
-                            ),
+                            menu = remember(video, strings) {
+                                videoMenu(
+                                    strings,
+                                    onSave = { onRemove(video) },
+                                    saveLabel = strings.removeFromPlaylist,
+                                )
+                            },
                         )
                     }
                 }

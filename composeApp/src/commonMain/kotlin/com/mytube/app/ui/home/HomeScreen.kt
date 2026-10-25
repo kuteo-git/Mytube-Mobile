@@ -34,7 +34,6 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import kotlin.math.roundToInt
 import com.mytube.app.ui.shell.BarBackdrop
 import com.mytube.app.ui.shell.GlassButton
-import com.mytube.app.ui.shell.LocalBarsHidden
 import com.mytube.app.ui.shell.ChipRowSkeleton
 import com.mytube.app.ui.shell.FeedSkeleton
 import com.mytube.app.ui.shell.TabRefreshIndicator
@@ -115,7 +114,6 @@ fun HomeScreen(
         listState = listState,
         onOpenSettings = onOpenSettings,
         onOpenVideo = onOpenVideo,
-        onSelectChip = viewModel::select,
         onRetry = viewModel::refresh,
         onLoadMore = viewModel::loadMore,
         onSaveVideo = onSaveToPlaylist,
@@ -137,7 +135,6 @@ fun HomeContent(
     mediaBaseUrl: String,
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
-    onSelectChip: (Chip) -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
     onSaveVideo: (Video) -> Unit = {},
@@ -194,7 +191,7 @@ fun HomeContent(
 
             is HomeState.Ready -> Feed(
                 current, listState, mediaBaseUrl, strings,
-                onSelectChip, onOpenVideo, onRetry, onLoadMore,
+                onOpenVideo, onRetry, onLoadMore,
                 onSaveVideo, onNotInterested, onMarkWatched, onOpenChannel,
             )
         }
@@ -208,7 +205,6 @@ private fun Feed(
     listState: LazyListState,
     mediaBaseUrl: String,
     strings: Strings,
-    onSelectChip: (Chip) -> Unit,
     onOpenVideo: (String) -> Unit,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
@@ -411,31 +407,31 @@ private fun sampleReady() = HomeState.Ready(
 @Preview
 @Composable
 private fun HomeReadyPreview() = MytubeTheme {
-    HomeContent(sampleReady(), "", {}, {}, {}, {}, {})
+    HomeContent(sampleReady(), "", {}, {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeVietnamesePreview() = MytubeTheme {
     CompositionLocalProvider(LocalStrings provides VietnameseStrings) {
-        HomeContent(sampleReady(), "", {}, {}, {}, {}, {})
+        HomeContent(sampleReady(), "", {}, {}, {}, {})
     }
 }
 
 @Preview
 @Composable
 private fun HomeNeedsServerPreview() = MytubeTheme {
-    HomeContent(HomeState.NeedsServer, "", {}, {}, {}, {}, {})
+    HomeContent(HomeState.NeedsServer, "", {}, {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeFailedPreview() = MytubeTheme {
-    HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {}, {})
+    HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeLoadingPreview() = MytubeTheme {
-    HomeContent(HomeState.Loading, "", {}, {}, {}, {}, {})
+    HomeContent(HomeState.Loading, "", {}, {}, {}, {})
 }

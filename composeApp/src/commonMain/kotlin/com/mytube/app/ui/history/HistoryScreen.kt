@@ -1,5 +1,6 @@
 package com.mytube.app.ui.history
 
+import androidx.compose.runtime.remember
 import com.mytube.app.ui.home.videoMenu
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
@@ -159,7 +160,7 @@ fun HistoryContent(
                             strings = strings,
                             onClick = { onOpenVideo(video.id) },
                             opening = false,
-                            menu = videoMenu(strings, onSave = { onSaveVideo(video) }),
+                            menu = remember(video, strings) { videoMenu(strings, onSave = { onSaveVideo(video) }) },
                         )
                     }
                 }

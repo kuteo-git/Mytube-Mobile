@@ -2,7 +2,10 @@ package com.mytube.app.ui.home
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
@@ -14,7 +17,7 @@ import androidx.compose.ui.unit.dp
  * once. When the set outgrows a screenful, that is the moment to reconsider —
  * not before.
  */
-private fun icon(name: String, pathData: androidx.compose.ui.graphics.vector.PathBuilder.() -> Unit) =
+internal fun filled(name: String, body: PathBuilder.() -> Unit) =
     ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,
@@ -22,11 +25,31 @@ private fun icon(name: String, pathData: androidx.compose.ui.graphics.vector.Pat
         viewportWidth = 24f,
         viewportHeight = 24f,
     ).apply {
-        path(fill = SolidColor(Color.White)) { pathData() }
+        path(fill = SolidColor(Color.White)) { body() }
+    }.build()
+
+/**
+ * The outlined set's builder: Lucide's 2-unit round stroke, which is what the
+ * tab bar and the player draw.
+ */
+internal fun stroke(name: String, body: PathBuilder.() -> Unit) =
+    ImageVector.Builder(
+        name = name,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round,
+        ) { body() }
     }.build()
 
 val MoreVertical: ImageVector by lazy {
-    icon("MoreVertical") {
+    filled("MoreVertical") {
         moveTo(12f, 8f)
         curveTo(13.1f, 8f, 14f, 7.1f, 14f, 6f)
         curveTo(14f, 4.9f, 13.1f, 4f, 12f, 4f)

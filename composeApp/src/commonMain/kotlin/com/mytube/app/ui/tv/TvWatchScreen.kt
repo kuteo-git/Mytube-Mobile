@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Comment
+import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.StoryboardState
 import com.mytube.app.domain.model.Video
@@ -620,10 +621,19 @@ private fun Playing(
             exit = slideOutHorizontally(tween(FADE_MILLIS)) { it } + fadeOut(tween(FADE_MILLIS)),
             modifier = Modifier.align(Alignment.CenterEnd),
         ) {
+            // The facts each panel reads rather than the whole state, which is
+            // a new object on every tick of the playhead: handed that, an open
+            // panel re-registered every comment four times a second.
             SidePanel(
                 panel = panel,
-                state = state,
-                mediaBaseUrl = mediaBaseUrl,
+                video = state.video,
+                subtitleLanguage = state.subtitleLanguage,
+                canNarrate = state.canNarrate,
+                narrating = state.narrating,
+                autoplay = state.autoplay,
+                comments = state.comments,
+                loadingComments = state.loadingComments,
+                commentsLoaded = state.commentsLoaded,
                 strings = strings,
                 focus = panelFocus,
                 onSelectSubtitles = onSelectSubtitles,
@@ -840,61 +850,88 @@ private fun Controls(
                 )
             }
 
+            // Its own composable, handed the list rather than the state: the
+            // controls follow the playhead four times a second, and the list
+            // is the same object on every tick, so the row skips them all.
             if (state.upNext.isNotEmpty()) {
-                Text(
-                    text = strings.upNext,
-                    color = Tokens.text,
-                    fontSize = 16.sp,
-                    lineHeight = 22.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(start = TV_SAFE_HORIZONTAL, top = Space.sm),
+                UpNextRow(
+                    upNext = state.upNext,
+                    shown = shown,
+                    mediaBaseUrl = mediaBaseUrl,
+                    strings = strings,
+                    firstFocus = upNextFocus,
+                    onFocused = { focusedLabel = "" },
+                    onOpenVideo = onOpenVideo,
+                    onSaveVideo = onSaveVideo,
                 )
-                val upNextState = rememberLazyListState()
-                // Back to its start each time the controls go, as it was when
-                // they were built afresh on every press: Down lands on the
-                // first video, and a row left scrolled would have it out of
-                // the composition. `requestScrollToItem`, because a state with
-                // no layout waits for ever on `scrollToItem`.
-                LaunchedEffect(shown) {
-                    if (!shown) upNextState.requestScrollToItem(0)
-                }
-                LazyRow(
-                    state = upNextState,
-                    // Down from any control lands on the first video, not on
-                    // the one under the control — it is the one that plays
-                    // next, and the row is read from its start.
-                    modifier = Modifier.entersAt(upNextState, index = { 0 }, requester = { upNextFocus }),
-                    // Room for a focused card's rise, past the safe margin.
-                    contentPadding = PaddingValues(
-                        horizontal = TV_SAFE_HORIZONTAL,
-                        vertical = FOCUS_MAX_OUTSET / 2,
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(Space.lg),
-                ) {
-                    itemsIndexed(state.upNext, key = { _, next -> next.id }) { index, next ->
-                        Box(
-                            Modifier
-                                .then(if (index == 0) Modifier.focusRequester(upNextFocus) else Modifier)
-                                .onFocusChanged { if (it.hasFocus) focusedLabel = "" },
-                        ) {
-                            TvVideoCard(
-                                video = next,
-                                mediaBaseUrl = mediaBaseUrl,
-                                strings = strings,
-                                onClick = { onOpenVideo(next.id) },
-                                withMeta = false,
-                                opening = false,
-                                // Remembered: the controls recompose on every
-                                // tick of the playhead, and a new list each time
-                                // was a card that could never skip.
-                                menu = remember(next) { videoMenu(strings, onSave = { onSaveVideo(next) }) },
-                                // Smaller than a shelf's: the row shares the
-                                // screen with the controls above it.
-                                width = UP_NEXT_CARD_WIDTH,
-                            )
-                        }
-                    }
-                }
+            }
+        }
+    }
+}
+
+/** The suggestions under the controls, entered at the one that plays next. */
+@Composable
+private fun UpNextRow(
+    upNext: List<Video>,
+    /** Whether the controls are up; see [Controls]. */
+    shown: Boolean,
+    mediaBaseUrl: String,
+    strings: Strings,
+    firstFocus: FocusRequester,
+    onFocused: () -> Unit,
+    onOpenVideo: (String) -> Unit,
+    onSaveVideo: (Video) -> Unit,
+) {
+    Text(
+        text = strings.upNext,
+        color = Tokens.text,
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.padding(start = TV_SAFE_HORIZONTAL, top = Space.sm),
+    )
+    val upNextState = rememberLazyListState()
+    // Back to its start each time the controls go, as it was when
+    // they were built afresh on every press: Down lands on the
+    // first video, and a row left scrolled would have it out of
+    // the composition. `requestScrollToItem`, because a state with
+    // no layout waits for ever on `scrollToItem`.
+    LaunchedEffect(shown) {
+        if (!shown) upNextState.requestScrollToItem(0)
+    }
+    LazyRow(
+        state = upNextState,
+        // Down from any control lands on the first video, not on
+        // the one under the control — it is the one that plays
+        // next, and the row is read from its start.
+        modifier = Modifier.entersAt(upNextState, index = { 0 }, requester = { firstFocus }),
+        // Room for a focused card's rise, past the safe margin.
+        contentPadding = PaddingValues(
+            horizontal = TV_SAFE_HORIZONTAL,
+            vertical = FOCUS_MAX_OUTSET / 2,
+        ),
+        horizontalArrangement = Arrangement.spacedBy(Space.lg),
+    ) {
+        itemsIndexed(upNext, key = { _, next -> next.id }) { index, next ->
+            Box(
+                Modifier
+                    .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                    .onFocusChanged { if (it.hasFocus) onFocused() },
+            ) {
+                TvVideoCard(
+                    video = next,
+                    mediaBaseUrl = mediaBaseUrl,
+                    strings = strings,
+                    onClick = { onOpenVideo(next.id) },
+                    withMeta = false,
+                    opening = false,
+                    // Remembered: a new list each time is a card that can
+                    // never skip.
+                    menu = remember(next, strings) { videoMenu(strings, onSave = { onSaveVideo(next) }) },
+                    // Smaller than a shelf's: the row shares the
+                    // screen with the controls above it.
+                    width = UP_NEXT_CARD_WIDTH,
+                )
             }
         }
     }
@@ -1086,17 +1123,22 @@ private fun ChannelControl(
 @Composable
 private fun SidePanel(
     panel: TvPanel,
-    state: WatchState.Playing,
-    mediaBaseUrl: String,
+    video: Video,
+    subtitleLanguage: String,
+    canNarrate: Boolean,
+    narrating: Boolean,
+    autoplay: Boolean,
+    comments: List<Comment>,
+    loadingComments: Boolean,
+    commentsLoaded: Boolean,
     strings: Strings,
     focus: FocusRequester,
     onSelectSubtitles: (String) -> Unit,
     onToggleNarration: () -> Unit,
     onToggleAutoplay: () -> Unit,
 ) {
-    // Split once per description: the panel is rebuilt with every tick of the
-    // playhead, and the text changes only with the video.
-    val paragraphs = remember(state.video.description) { paragraphsOf(state.video.description) }
+    // Split once per description, not on every recomposition of the panel.
+    val paragraphs = remember(video.description) { paragraphsOf(video.description) }
     Box(
         Modifier
             .fillMaxHeight()
@@ -1115,9 +1157,12 @@ private fun SidePanel(
         ) {
             when (panel) {
                 TvPanel.None -> Unit
-                TvPanel.Settings -> settingsRows(state, strings, focus, onSelectSubtitles, onToggleNarration, onToggleAutoplay)
-                TvPanel.Comments -> commentRows(state, strings, focus)
-                TvPanel.Description -> descriptionRows(state.video, paragraphs, strings, focus)
+                TvPanel.Settings -> settingsRows(
+                    video.subtitles, subtitleLanguage, canNarrate, narrating, autoplay,
+                    strings, focus, onSelectSubtitles, onToggleNarration, onToggleAutoplay,
+                )
+                TvPanel.Comments -> commentRows(comments, loadingComments, commentsLoaded, strings, focus)
+                TvPanel.Description -> descriptionRows(video, paragraphs, strings, focus)
             }
         }
     }
@@ -1137,7 +1182,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.panelTitle(text: Stri
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.settingsRows(
-    state: WatchState.Playing,
+    subtitles: List<SubtitleTrack>,
+    subtitleLanguage: String,
+    canNarrate: Boolean,
+    narrating: Boolean,
+    autoplay: Boolean,
     strings: Strings,
     focus: FocusRequester,
     onSelectSubtitles: (String) -> Unit,
@@ -1151,32 +1200,34 @@ private fun androidx.compose.foundation.lazy.LazyListScope.settingsRows(
     item(key = "subtitles-off") {
         PanelRow(
             label = strings.off,
-            selected = state.subtitleLanguage.isEmpty(),
-            onClick = { if (state.subtitleLanguage.isNotEmpty()) onSelectSubtitles(state.subtitleLanguage) },
+            selected = subtitleLanguage.isEmpty(),
+            onClick = { if (subtitleLanguage.isNotEmpty()) onSelectSubtitles(subtitleLanguage) },
             modifier = Modifier.focusRequester(focus),
         )
     }
-    items(state.video.subtitles, key = { "subtitles-${it.language}" }) { track ->
+    items(subtitles, key = { "subtitles-${it.language}" }) { track ->
         PanelRow(
             label = trackLabel(track, strings),
-            selected = state.subtitleLanguage == track.language,
+            selected = subtitleLanguage == track.language,
             onClick = { onSelectSubtitles(track.language) },
         )
     }
     // Absent rather than disabled where there is no track to read, as on the
     // phone's panel and for its reason.
-    if (state.canNarrate) {
+    if (canNarrate) {
         item(key = "narration") {
-            PanelRow(label = strings.narration, selected = state.narrating, onClick = onToggleNarration)
+            PanelRow(label = strings.narration, selected = narrating, onClick = onToggleNarration)
         }
     }
     item(key = "autoplay") {
-        PanelRow(label = strings.autoplay, selected = state.autoplay, onClick = onToggleAutoplay)
+        PanelRow(label = strings.autoplay, selected = autoplay, onClick = onToggleAutoplay)
     }
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.commentRows(
-    state: WatchState.Playing,
+    comments: List<Comment>,
+    loadingComments: Boolean,
+    commentsLoaded: Boolean,
     strings: Strings,
     focus: FocusRequester,
 ) {
@@ -1184,7 +1235,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.commentRows(
     when {
         // Still asking is not "none": a spinner, focused so Back and the keys
         // still have somewhere to be.
-        state.loadingComments || !state.commentsLoaded -> item(key = "loading") {
+        loadingComments || !commentsLoaded -> item(key = "loading") {
             Box(
                 Modifier.fillMaxWidth().padding(Space.xl).focusRequester(focus).focusStop(),
                 contentAlignment = Alignment.Center,
@@ -1193,7 +1244,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.commentRows(
             }
         }
 
-        state.comments.isEmpty() -> item(key = "empty") {
+        comments.isEmpty() -> item(key = "empty") {
             Text(
                 text = strings.noComments,
                 color = Tokens.text2,
@@ -1203,7 +1254,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.commentRows(
             )
         }
 
-        else -> state.comments.forEachIndexed { index, comment ->
+        else -> comments.forEachIndexed { index, comment ->
             item(key = comment.id) {
                 CommentBlock(
                     comment = comment,

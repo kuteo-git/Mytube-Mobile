@@ -1,11 +1,10 @@
 package com.mytube.app.ui
 
+import com.mytube.app.StubVideoRepository
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Playlist
-import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.PlaylistPage
-import com.mytube.app.domain.repository.VideoRepository
 import com.mytube.app.ui.playlist.PlaylistState
 import com.mytube.app.ui.playlist.PlaylistViewModel
 import kotlinx.coroutines.Dispatchers
@@ -146,7 +145,7 @@ class PlaylistViewModelTest {
     private class FakePlaylist(
         private val removeFails: Boolean = false,
         private val updateFails: Boolean = false,
-    ) : VideoRepository {
+    ) : StubVideoRepository() {
         val removed = mutableListOf<Pair<String, String>>()
         val deleted = mutableListOf<String>()
 
@@ -184,44 +183,10 @@ class PlaylistViewModelTest {
             deleted += playlistId
         }
 
-        override suspend fun playlists(videoId: String) = emptyList<Playlist>()
         override suspend fun createPlaylist(title: String) = throw NotImplementedError()
-        override suspend fun addToPlaylist(playlistId: String, videoId: String) = Unit
 
         override suspend fun feed(topic: String, pageToken: String) = throw NotImplementedError()
         override suspend fun video(id: String) = throw NotImplementedError()
-        override suspend fun search(query: String) = emptyList<Video>()
-        override suspend fun discover(query: String, limit: Int) =
-            emptyList<com.mytube.app.domain.model.ExternalVideo>()
-        override suspend fun ensureExternal(sourceUrl: String) = ""
-        override suspend fun resolveChannel(query: String) = ""
-        override suspend fun topics() = emptyList<com.mytube.app.domain.model.Topic>()
-        override suspend fun live() = emptyList<Video>()
-        override suspend fun missed(pageToken: String) =
-            com.mytube.app.domain.repository.FeedPage(emptyList(), "")
-        override suspend fun history(limit: Int) = emptyList<Video>()
-        override suspend fun saved() = emptyList<Video>()
-        override suspend fun feedMix() = throw NotImplementedError()
-        override suspend fun saveFeedMix(mix: com.mytube.app.domain.repository.FeedMix) = Unit
-        override suspend fun subscriptions() = emptyList<Channel>()
-        override suspend fun upNext(videoId: String, channelId: String) = emptyList<Video>()
-        override suspend fun recordProgress(
-            videoId: String,
-            positionSeconds: Double,
-            watchedFraction: Double,
-        ) = Unit
-        override suspend fun setReaction(
-            videoId: String,
-            reaction: com.mytube.app.domain.model.Reaction,
-        ) = Unit
-        override suspend fun setSaved(videoId: String, saved: Boolean) = Unit
-        override suspend fun setSubscribed(channelId: String, subscribed: Boolean) = Unit
-        override suspend fun setNotInterested(videoId: String) = Unit
-        override suspend fun subtitleCues(url: String) = emptyList<SubtitleCue>()
-        override suspend fun comments(videoId: String) =
-            emptyList<com.mytube.app.domain.model.Comment>()
-        override suspend fun importComments(videoId: String) = Unit
-        override suspend fun refreshMetadata(videoId: String) = Unit
         override suspend fun channelPage(
             channelId: String,
             sortToken: String,

@@ -91,3 +91,12 @@ interface ServerRepository {
 
     suspend fun setTtsVoice(voice: String)
 }
+
+/**
+ * What every port that talks to the library throws before an address is set.
+ *
+ * Declared here, beside the port that holds the address, because it is part of
+ * the ports' contract: a screen catches it to send somebody to the settings
+ * rather than tell them to check their wifi.
+ */
+class ServerNotConfigured : Exception("no server address has been set")

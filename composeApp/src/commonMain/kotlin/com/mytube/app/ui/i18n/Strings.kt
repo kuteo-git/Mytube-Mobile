@@ -111,8 +111,6 @@ interface Strings {
     val back: String
     /** On the double-tap ripple. Takes the total, which grows as taps repeat. */
     fun seconds(count: Int): String
-    val skipBack: String
-    val skipForward: String
     val like: String
     val dislike: String
     val saveVideo: String
@@ -167,14 +165,6 @@ interface Strings {
     /** Over a broadcast, in place of the two timestamps. */
     val live: String
 
-    /**
-     * The same pill once the viewer has rewound inside the broadcast's window.
-     *
-     * A label rather than a second control: the pill *is* the way back to the
-     * edge, and drawing a separate button beside it would be two things saying
-     * one thing.
-     */
-    val goToLive: String
     val fullscreen: String
     val exitFullscreen: String
     val notInterested: String
@@ -209,9 +199,6 @@ interface Strings {
     /** The heading over the household's members, on the avatar's sheet. */
     val profileTitle: String
 
-    /** Marks the member this device is currently watching as. */
-    val profileCurrent: String
-
     val savedTitle: String
     val noSaved: String
     val noSavedDetail: String
@@ -228,7 +215,6 @@ interface Strings {
      */
     val saveToPlaylist: String
     val newPlaylist: String
-    val playlistName: String
     val createPlaylist: String
     val savePlaylist: String
     /** Above Save when the library refused part of it; the rows show what it holds. */
@@ -251,11 +237,6 @@ interface Strings {
 
     /** "videos", after a count, on a playlist card. */
     fun playlistCount(count: Int): String
-    val feedMix: String
-    val feedMixSubscribed: String
-    val feedMixAffinity: String
-    val feedMixDiscovery: String
-    val feedMixHint: String
 
     // --- navigation --------------------------------------------------------
     val navHome: String
@@ -380,8 +361,6 @@ object EnglishStrings : Strings {
     override val pause = "Pause"
     override val back = "Back"
     override fun seconds(count: Int) = "$count seconds"
-    override val skipBack = "Back 10 seconds"
-    override val skipForward = "Forward 10 seconds"
     override val like = "Like"
     override val dislike = "Dislike"
     override val saveVideo = "Save"
@@ -410,7 +389,6 @@ object EnglishStrings : Strings {
     // Kept in English in both dictionaries: it is what every player and every
     // television calls a broadcast, the same reasoning as the Live chip.
     override val live = "LIVE"
-    override val goToLive = "Go live"
     override val fullscreen = "Fullscreen"
     override val exitFullscreen = "Exit fullscreen"
     override val notInterested = "Not interested"
@@ -444,12 +422,10 @@ object EnglishStrings : Strings {
     override val playNext = "Next video"
     override val playPrevious = "Previous video"
     override val profileTitle = "Who is watching?"
-    override val profileCurrent = "This device"
     override val savedTitle = "Saved"
     override val playlists = "Playlists"
     override val saveToPlaylist = "Save to playlist"
     override val newPlaylist = "New playlist"
-    override val playlistName = "Playlist name"
     override val createPlaylist = "Create"
     override val savePlaylist = "Save"
     override val someChangesNotSaved = "Some changes were not saved"
@@ -470,12 +446,6 @@ object EnglishStrings : Strings {
     override val noSaved = "Nothing saved yet"
     override val noSavedDetail =
         "Saving a video keeps its file on the disk when the library runs out of room."
-    override val feedMix = "Home feed"
-    override val feedMixSubscribed = "Channels you follow"
-    override val feedMixAffinity = "More of what you watch"
-    override val feedMixDiscovery = "Something new"
-    override val feedMixHint =
-        "These three divide what is left after continue watching, rewatch and new uploads."
 
     override val navHome = "Home"
     override val navSettings = "Settings"
@@ -569,8 +539,6 @@ object VietnameseStrings : Strings {
     override val pause = "Tạm dừng"
     override val back = "Quay lại"
     override fun seconds(count: Int) = "$count giây"
-    override val skipBack = "Lùi 10 giây"
-    override val skipForward = "Tới 10 giây"
     override val like = "Thích"
     override val dislike = "Không thích"
     override val saveVideo = "Lưu"
@@ -597,7 +565,6 @@ object VietnameseStrings : Strings {
     override val narrationFailed = "Không chuẩn bị được giọng đọc"
 
     override val live = "LIVE"
-    override val goToLive = "Xem trực tiếp"
     override val fullscreen = "Toàn màn hình"
     override val exitFullscreen = "Thoát toàn màn hình"
     override val notInterested = "Không quan tâm"
@@ -628,12 +595,10 @@ object VietnameseStrings : Strings {
     override val playNext = "Video kế tiếp"
     override val playPrevious = "Video trước"
     override val profileTitle = "Ai đang xem?"
-    override val profileCurrent = "Thiết bị này"
     override val savedTitle = "Đã lưu"
     override val playlists = "Playlist"
     override val saveToPlaylist = "Lưu vào playlist"
     override val newPlaylist = "Playlist mới"
-    override val playlistName = "Tên playlist"
     override val createPlaylist = "Tạo"
     override val savePlaylist = "Lưu"
     override val someChangesNotSaved = "Một số thay đổi chưa được lưu"
@@ -655,12 +620,6 @@ object VietnameseStrings : Strings {
     override fun playlistCount(count: Int) = "$count video"
     override val noSaved = "Chưa lưu video nào"
     override val noSavedDetail = "Lưu một video là giữ file của nó lại khi ổ đĩa đầy."
-    override val feedMix = "Trang chủ"
-    override val feedMixSubscribed = "Kênh đang theo dõi"
-    override val feedMixAffinity = "Giống thứ bạn hay xem"
-    override val feedMixDiscovery = "Thử cái mới"
-    override val feedMixHint =
-        "Ba phần này chia nhau chỗ còn lại, sau xem tiếp, xem lại và video mới."
 
     override val navHome = "Trang chủ"
     override val navSettings = "Cài đặt"

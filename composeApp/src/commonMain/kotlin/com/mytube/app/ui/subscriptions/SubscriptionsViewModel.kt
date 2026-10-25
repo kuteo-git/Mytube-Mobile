@@ -1,8 +1,8 @@
 package com.mytube.app.ui.subscriptions
 
+import com.mytube.app.ui.toScreenState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.repository.VideoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,8 +58,6 @@ class SubscriptionsViewModel(private val videos: VideoRepository) : ViewModel() 
         }
     }
 
-    private fun asState(error: Throwable): SubscriptionsState = when (error) {
-        is ServerNotConfigured -> SubscriptionsState.NeedsServer
-        else -> SubscriptionsState.Failed(error.message ?: "could not reach the library")
-    }
+    private fun asState(error: Throwable): SubscriptionsState =
+        error.toScreenState(SubscriptionsState.NeedsServer, SubscriptionsState::Failed)
 }

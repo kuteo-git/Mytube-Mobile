@@ -1,10 +1,9 @@
 package com.mytube.app.ui
 
+import com.mytube.app.StubVideoRepository
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.ExternalVideo
-import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Video
-import com.mytube.app.domain.repository.VideoRepository
 import com.mytube.app.ui.search.SearchState
 import com.mytube.app.ui.search.SearchViewModel
 import com.mytube.app.ui.search.UPSTREAM_PAGE
@@ -378,7 +377,7 @@ class SearchViewModelTest {
         private val resolveFails: Boolean = false,
         /** How long each search takes to answer, so one can be in flight. */
         private val answerAfterMillis: Long = 0,
-    ) : VideoRepository {
+    ) : StubVideoRepository() {
         var searchCalls = 0
             private set
         var discoverCalls = 0
@@ -420,41 +419,12 @@ class SearchViewModelTest {
 
         override suspend fun feed(topic: String, pageToken: String) = throw NotImplementedError()
         override suspend fun video(id: String) = throw NotImplementedError()
-        override suspend fun topics() = emptyList<com.mytube.app.domain.model.Topic>()
-        override suspend fun live() = emptyList<Video>()
-        override suspend fun missed(pageToken: String) =
-            com.mytube.app.domain.repository.FeedPage(emptyList(), "")
-        override suspend fun history(limit: Int) = emptyList<Video>()
-        override suspend fun saved() = emptyList<Video>()
-        override suspend fun feedMix() = throw NotImplementedError()
-        override suspend fun saveFeedMix(mix: com.mytube.app.domain.repository.FeedMix) = Unit
-        override suspend fun subscriptions() = emptyList<Channel>()
-        override suspend fun upNext(videoId: String, channelId: String) = emptyList<Video>()
-        override suspend fun recordProgress(
-            videoId: String,
-            positionSeconds: Double,
-            watchedFraction: Double,
-        ) = Unit
-        override suspend fun setReaction(
-            videoId: String,
-            reaction: com.mytube.app.domain.model.Reaction,
-        ) = Unit
-        override suspend fun setSaved(videoId: String, saved: Boolean) = Unit
-        override suspend fun setSubscribed(channelId: String, subscribed: Boolean) = Unit
-        override suspend fun setNotInterested(videoId: String) = Unit
-        override suspend fun subtitleCues(url: String) = emptyList<SubtitleCue>()
-        override suspend fun comments(videoId: String) =
-            emptyList<com.mytube.app.domain.model.Comment>()
-        override suspend fun importComments(videoId: String) = Unit
-        override suspend fun refreshMetadata(videoId: String) = Unit
         override suspend fun channelPage(
             channelId: String,
             sortToken: String,
             pageToken: String,
         ) = throw NotImplementedError()
 
-        override suspend fun playlists(videoId: String) =
-            emptyList<com.mytube.app.domain.model.Playlist>()
         override suspend fun playlist(playlistId: String, pageToken: String) =
             throw NotImplementedError()
         override suspend fun createPlaylist(title: String) = throw NotImplementedError()
@@ -463,8 +433,5 @@ class SearchViewModelTest {
             title: String,
             description: String,
         ) = throw NotImplementedError()
-        override suspend fun deletePlaylist(playlistId: String) = Unit
-        override suspend fun addToPlaylist(playlistId: String, videoId: String) = Unit
-        override suspend fun removeFromPlaylist(playlistId: String, videoId: String) = Unit
     }
 }

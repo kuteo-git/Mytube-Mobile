@@ -1,8 +1,8 @@
 package com.mytube.app.ui.home
 
+import com.mytube.app.ui.toScreenState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.VideoRepository
@@ -418,10 +418,8 @@ class HomeViewModel(private val videos: VideoRepository) : ViewModel() {
         else -> ""
     }
 
-    private fun asState(error: Throwable): HomeState = when (error) {
-        is ServerNotConfigured -> HomeState.NeedsServer
-        else -> HomeState.Failed(error.message ?: "could not reach the library")
-    }
+    private fun asState(error: Throwable): HomeState =
+        error.toScreenState(HomeState.NeedsServer, HomeState::Failed)
 }
 
 /**

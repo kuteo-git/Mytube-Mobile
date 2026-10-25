@@ -290,9 +290,11 @@ fun WatchContent(
         if (pictureBoxWidth > 0f) (miniThumbWidthPx / pictureBoxWidth).coerceIn(0f, 1f) else 0.3f
 
     val openShare = rememberShare()
+    // The id, not the state: a lambda that captured the state was a new one on
+    // every tick, and the action row it is handed could never skip.
+    val shareId = (state as? WatchState.Playing)?.video?.id.orEmpty()
     val share: () -> Unit = {
-        val id = (state as? WatchState.Playing)?.video?.id.orEmpty()
-        if (id.isNotEmpty()) openShare("https://www.youtube.com/watch?v=$id")
+        if (shareId.isNotEmpty()) openShare("https://www.youtube.com/watch?v=$shareId")
     }
 
     // Told the platform as state, not as an event: a screen disposed while
@@ -631,123 +633,134 @@ fun WatchContent(
                 onAction = {},
             )
 
-            // One scroller for everything below the picture, so the rail is
-            // lazy: an up-next of twenty videos is twenty thumbnails, and
-            // composing them all under a Column would fetch every one before the
-            // viewer had scrolled to any.
             // One scroller for everything below the picture, in the web app's
             // order: title, channel and actions, description, comments, then
             // what plays next. It is lazy because the comments and the rail are
             // both lists of unknown length, and a Column would compose every
             // thumbnail and every comment before the viewer had scrolled to any.
-            is WatchState.Playing -> LazyColumn(
-                Modifier.fillMaxSize(),
-                state = listState,
-                contentPadding = PaddingValues(
-                    bottom = WindowInsets.navigationBars.asPaddingValues()
-                        .calculateBottomPadding() + Space.lg,
-                ),
-            ) {
-                item(key = "title") {
-                    Text(
-                        text = state.video.title,
-                        color = Tokens.text,
-                        fontSize = 20.sp,
-                        lineHeight = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(
-                            start = Space.lg,
-                            end = Space.lg,
-                            top = Space.md,
-                        ),
-                    )
-                }
+            is WatchState.Playing -> {
+                // Read out of the state here, and captured by the list instead
+                // of it. The state is a new object on every tick of the
+                // playhead; these are the same objects from one tick to the
+                // next, so the list and its rows skip the ticks rather than
+                // re-running and re-measuring four times a second.
+                val video = state.video
+                val comments = state.comments
+                val loadingComments = state.loadingComments
+                val commentsLoaded = state.commentsLoaded
+                val upNext = state.upNext
+                val railCollapsed = state.railCollapsed
+                val loadingUpNext = state.loadingUpNext
+                val railChannelOnly = state.railChannelOnly
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    state = listState,
+                    contentPadding = PaddingValues(
+                        bottom = WindowInsets.navigationBars.asPaddingValues()
+                            .calculateBottomPadding() + Space.lg,
+                    ),
+                ) {
+                    item(key = "title") {
+                        Text(
+                            text = video.title,
+                            color = Tokens.text,
+                            fontSize = 20.sp,
+                            lineHeight = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(
+                                start = Space.lg,
+                                end = Space.lg,
+                                top = Space.md,
+                            ),
+                        )
+                    }
 
-                item(key = "channel") {
-                    ChannelRow(
-                        video = state.video,
-                        mediaBaseUrl = mediaBaseUrl,
-                        onToggleSubscribed = onToggleSubscribed,
-                        onOpenChannel = { onOpenChannel(state.video.channel.id) },
-                    )
-                }
+                    item(key = "channel") {
+                        ChannelRow(
+                            video = video,
+                            mediaBaseUrl = mediaBaseUrl,
+                            onToggleSubscribed = onToggleSubscribed,
+                            onOpenChannel = { onOpenChannel(video.channel.id) },
+                        )
+                    }
 
-                item(key = "actions") {
-                    Spacer(Modifier.height(Space.md))
-                    WatchActions(
-                        video = state.video,
-                        onReact = onReact,
-                        onToggleSaved = onToggleSaved,
-                        onShare = share,
-                    )
-                }
+                    item(key = "actions") {
+                        Spacer(Modifier.height(Space.md))
+                        WatchActions(
+                            video = video,
+                            onReact = onReact,
+                            onToggleSaved = onToggleSaved,
+                            onShare = share,
+                        )
+                    }
 
-                item(key = "description") {
-                    Spacer(Modifier.height(Space.md))
-                    DescriptionBox(
-                        video = state.video,
-                        expanded = descriptionOpen,
-                        onToggleExpanded = { descriptionOpen = !descriptionOpen },
-                        modifier = Modifier.padding(horizontal = Space.lg),
-                    )
-                }
+                    item(key = "description") {
+                        Spacer(Modifier.height(Space.md))
+                        DescriptionBox(
+                            video = video,
+                            expanded = descriptionOpen,
+                            onToggleExpanded = { descriptionOpen = !descriptionOpen },
+                            modifier = Modifier.padding(horizontal = Space.lg),
+                        )
+                    }
 
-                // The break between the video's own facts and the sections
-                // under them, and it is `lg` rather than `xl` so that it equals
-                // the one above the up-next rail.
-                //
-                // Both gaps carry 8dp of their own from `CommentsHeading`'s
-                // padding, which sits *outside* its pane — so this spacer made
-                // 32dp on screen against the rail's 24, measured at 96px and
-                // 72px on a 3x phone. Two sections one under the other,
-                // separated by different amounts, is the fault the comment
-                // inside `CommentSection` already names for the space these
-                // sections open into.
-                item(key = "comments-gap") { Spacer(Modifier.height(Space.lg)) }
+                    // The break between the video's own facts and the sections
+                    // under them, and it is `lg` rather than `xl` so that it equals
+                    // the one above the up-next rail.
+                    //
+                    // Both gaps carry 8dp of their own from `CommentsHeading`'s
+                    // padding, which sits *outside* its pane — so this spacer made
+                    // 32dp on screen against the rail's 24, measured at 96px and
+                    // 72px on a 3x phone. Two sections one under the other,
+                    // separated by different amounts, is the fault the comment
+                    // inside `CommentSection` already names for the space these
+                    // sections open into.
+                    item(key = "comments-gap") { Spacer(Modifier.height(Space.lg)) }
 
-                commentSection(
-                    comments = state.comments,
-                    loading = state.loadingComments,
-                    loaded = state.commentsLoaded,
-                    open = commentsOpen,
-                    onToggleOpen = {
-                        // No anchor here, deliberately. The section shrinks over
-                        // several frames now, so the list's own clamping follows
-                        // it down smoothly; a scroll restored two frames in
-                        // would land in the middle of that and be clamped again
-                        // on every frame after it.
-                        if (!commentsOpen) onLoadComments()
-                        commentsOpen = !commentsOpen
-                    },
-                    expanded = expandedReplies,
-                    onToggleReplies = { id ->
-                        expandedReplies = if (id in expandedReplies) {
-                            expandedReplies - id
-                        } else {
-                            expandedReplies + id
-                        }
-                    },
-                )
-
-                item(key = UP_NEXT) {
-                    Spacer(Modifier.height(Space.lg))
-                    UpNextRail(
-                        current = state.video,
-                        videos = state.upNext,
-                        collapsed = state.railCollapsed,
-                        loading = state.loadingUpNext,
-                        channelOnly = state.railChannelOnly,
-                        mediaBaseUrl = mediaBaseUrl,
-                        onToggleCollapsed = onToggleRail,
-                        onSelectFilter = {
-                            anchor = listState.holdPosition(UP_NEXT)
-                            onFilterRail(it)
+                    commentSection(
+                        comments = comments,
+                        loading = loadingComments,
+                        loaded = commentsLoaded,
+                        open = commentsOpen,
+                        onToggleOpen = {
+                            // No anchor here, deliberately. The section shrinks over
+                            // several frames now, so the list's own clamping follows
+                            // it down smoothly; a scroll restored two frames in
+                            // would land in the middle of that and be clamped again
+                            // on every frame after it.
+                            if (!commentsOpen) onLoadComments()
+                            commentsOpen = !commentsOpen
                         },
-                        onOpenVideo = onOpenVideo,
-                        today = today,
+                        expanded = expandedReplies,
+                        onToggleReplies = { id ->
+                            expandedReplies = if (id in expandedReplies) {
+                                expandedReplies - id
+                            } else {
+                                expandedReplies + id
+                            }
+                        },
                     )
+
+                    item(key = UP_NEXT) {
+                        Spacer(Modifier.height(Space.lg))
+                        UpNextRail(
+                            current = video,
+                            videos = upNext,
+                            collapsed = railCollapsed,
+                            loading = loadingUpNext,
+                            channelOnly = railChannelOnly,
+                            mediaBaseUrl = mediaBaseUrl,
+                            onToggleCollapsed = onToggleRail,
+                            onSelectFilter = {
+                                anchor = listState.holdPosition(UP_NEXT)
+                                onFilterRail(it)
+                            },
+                            onOpenVideo = onOpenVideo,
+                            today = today,
+                        )
+                    }
                 }
             }
         }

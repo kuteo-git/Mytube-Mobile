@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,13 +40,13 @@ import coil3.compose.AsyncImage
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.home.BadgeBackground
 import com.mytube.app.ui.home.Space
+import com.mytube.app.ui.shell.SkeletonLine
 import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.home.formatRelative
 import com.mytube.app.ui.home.formatViews
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.shell.PRESS_INSET
-import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.shell.pressableGlassControl
 import com.mytube.app.ui.shell.skeletonShade
@@ -135,14 +134,9 @@ fun UpNextRail(
                     // way, as a bar rather than as empty space: the row is a
                     // pane, and a pane that grows a line when a request lands
                     // moves everything under a thumb already reaching for it.
-                    loading -> Box(
-                        Modifier
-                            .padding(top = 3.dp)
-                            .fillMaxWidth(0.4f)
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shade),
-                    )
+                    loading -> Box(Modifier.padding(top = 3.dp)) {
+                        SkeletonLine(shade, 0.4f, 12.dp)
+                    }
                 }
             }
             Icon(
@@ -217,27 +211,16 @@ private fun UpNextSkeleton() {
                 )
                 Spacer(Modifier.width(Space.sm))
                 Column(Modifier.weight(1f)) {
-                    SkeletonBar(shade, 1f)
+                    SkeletonLine(shade, 1f, 12.dp)
                     Spacer(Modifier.height(Space.xs))
-                    SkeletonBar(shade, 0.7f)
+                    SkeletonLine(shade, 0.7f, 12.dp)
                     Spacer(Modifier.height(Space.xs))
-                    SkeletonBar(shade, 0.45f)
+                    SkeletonLine(shade, 0.45f, 12.dp)
                 }
             }
             Spacer(Modifier.height(Space.sm))
         }
     }
-}
-
-@Composable
-private fun SkeletonBar(shade: Color, width: Float) {
-    Box(
-        Modifier
-            .fillMaxWidth(width)
-            .height(12.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(shade),
-    )
 }
 
 @Composable

@@ -1,5 +1,6 @@
 package com.mytube.app.data.repository
 
+import com.mytube.app.domain.repository.ServerNotConfigured
 import com.mytube.app.data.remote.GatewayDataSource
 import com.mytube.app.data.remote.dto.toDomain
 import com.mytube.app.domain.model.Channel
@@ -13,14 +14,16 @@ import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.model.Narration
-import com.mytube.app.data.remote.dto.FeedMixDto
 import com.mytube.app.domain.repository.ChannelPage
-import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.ServerRepository
 import com.mytube.app.domain.repository.PlaylistPage
 import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.domain.repository.VideoRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 
 /**
  * Videos, fetched from the gateway and handed over as domain types.
@@ -47,18 +50,15 @@ class NarrationRepositoryImpl(
 ) : NarrationRepository {
 
     override suspend fun start(videoId: String, fromSeconds: Double) =
-        gateway.startNarration(requireBase(), server.profileId(), videoId, fromSeconds)
+        gateway.startNarration(server.requireBaseUrl(), server.profileId(), videoId, fromSeconds)
 
     override suspend fun stop(videoId: String) =
-        gateway.stopNarration(requireBase(), server.profileId(), videoId)
+        gateway.stopNarration(server.requireBaseUrl(), server.profileId(), videoId)
 
     override suspend fun state(videoId: String): Narration {
-        val base = requireBase()
+        val base = server.requireBaseUrl()
         return gateway.narration(base, server.profileId(), videoId).toDomain(base)
     }
-
-    private suspend fun requireBase(): String =
-        server.baseUrl().ifBlank { throw ServerNotConfigured() }
 }
 
 class VideoRepositoryImpl(
@@ -67,7 +67,7 @@ class VideoRepositoryImpl(
 ) : VideoRepository {
 
     override suspend fun feed(topic: String, pageToken: String): FeedPage {
-        val dto = gateway.feed(requireBaseUrl(), server.profileId(), topic, pageToken)
+        val dto = gateway.feed(server.requireBaseUrl(), server.profileId(), topic, pageToken)
         return FeedPage(
             videos = dto.videos.map { it.toDomain() },
             // The wire's null and the wire's blank string mean the same thing —
@@ -77,7 +77,7 @@ class VideoRepositoryImpl(
     }
 
     override suspend fun missed(pageToken: String): FeedPage {
-        val dto = gateway.missed(requireBaseUrl(), server.profileId(), pageToken)
+        val dto = gateway.missed(server.requireBaseUrl(), server.profileId(), pageToken)
         return FeedPage(
             videos = dto.videos.map { it.toDomain() },
             nextPageToken = dto.nextPageToken.orEmpty().trim(),
@@ -85,26 +85,26 @@ class VideoRepositoryImpl(
     }
 
     override suspend fun video(id: String): Video =
-        gateway.video(requireBaseUrl(), server.profileId(), id).toDomain()
+        gateway.video(server.requireBaseUrl(), server.profileId(), id).toDomain()
 
     override suspend fun search(query: String): List<Video> =
-        gateway.search(requireBaseUrl(), server.profileId(), query).map { it.toDomain() }
+        gateway.search(server.requireBaseUrl(), server.profileId(), query).map { it.toDomain() }
 
     override suspend fun discover(query: String, limit: Int): List<ExternalVideo> =
-        gateway.discover(requireBaseUrl(), server.profileId(), query, limit)
+        gateway.discover(server.requireBaseUrl(), server.profileId(), query, limit)
             .videos.map { it.toDomain() }
 
     override suspend fun ensureExternal(sourceUrl: String): String =
-        gateway.ensureExternal(requireBaseUrl(), server.profileId(), sourceUrl)
+        gateway.ensureExternal(server.requireBaseUrl(), server.profileId(), sourceUrl)
 
     override suspend fun resolveChannel(query: String): String =
-        gateway.resolveChannel(requireBaseUrl(), server.profileId(), query)
+        gateway.resolveChannel(server.requireBaseUrl(), server.profileId(), query)
 
     override suspend fun topics(): List<Topic> =
-        gateway.topics(requireBaseUrl(), server.profileId()).topics.map { it.toDomain() }
+        gateway.topics(server.requireBaseUrl(), server.profileId()).topics.map { it.toDomain() }
 
     override suspend fun live(): List<Video> =
-        gateway.live(requireBaseUrl(), server.profileId()).videos.map { it.toDomain() }
+        gateway.live(server.requireBaseUrl(), server.profileId()).videos.map { it.toDomain() }
 
     /**
      * A page of history is enough for the rail.
@@ -114,52 +114,37 @@ class VideoRepositoryImpl(
      * leaves room for the finished videos that get filtered out of it.
      */
     override suspend fun history(limit: Int): List<Video> =
-        gateway.history(requireBaseUrl(), server.profileId(), limit = limit)
+        gateway.history(server.requireBaseUrl(), server.profileId(), limit = limit)
             .videos.map { it.toDomain() }
 
     override suspend fun subscriptions(): List<Channel> =
-        gateway.subscriptions(requireBaseUrl(), server.profileId())
+        gateway.subscriptions(server.requireBaseUrl(), server.profileId())
             .channels.map { it.toDomain() }
 
     override suspend fun saved(): List<Video> =
-        gateway.saved(requireBaseUrl(), server.profileId()).videos.map { it.toDomain() }
+        gateway.saved(server.requireBaseUrl(), server.profileId()).videos.map { it.toDomain() }
 
-    override suspend fun feedMix(): FeedMix {
-        val dto = gateway.feedMix(requireBaseUrl(), server.profileId())
-        return FeedMix(
-            subscribedPercent = dto.subscribedPercent,
-            affinityPercent = dto.affinityPercent,
-            discoveryPercent = dto.discoveryPercent,
-            fixedPercent = dto.fixedShares.continueWatching +
-                dto.fixedShares.rewatch + dto.fixedShares.freshSubscribed,
-        )
+    override suspend fun subtitleCues(url: String): List<SubtitleCue> {
+        val file = gateway.subtitleFile(url)
+        // Parsed off the main thread. A film's machine-written captions run to
+        // thousands of lines, and this is asked as the video opens — on the
+        // caller's dispatcher it was a stall on the UI thread at the moment
+        // playback starts.
+        return withContext(Dispatchers.Default) { parseWebVtt(file) }
     }
 
-    override suspend fun saveFeedMix(mix: FeedMix) = gateway.saveFeedMix(
-        requireBaseUrl(),
-        server.profileId(),
-        FeedMixDto(
-            subscribedPercent = mix.subscribedPercent,
-            affinityPercent = mix.affinityPercent,
-            discoveryPercent = mix.discoveryPercent,
-        ),
-    )
-
-    override suspend fun subtitleCues(url: String): List<SubtitleCue> =
-        parseWebVtt(gateway.subtitleFile(url))
-
     override suspend fun comments(videoId: String): List<Comment> =
-        gateway.comments(requireBaseUrl(), server.profileId(), videoId)
+        gateway.comments(server.requireBaseUrl(), server.profileId(), videoId)
             .comments.map { it.toDomain() }
 
     override suspend fun importComments(videoId: String) =
-        gateway.importComments(requireBaseUrl(), server.profileId(), videoId)
+        gateway.importComments(server.requireBaseUrl(), server.profileId(), videoId)
 
     override suspend fun refreshMetadata(videoId: String) =
-        gateway.refreshMetadata(requireBaseUrl(), server.profileId(), videoId)
+        gateway.refreshMetadata(server.requireBaseUrl(), server.profileId(), videoId)
 
     override suspend fun upNext(videoId: String, channelId: String): List<Video> =
-        gateway.upNext(requireBaseUrl(), server.profileId(), videoId, channelId)
+        gateway.upNext(server.requireBaseUrl(), server.profileId(), videoId, channelId)
             .videos.map { it.toDomain() }
 
     override suspend fun recordProgress(
@@ -167,12 +152,12 @@ class VideoRepositoryImpl(
         positionSeconds: Double,
         watchedFraction: Double,
     ) = gateway.recordProgress(
-        requireBaseUrl(), server.profileId(), videoId, positionSeconds, watchedFraction,
+        server.requireBaseUrl(), server.profileId(), videoId, positionSeconds, watchedFraction,
     )
 
     override suspend fun setReaction(videoId: String, reaction: Reaction) =
         gateway.setReaction(
-            requireBaseUrl(),
+            server.requireBaseUrl(),
             server.profileId(),
             videoId,
             // The server's own three words. Mapped here rather than by naming
@@ -186,25 +171,30 @@ class VideoRepositoryImpl(
         )
 
     override suspend fun setSaved(videoId: String, saved: Boolean) =
-        gateway.setSaved(requireBaseUrl(), server.profileId(), videoId, saved)
+        gateway.setSaved(server.requireBaseUrl(), server.profileId(), videoId, saved)
 
     override suspend fun setNotInterested(videoId: String) =
-        gateway.setNotInterested(requireBaseUrl(), server.profileId(), videoId)
+        gateway.setNotInterested(server.requireBaseUrl(), server.profileId(), videoId)
 
     override suspend fun setSubscribed(channelId: String, subscribed: Boolean) =
-        gateway.setSubscribed(requireBaseUrl(), server.profileId(), channelId, subscribed)
+        gateway.setSubscribed(server.requireBaseUrl(), server.profileId(), channelId, subscribed)
 
     override suspend fun channelPage(
         channelId: String,
         sortToken: String,
         pageToken: String,
     ): ChannelPage {
-        val base = requireBaseUrl()
+        val base = server.requireBaseUrl()
         val user = server.profileId()
-        // In sequence, not in parallel: the videos cannot be mapped without the
-        // channel, since the listing carries none of its own.
-        val detail = gateway.channel(base, user, channelId)
-        val page = gateway.channelVideos(base, user, channelId, channelToken(sortToken, pageToken))
+        // Asked together, mapped after: the videos cannot be mapped without the
+        // channel, since the listing carries none of its own — but the two
+        // requests do not depend on each other, and in sequence every open,
+        // sort and page waited for two round trips.
+        val (detail, page) = coroutineScope {
+            val detail = async { gateway.channel(base, user, channelId) }
+            val page = gateway.channelVideos(base, user, channelId, channelToken(sortToken, pageToken))
+            detail.await() to page
+        }
         val channel = detail.channel.toDomain()
         return ChannelPage(
             channel = channel,
@@ -216,11 +206,11 @@ class VideoRepositoryImpl(
     }
 
     override suspend fun playlists(videoId: String): List<Playlist> =
-        gateway.playlists(requireBaseUrl(), server.profileId(), videoId)
+        gateway.playlists(server.requireBaseUrl(), server.profileId(), videoId)
             .playlists.map { it.toDomain() }
 
     override suspend fun playlist(playlistId: String, pageToken: String): PlaylistPage {
-        val page = gateway.playlist(requireBaseUrl(), server.profileId(), playlistId, pageToken)
+        val page = gateway.playlist(server.requireBaseUrl(), server.profileId(), playlistId, pageToken)
         return PlaylistPage(
             playlist = page.playlist.toDomain(),
             videos = page.videos.map { it.toDomain() },
@@ -229,38 +219,25 @@ class VideoRepositoryImpl(
     }
 
     override suspend fun createPlaylist(title: String): Playlist =
-        gateway.createPlaylist(requireBaseUrl(), server.profileId(), title).toDomain()
+        gateway.createPlaylist(server.requireBaseUrl(), server.profileId(), title).toDomain()
 
     override suspend fun updatePlaylist(
         playlistId: String,
         title: String,
         description: String,
     ): Playlist =
-        gateway.updatePlaylist(requireBaseUrl(), server.profileId(), playlistId, title, description)
+        gateway.updatePlaylist(server.requireBaseUrl(), server.profileId(), playlistId, title, description)
             .toDomain()
 
     override suspend fun deletePlaylist(playlistId: String) =
-        gateway.deletePlaylist(requireBaseUrl(), server.profileId(), playlistId)
+        gateway.deletePlaylist(server.requireBaseUrl(), server.profileId(), playlistId)
 
     override suspend fun addToPlaylist(playlistId: String, videoId: String) =
-        gateway.addPlaylistItem(requireBaseUrl(), server.profileId(), playlistId, videoId)
+        gateway.addPlaylistItem(server.requireBaseUrl(), server.profileId(), playlistId, videoId)
 
     override suspend fun removeFromPlaylist(playlistId: String, videoId: String) =
-        gateway.removePlaylistItem(requireBaseUrl(), server.profileId(), playlistId, videoId)
-
-    /**
-     * Refusing early, with a distinct type.
-     *
-     * Before anybody has set an address there is nothing to request, and the
-     * honest answer is not a network failure — the network is fine. A screen
-     * that catches this can send somebody to the settings; one that sees a
-     * connection error will tell them to check their wifi.
-     */
-    private suspend fun requireBaseUrl(): String =
-        server.baseUrl().ifBlank { throw ServerNotConfigured() }
+        gateway.removePlaylistItem(server.requireBaseUrl(), server.profileId(), playlistId, videoId)
 }
-
-class ServerNotConfigured : Exception("no server address has been set")
 
 /**
  * The one token a channel listing is asked for, from the two the caller has.
@@ -282,3 +259,14 @@ class ServerNotConfigured : Exception("no server address has been set")
  */
 internal fun channelToken(sortToken: String, pageToken: String): String =
     pageToken.ifEmpty { sortToken }
+
+/**
+ * The address, refusing early with a distinct type.
+ *
+ * Before anybody has set an address there is nothing to request, and the
+ * honest answer is not a network failure — the network is fine. A screen that
+ * catches this can send somebody to the settings; one that sees a connection
+ * error will tell them to check their wifi.
+ */
+internal suspend fun ServerRepository.requireBaseUrl(): String =
+    baseUrl().ifBlank { throw ServerNotConfigured() }

@@ -1,31 +1,18 @@
 package com.mytube.app.ui.watch
 
+import com.mytube.app.StubVideoRepository
 import com.mytube.app.domain.model.Channel
-import com.mytube.app.domain.model.Comment
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Playlist
-import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Stream
-import com.mytube.app.domain.model.SubtitleCue
-import com.mytube.app.domain.model.Topic
-import com.mytube.app.domain.model.StoryboardState
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.ChannelPage
-import com.mytube.app.domain.repository.FeedMix
-import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.repository.PlaylistPage
-import com.mytube.app.domain.model.Narration
-import com.mytube.app.domain.model.NarrationStatus
 import com.mytube.app.domain.model.NarrationClip
-import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
-import com.mytube.app.domain.repository.PreferencesRepository
-import com.mytube.app.domain.repository.StoryboardRepository
 import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
-import com.mytube.app.domain.repository.VideoRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -167,9 +154,9 @@ class WatchTelevisionTest {
             mediaBaseUrl = "http://mac:8180",
             videos = FakeVideos(thumbnailPath = "thumbnails/abc.jpg"),
             streams = streams,
-            storyboards = FakeStoryboards,
-            narration = FakeNarration,
-            preferences = FakePreferences,
+            storyboards = NoStoryboards,
+            narration = IdleNarration,
+            preferences = InstantPreferences,
             maxHeight = maxHeight,
             playerFactory = factory,
         )
@@ -219,7 +206,7 @@ class WatchTelevisionTest {
         override fun release() {}
     }
 
-    private class FakeVideos(private val thumbnailPath: String) : VideoRepository {
+    private class FakeVideos(private val thumbnailPath: String) : StubVideoRepository() {
         override suspend fun video(id: String) = Video(
             id = id,
             title = "A film",
@@ -230,34 +217,6 @@ class WatchTelevisionTest {
             thumbnailPath = thumbnailPath,
         )
 
-        override suspend fun feed(topic: String, pageToken: String) = FeedPage(emptyList(), "")
-        override suspend fun missed(pageToken: String) = FeedPage(emptyList(), "")
-        override suspend fun search(query: String) = emptyList<Video>()
-        override suspend fun discover(query: String, limit: Int) = emptyList<ExternalVideo>()
-        override suspend fun ensureExternal(sourceUrl: String) = ""
-        override suspend fun resolveChannel(query: String) = ""
-        override suspend fun topics() = emptyList<Topic>()
-        override suspend fun live() = emptyList<Video>()
-        override suspend fun history(limit: Int) = emptyList<Video>()
-        override suspend fun saved() = emptyList<Video>()
-        override suspend fun feedMix() = FeedMix(0, 0, 0, 0)
-        override suspend fun saveFeedMix(mix: FeedMix) {}
-        override suspend fun subscriptions() = emptyList<Channel>()
-        override suspend fun subtitleCues(url: String) = emptyList<SubtitleCue>()
-        override suspend fun comments(videoId: String) = emptyList<Comment>()
-        override suspend fun importComments(videoId: String) {}
-        override suspend fun refreshMetadata(videoId: String) = Unit
-        override suspend fun upNext(videoId: String, channelId: String) = emptyList<Video>()
-        override suspend fun recordProgress(
-            videoId: String,
-            positionSeconds: Double,
-            watchedFraction: Double,
-        ) {}
-        override suspend fun setReaction(videoId: String, reaction: Reaction) {}
-        override suspend fun setSaved(videoId: String, saved: Boolean) {}
-        override suspend fun setSubscribed(channelId: String, subscribed: Boolean) {}
-        override suspend fun setNotInterested(videoId: String) {}
-        override suspend fun playlists(videoId: String) = emptyList<Playlist>()
         override suspend fun playlist(playlistId: String, pageToken: String) =
             PlaylistPage(emptyPlaylist(playlistId), emptyList(), "")
         override suspend fun createPlaylist(title: String) = emptyPlaylist("")
@@ -266,9 +225,6 @@ class WatchTelevisionTest {
             title: String,
             description: String,
         ) = emptyPlaylist(playlistId)
-        override suspend fun deletePlaylist(playlistId: String) {}
-        override suspend fun addToPlaylist(playlistId: String, videoId: String) {}
-        override suspend fun removeFromPlaylist(playlistId: String, videoId: String) {}
 
         override suspend fun channelPage(
             channelId: String,
@@ -292,36 +248,4 @@ class WatchTelevisionTest {
         )
     }
 
-    /**
-     * No preview, which is what most of this library answers.
-     *
-     * Neither of these tests is about storyboards, so the honest stub is the
-     * answer a video with no ladder really gets — a test that accidentally
-     * reaches this takes the path a Short takes rather than one nothing takes.
-     */
-    private object FakeStoryboards : StoryboardRepository {
-        override suspend fun storyboard(videoId: String) = StoryboardState.None
-    }
-
-    private object FakeNarration : NarrationRepository {
-        override suspend fun start(videoId: String, fromSeconds: Double) {}
-        override suspend fun stop(videoId: String) {}
-        override suspend fun state(videoId: String) =
-            Narration(NarrationStatus.Idle, done = 0, total = 0, clips = emptyList())
-    }
-
-    private object FakePreferences : PreferencesRepository {
-        override suspend fun narration() = false
-        override suspend fun setNarration(on: Boolean) {}
-        override suspend fun autoplay() = false
-        override suspend fun setAutoplay(on: Boolean) {}
-        override suspend fun subtitleLanguage() = ""
-        override suspend fun setSubtitleLanguage(language: String) {}
-        override suspend fun voiceLevel() = 1f
-        override suspend fun setVoiceLevel(level: Float) {}
-        override suspend fun duckLevel() = 0.2f
-        override suspend fun setDuckLevel(level: Float) {}
-        override suspend fun lastVideoId() = ""
-        override suspend fun setLastVideoId(id: String) {}
-    }
 }

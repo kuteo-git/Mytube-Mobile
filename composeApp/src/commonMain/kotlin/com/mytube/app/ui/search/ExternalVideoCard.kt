@@ -1,6 +1,6 @@
 package com.mytube.app.ui.search
 
-import androidx.compose.runtime.setValue
+import com.mytube.app.ui.home.DurationBadge
 import androidx.compose.runtime.getValue
 import com.mytube.app.ui.home.videoMenu
 import androidx.compose.animation.core.Spring
@@ -18,12 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -36,8 +34,6 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.mohamedrejeb.calf.ui.gesture.adaptiveClickable
 import com.mytube.app.domain.model.ExternalVideo
-import com.mytube.app.ui.home.BadgeBackground
-import com.mytube.app.ui.home.Radius
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.CircleShape
@@ -47,7 +43,6 @@ import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.shell.rememberMenuAnchor
 import com.mytube.app.ui.home.OpeningOverlay
 import com.mytube.app.ui.home.Space
-import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.home.formatViews
 import com.mytube.app.ui.i18n.Strings
 import com.mytube.app.ui.theme.Tokens
@@ -133,18 +128,7 @@ fun ExternalVideoCard(
             )
 
             if (video.durationSeconds > 0) {
-                Text(
-                    text = formatDuration(video.durationSeconds),
-                    color = Tokens.text,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(Space.sm)
-                        .clip(RoundedCornerShape(Radius.badge))
-                        .background(BadgeBackground)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                )
+                DurationBadge(video.durationSeconds)
             }
 
             // Shared with the channel page's card, which has the same state for

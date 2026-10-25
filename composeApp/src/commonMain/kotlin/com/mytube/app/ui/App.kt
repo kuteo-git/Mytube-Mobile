@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -66,7 +67,6 @@ import com.mytube.app.AppContainer
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.Profile
-import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.ui.channel.ChannelScreen
 import com.mytube.app.ui.channel.ChannelViewModel
 import com.mytube.app.ui.history.HistoryScreen
@@ -644,14 +644,6 @@ fun App(
                 label = "collapse",
             )
             val scope = rememberCoroutineScope()
-            // Null until the server answers. Read once for the process: it is
-            // one setting for the household and nothing else in the app changes
-            // it, so re-reading on every visit to Settings would be a request
-            // for an answer already held.
-            var feedMix: FeedMix? by remember { mutableStateOf(null) }
-            // The household, and who this device is. Read once the address is
-            // known; an empty list is the honest answer for a server that is not
-            // answering, and for a house of one there is nothing to pick.
             // How the Vietnamese voice sounds. Held here rather than inside the
             // watch screen because Settings is where it is now edited and the
             // watch screen is where it takes effect — two tabs apart, so the
@@ -694,6 +686,9 @@ fun App(
                 duckLevel = container.preferencesRepository.duckLevel()
                 if (baseUrl.isNotBlank()) voice = container.serverRepository.ttsVoice()
             }
+            // The household, and who this device is. Read once the address is
+            // known; an empty list is the honest answer for a server that is not
+            // answering, and for a house of one there is nothing to pick.
             var profiles: List<Profile> by remember { mutableStateOf(emptyList()) }
             var profileId by remember { mutableStateOf("") }
             // Hoisted out of the route, because two screens act on one list: the
@@ -734,11 +729,6 @@ fun App(
             // device is.
             val currentProfile = profiles.firstOrNull { it.id == profileId }
                 ?: profiles.firstOrNull()
-            LaunchedEffect(baseUrl) {
-                if (baseUrl.isNotBlank()) {
-                    feedMix = runCatching { container.videoRepository.feedMix() }.getOrNull()
-                }
-            }
 
             // Which screen opens is a question for the settings store, and that
             // cannot be answered during composition. Nothing is drawn until it is:
@@ -903,62 +893,12 @@ fun App(
                         SettingsScreen(
                             baseUrl = baseUrl,
                             language = chosen,
-                            feedMix = feedMix,
                             onOpenServer = { route = Route.Setup },
                             onOpenProfile = { route = Route.Profile },
                             onOpenHistory = { route = Route.History },
                             onOpenSubscriptions = { route = Route.Subscriptions },
                             profileName = currentProfile?.name.orEmpty(),
-                            onChangeMix = { next ->
-                                // Drawn immediately, sent after: a
-                                // slider that waits for a round trip
-                                // before moving is one that feels stuck.
-                                feedMix = next
-                                scope.launch {
-                                    runCatching {
-                                        container.videoRepository.saveFeedMix(next)
-                                    }
-                                }
-                            },
-                            voiceLevel = voiceLevel,
-                            duckLevel = duckLevel,
                             voice = voice,
-                            // Drawn immediately, written after — the
-                            // same rule the feed mix follows. A slider
-                            // that waits for a write before it moves is
-                            // one somebody drags twice.
-                            onVoiceLevel = { level ->
-                                voiceLevel = level
-                                scope.launch {
-                                    runCatching {
-                                        container.preferencesRepository
-                                            .setVoiceLevel(level)
-                                    }
-                                }
-                            },
-                            onDuckLevel = { level ->
-                                duckLevel = level
-                                scope.launch {
-                                    runCatching {
-                                        container.preferencesRepository
-                                            .setDuckLevel(level)
-                                    }
-                                }
-                            },
-                            onVoice = { name ->
-                                voice = name
-                                scope.launch {
-                                    runCatching {
-                                        container.serverRepository.setTtsVoice(name)
-                                    }
-                                }
-                            },
-                            onPickLanguage = { picked ->
-                                language = picked
-                                scope.launch {
-                                    container.serverRepository.setLanguage(picked.code)
-                                }
-                            },
                             onOpenVoice = { route = Route.Voice },
                             onOpenLanguage = { route = Route.Language },
                         )
@@ -1231,6 +1171,9 @@ fun App(
                         voiceLevel = voiceLevel,
                         duckLevel = duckLevel,
                         voice = voice,
+                        // Drawn immediately, written after. A slider that
+                        // waits for a write before it moves is one somebody
+                        // drags twice.
                         onVoiceLevel = { level ->
                             voiceLevel = level
                             scope.launch { container.preferencesRepository.setVoiceLevel(level) }
@@ -1622,10 +1565,14 @@ fun App(
                 var dragProgress by remember(session.videoId, session.minimised) {
                     mutableFloatStateOf(0f)
                 }
+                // Whether a drag is live at all, which is the only thing this
+                // scope's composition asks. The progress itself is read in the
+                // draw phase; read here, it recomposed the app on every frame
+                // of the gesture.
+                val dragging by remember(session.videoId, session.minimised) {
+                    derivedStateOf { dragProgress > 0f }
+                }
                 val knock = rememberLandingKnock()
-
-                val playbackState by watch.state.collectAsStateWithLifecycle()
-                val playing = playbackState as? WatchState.Playing
 
                 // One modifier, two call sites — the bar drawn under the drag
                 // and the bar left behind by it. They have to land on the same
@@ -1693,29 +1640,43 @@ fun App(
                     // only this half knew about the search screen.
                     .padding(bottom = miniBottomInset)
 
+                // One bar, two call sites — the bar left behind by a drag and the
+                // bar drawn under it — and built once, so they can differ only
+                // in the three things that do.
+                val miniPlayer: @Composable (Boolean, Float, Modifier) -> Unit =
+                    { showSurface, collapse, modifier ->
+                        // Collected inside the bar, not above it. The playhead
+                        // moves four times a second, and read in this scope it
+                        // recomposed the whole app with it, for as long as
+                        // anything played.
+                        val playing = watch.state.collectAsStateWithLifecycle().value
+                            as? WatchState.Playing
+                        MiniPlayer(
+                            player = watch.player,
+                            title = playing?.video?.title.orEmpty(),
+                            channel = playing?.video?.channel?.name.orEmpty(),
+                            progress = playing?.playback?.progress ?: 0f,
+                            isPlaying = playing?.playback?.isPlaying == true,
+                            onExpand = { watching = session.copy(minimised = false) },
+                            onPlayPause = watch::playPause,
+                            // Nothing while the tab bar is under it; the full
+                            // navigation inset once that bar has gone, so the
+                            // glass still reaches the bottom of the screen.
+                            bottomInset = navigationInset * barsHidden,
+                            onClose = {
+                                // Stop first, then let go. The disposal that
+                                // follows only releases the connection.
+                                watch.stop()
+                                watching = null
+                            },
+                            showSurface = showSurface,
+                            collapse = collapse,
+                            modifier = modifier,
+                        )
+                    }
+
                 if (session.minimised) {
-                    MiniPlayer(
-                        player = watch.player,
-                        title = playing?.video?.title.orEmpty(),
-                        channel = playing?.video?.channel?.name.orEmpty(),
-                        progress = playing?.playback?.progress ?: 0f,
-                        isPlaying = playing?.playback?.isPlaying == true,
-                        onExpand = { watching = session.copy(minimised = false) },
-                        onPlayPause = watch::playPause,
-                        // Nothing while the tab bar is under it; the full
-                        // navigation inset once that bar has gone, so the glass
-                        // still reaches the bottom of the screen.
-                        bottomInset = navigationInset * barsHidden,
-                        onClose = {
-                            // Stop first, then let go. The disposal that follows
-                            // only releases the connection.
-                            watch.stop()
-                            watching = null
-                        },
-                        showSurface = true,
-                        collapse = collapse,
-                        modifier = miniPlayerModifier,
-                    )
+                    miniPlayer(true, collapse, miniPlayerModifier)
                 } else {
                     // Started at `false` and flipped on the first frame, which
                     // is what makes the rise actually play: an AnimatedVisibility
@@ -1749,31 +1710,19 @@ fun App(
                     //
                     // Composed only while the drag is live — at rest this would
                     // be a whole invisible bar laid out on every frame.
-                    if (dragProgress > 0f) {
-                        MiniPlayer(
-                            player = watch.player,
-                            title = playing?.video?.title.orEmpty(),
-                            channel = playing?.video?.channel?.name.orEmpty(),
-                            progress = playing?.playback?.progress ?: 0f,
-                            isPlaying = playing?.playback?.isPlaying == true,
-                            onExpand = { watching = session.copy(minimised = false) },
-                            onPlayPause = watch::playPause,
-                            bottomInset = navigationInset * barsHidden,
-                            onClose = {
-                                watch.stop()
-                                watching = null
-                            },
+                    if (dragging) {
+                        miniPlayer(
                             // The watch screen is holding the player's one
                             // surface, and the real picture is travelling down
                             // into this very box — see the flag's own comment.
-                            showSurface = false,
+                            false,
+                            0f,
                             // Linear across the whole gesture. Filling in early
                             // would leave the glass solid while the video is
                             // still twice the width of the box it is heading
                             // for, which is the moment the mismatch is most
                             // visible.
-                            modifier = miniPlayerModifier
-                                .graphicsLayer { alpha = dragProgress },
+                            miniPlayerModifier.graphicsLayer { alpha = dragProgress },
                         )
                     }
 

@@ -1,9 +1,9 @@
 package com.mytube.app.ui.channel
 
+import com.mytube.app.ui.toScreenState
 import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.SortOption
@@ -255,8 +255,6 @@ class ChannelViewModel(
         }
     }
 
-    private fun asState(error: Throwable): ChannelState = when (error) {
-        is ServerNotConfigured -> ChannelState.NeedsServer
-        else -> ChannelState.Failed(error.message ?: "could not reach the library")
-    }
+    private fun asState(error: Throwable): ChannelState =
+        error.toScreenState(ChannelState.NeedsServer, ChannelState::Failed)
 }

@@ -1,8 +1,8 @@
 package com.mytube.app.ui.search
 
+import com.mytube.app.ui.toScreenState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.VideoRepository
@@ -252,8 +252,6 @@ class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
         if (text.isNotBlank()) type(text)
     }
 
-    private fun asState(error: Throwable): SearchState = when (error) {
-        is ServerNotConfigured -> SearchState.NeedsServer
-        else -> SearchState.Failed(error.message ?: "could not reach the library")
-    }
+    private fun asState(error: Throwable): SearchState =
+        error.toScreenState(SearchState.NeedsServer, SearchState::Failed)
 }

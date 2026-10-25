@@ -1,14 +1,8 @@
 package com.mytube.app.ui.shell
 
+import com.mytube.app.ui.home.stroke
 import com.mytube.app.ui.i18n.Strings
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.PathBuilder
-import androidx.compose.ui.graphics.vector.path
-import androidx.compose.ui.unit.dp
 
 /**
  * The tab icons, outlined.
@@ -17,22 +11,6 @@ import androidx.compose.ui.unit.dp
  * written out rather than pulled from `material-icons-extended` — several
  * megabytes for four glyphs.
  */
-private fun stroke(name: String, body: PathBuilder.() -> Unit) =
-    ImageVector.Builder(
-        name = name,
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        path(
-            stroke = SolidColor(Color.White),
-            strokeLineWidth = 2f,
-            strokeLineCap = StrokeCap.Round,
-            strokeLineJoin = StrokeJoin.Round,
-        ) { body() }
-    }.build()
-
 internal fun tabIcon(tab: Tab): ImageVector = when (tab) {
     Tab.Home -> HomeIcon
     Tab.Playlists -> PlaylistsTabIcon

@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.BackdropEffectScope
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.drawBackdrop
@@ -436,6 +437,31 @@ val GLASS_SHAPE = RoundedCornerShape(percent = 50)
 private const val PILL_WASH = 0.12f
 
 /**
+ * A control's glass: the selection pill's and a chip's, which are one material.
+ *
+ * Smaller than the bars'. A chip is 32dp tall and a hundred wide; the bars'
+ * numbers are sized for a pane the width of the screen, and a 16dp refraction
+ * on a 32dp control bends the whole of it rather than its edge. The refraction
+ * height is held at the control's own corner radius, which is the library's
+ * ceiling for it — see the note on the bars' lens.
+ *
+ * The press is read here, at draw time, which is the whole reason it is an
+ * object rather than a parameter: this re-runs on every frame of the animation
+ * and the control never recomposes.
+ */
+private fun BackdropEffectScope.controlLens(press: GlassPress?) {
+    vibrancy()
+    blur(GLASS_BLUR.toPx())
+    val pressed = press?.fraction ?: 0f
+    lens(
+        refractionHeight = 8.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
+        refractionAmount = 16.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
+        depthEffect = true,
+        chromaticAberration = true,
+    )
+}
+
+/**
  * The travelling selection pill, as a lens.
  *
  * # Why the pill is not just a lighter rectangle
@@ -476,19 +502,7 @@ fun Modifier.selectionLens(
     return this.drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
-        effects = {
-            vibrancy()
-            blur(GLASS_BLUR.toPx())
-            // Read at draw time, which is what lets the press animate without
-            // recomposing a row that is being dragged across.
-            val pressed = press?.fraction ?: 0f
-            lens(
-                refractionHeight = 8.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
-                refractionAmount = 16.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
-                depthEffect = true,
-                chromaticAberration = true,
-            )
-        },
+        effects = { controlLens(press) },
         // Two rects, and the order is the whole point.
         //
         // The pill is a lighter patch **of the bar**, not a window cut through
@@ -626,26 +640,7 @@ fun Modifier.liquidGlass(
     return this.drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
-        effects = {
-            vibrancy()
-            // Smaller than the bars'. A chip is 32dp tall and a hundred wide;
-            // the bars' numbers are sized for a pane the width of the screen,
-            // and a 16dp refraction on a 32dp control bends the whole of it
-            // rather than its edge.
-            blur(GLASS_BLUR.toPx())
-            // Read at draw time, which is the whole reason the press is an
-            // object rather than a parameter: this lambda re-runs on every
-            // frame of the animation and the control never recomposes.
-            val pressed = press?.fraction ?: 0f
-            lens(
-                // At the chip's own corner radius, which is the library's
-                // ceiling for this parameter. See the note on the bars' lens.
-                refractionHeight = 8.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
-                refractionAmount = 16.dp.toPx() * (1f + PRESS_LENS_GAIN * pressed),
-                depthEffect = true,
-                chromaticAberration = true,
-            )
-        },
+        effects = { controlLens(press) },
         // The bars' own tone, not one of its own. A chip sits directly under
         // the top bar and above the tab bar, and a third shade in that stack is
         // the seam [TINT_GLASS] exists to remove.

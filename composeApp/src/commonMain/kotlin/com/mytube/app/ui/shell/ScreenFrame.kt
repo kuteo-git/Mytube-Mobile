@@ -1,5 +1,6 @@
 package com.mytube.app.ui.shell
 
+import com.mytube.app.ui.home.filled
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -7,7 +8,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,8 +34,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -58,14 +56,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.ui.home.Radius
@@ -179,19 +174,6 @@ val LocalMiniPlayerShowing = staticCompositionLocalOf { false }
  */
 val LocalTopBarHeight = compositionLocalOf { 0.dp }
 
-/**
- * How far the floating bars have slid out of the way: 0 down, 1 gone.
- *
- * Read by anything else pinned to the top of a tab — today that is the feed's
- * chip row. It was pinned at a *fixed* offset below the top bar, so scrolling
- * down took both bars away and left the chips floating alone under a band of
- * empty black. The chips are chrome too; they leave with the chrome.
- *
- * A local rather than a parameter for the reason `LocalMiniPlayerShowing` is
- * one: it is an ambient fact about the shell, and threading a float through
- * every screen signature is how the next screen to pin something forgets.
- */
-val LocalBarsHidden = compositionLocalOf { 0f }
 
 @Composable
 private fun tabContentPadding(miniPlayer: Boolean): PaddingValues = PaddingValues(
@@ -360,9 +342,6 @@ private fun Centered(content: @Composable () -> Unit) {
 internal object PullGlass {
     var fraction by mutableFloatStateOf(0f)
     var refreshing by mutableStateOf(false)
-
-    /** How far down the pane goes, over and above the bar it hangs under. */
-    var extraTop by mutableStateOf(0.dp)
 }
 
 /**
@@ -377,15 +356,6 @@ internal object PullGlass {
 fun BoxScope.TabRefreshIndicator(
     state: PullToRefreshState,
     isRefreshing: Boolean,
-    /**
-     * Anything above this list that the bar's own measurement does not cover.
-     *
-     * Nothing does today: the chip row used to need `Size.chipRow` here, because
-     * it was pinned under a bar whose height the indicator assumed rather than
-     * measured, and the pane came out behind the chips — a disc peeking out from
-     * under "Gaming". The bar reports its real height now, chips included.
-     */
-    extraTop: Dp = 0.dp,
 ) {
     // Read **here**, in composition, and not inside the effect.
     //
@@ -420,7 +390,6 @@ fun BoxScope.TabRefreshIndicator(
     SideEffect {
         PullGlass.fraction = distance
         PullGlass.refreshing = isRefreshing
-        PullGlass.extraTop = extraTop
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -723,33 +692,15 @@ fun FeedSkeleton(modifier: Modifier = Modifier, cards: Int = 3) {
                     // Two bars, because the title takes two lines at 20sp and a
                     // single bar leaves the row a third too short — the cards
                     // below it then jump upward as the text arrives.
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shade),
-                    )
+                    SkeletonLine(shade, 1f, 14.dp)
                     Spacer(Modifier.height(6.dp))
-                    Box(
-                        Modifier
-                            // Short, like the second line of a title that has
-                            // run out of words. Two full-width bars read as a
-                            // paragraph, which no card is.
-                            .fillMaxWidth(0.7f)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shade),
-                    )
+                    // Short, like the second line of a title that has
+                    // run out of words. Two full-width bars read as a
+                    // paragraph, which no card is.
+                    SkeletonLine(shade, 0.7f, 14.dp)
                     Spacer(Modifier.height(8.dp))
-                    Box(
-                        Modifier
-                            // One meta line: `channel · views · age`.
-                            .fillMaxWidth(0.55f)
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shade),
-                    )
+                    // One meta line: `channel · views · age`.
+                    SkeletonLine(shade, 0.55f, 12.dp)
                 }
             }
             Spacer(Modifier.height(Space.md))
@@ -782,7 +733,7 @@ fun ChannelListSkeleton(modifier: Modifier = Modifier, rows: Int = 8) {
                         Modifier
                             .width(160.dp)
                             .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(SKELETON_LINE_RADIUS))
                             .background(shade),
                     )
                     Spacer(Modifier.height(6.dp))
@@ -790,7 +741,7 @@ fun ChannelListSkeleton(modifier: Modifier = Modifier, rows: Int = 8) {
                         Modifier
                             .width(96.dp)
                             .height(12.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(SKELETON_LINE_RADIUS))
                             .background(shade),
                     )
                 }
@@ -844,21 +795,9 @@ fun CollectionListSkeleton(modifier: Modifier = Modifier, rows: Int = 6) {
                 }
                 Spacer(Modifier.width(Space.md))
                 Column(Modifier.weight(1f)) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth(0.8f)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shade),
-                    )
+                    SkeletonLine(shade, 0.8f, 14.dp)
                     Spacer(Modifier.height(6.dp))
-                    Box(
-                        Modifier
-                            .fillMaxWidth(0.4f)
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shade),
-                    )
+                    SkeletonLine(shade, 0.4f, 12.dp)
                 }
             }
         }
@@ -1096,23 +1035,15 @@ fun DetailScaffold(
     }
 }
 
-/** The same chevron the channel page and the saved shelf carry. */
-private val DetailBackIcon: ImageVector by lazy {
-    ImageVector.Builder(
-        name = "DetailBack",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        path(fill = SolidColor(Color.White)) {
-            moveTo(15.5f, 4f)
-            lineTo(7.5f, 12f)
-            lineTo(15.5f, 20f)
-            lineTo(17f, 18.5f)
-            lineTo(10.5f, 12f)
-            lineTo(17f, 5.5f)
-            close()
-        }
-    }.build()
+/** The same chevron every screen opened from another one carries. */
+internal val DetailBackIcon: ImageVector by lazy {
+    filled("DetailBack") {
+        moveTo(15.5f, 4f)
+        lineTo(7.5f, 12f)
+        lineTo(15.5f, 20f)
+        lineTo(17f, 18.5f)
+        lineTo(10.5f, 12f)
+        lineTo(17f, 5.5f)
+        close()
+    }
 }

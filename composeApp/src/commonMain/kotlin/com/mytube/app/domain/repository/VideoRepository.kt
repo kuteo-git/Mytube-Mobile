@@ -132,10 +132,6 @@ interface VideoRepository {
     /** Videos this member has kept against the eviction sweep. */
     suspend fun saved(): List<Video>
 
-    suspend fun feedMix(): FeedMix
-
-    suspend fun saveFeedMix(mix: FeedMix)
-
     /**
      * The channels this member follows, by name.
      *
@@ -313,23 +309,3 @@ data class ChannelPage(
  * day upstream adds a fourth.
  */
 data class SortOption(val label: String, val token: String)
-
-
-/**
- * How Home is divided.
- *
- * The three shares are a preference and total 100 between them; the fixed part
- * is the server's and is only read. It is **one setting for the household**,
- * which is the server's decision, not this app's — so a phone changing it
- * changes everybody's Home.
- */
-data class FeedMix(
-    val subscribedPercent: Int,
-    val affinityPercent: Int,
-    val discoveryPercent: Int,
-    /** Continue watching + rewatch + new uploads, as a percentage of the page. */
-    val fixedPercent: Int,
-) {
-    /** What the three sliders divide between them. */
-    val adjustablePercent: Int get() = 100 - fixedPercent
-}

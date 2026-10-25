@@ -23,9 +23,6 @@ package com.mytube.app.ui.watch
  * fleeing the hand dragging it.
  */
 
-/** Movement before a drag is admitted. A finger never lands perfectly still. */
-const val DRAG_SLOP = 12f
-
 /**
  * How far down counts as "put it away", as a fraction of the *picture's*
  * height — not of the journey.

@@ -1,5 +1,6 @@
 package com.mytube.app.data.repository
 
+import com.mytube.app.domain.model.MAX_LEVEL
 import com.mytube.app.data.local.SettingsDataSource
 import com.mytube.app.data.local.SettingsKeys
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
@@ -67,16 +68,4 @@ class PreferencesRepositoryImpl(
     private suspend fun read(key: String): Boolean = settings.get(key) == "true"
 
     private suspend fun write(key: String, on: Boolean) = settings.set(key, on.toString())
-
-    private companion object {
-        /**
-         * The ceiling both sliders share.
-         *
-         * 2.0 rather than 1.0 because the voice legitimately wants to be louder
-         * than the source it is read over — the web app allows the same, and a
-         * limiter sits after it. Applying the same ceiling to the duck level
-         * costs nothing and means one number to reason about.
-         */
-        const val MAX_LEVEL = 2f
-    }
 }

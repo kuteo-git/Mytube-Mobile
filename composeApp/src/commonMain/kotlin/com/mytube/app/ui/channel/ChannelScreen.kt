@@ -214,7 +214,7 @@ fun ChannelContent(
                         strings = strings,
                         onClick = { onOpenVideo(video, queue) },
                         opening = opening == video.id,
-                        menu = videoMenu(strings, onSave = { onSaveVideo(video) }),
+                        menu = remember(video, strings) { videoMenu(strings, onSave = { onSaveVideo(video) }) },
                     )
                 }
                 if (ready.loadingMore) {

@@ -1,7 +1,6 @@
 package com.mytube.app.ui.subscriptions
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import com.mytube.app.ui.home.ChannelAvatar
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -26,14 +24,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatCount
@@ -157,14 +152,16 @@ private fun ChannelRow(channel: Channel, mediaBaseUrl: String, onClick: () -> Un
             .padding(horizontal = Space.lg, vertical = Space.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AsyncImage(
-            model = "$mediaBaseUrl/media/${channel.avatarPath}",
-            contentDescription = channel.name,
-            contentScale = ContentScale.Crop,
-            // 48, larger than the 40 on the watch page and the 36 on a card: here
-            // the avatar is the thing being chosen from, not a label beside a
-            // title.
-            modifier = Modifier.size(48.dp).clip(CircleShape).background(Tokens.surface),
+        // 48, larger than the 40 on the watch page and the 36 on a card: here
+        // the avatar is the thing being chosen from, not a label beside a
+        // title. The shared avatar, so an address the gateway sent absolute is
+        // not pasted after `/media/`, and a channel with no picture shows its
+        // initial rather than a grey disc.
+        ChannelAvatar(
+            name = channel.name,
+            mediaBaseUrl = mediaBaseUrl,
+            path = channel.avatarPath,
+            size = 48.dp,
         )
         Spacer(Modifier.width(Space.md))
         Column(Modifier.weight(1f)) {

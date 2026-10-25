@@ -1,5 +1,6 @@
 package com.mytube.app.ui.settings
 
+import com.mytube.app.domain.model.MAX_LEVEL
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -117,9 +118,6 @@ private fun Level(label: String, value: Float, onChange: (Float) -> Unit) {
         GlassSlider(value = value, onValueChange = onChange, valueRange = 0f..MAX_LEVEL)
     }
 }
-
-/** The ceiling both sliders share. Above 1 on purpose — see [Level]. */
-private const val MAX_LEVEL = 2f
 
 @Preview
 @Composable

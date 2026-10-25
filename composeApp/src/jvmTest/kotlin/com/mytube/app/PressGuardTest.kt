@@ -1,6 +1,5 @@
 package com.mytube.app
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.fail
 
@@ -61,10 +60,7 @@ class PressGuardTest {
                 // this guard failed on a control whose press was perfectly well
                 // hosted. `ScrollRoomGuardTest` was caught by the same thing on
                 // its own first run.
-                val code = lines.withIndex().filterNot { (_, l) ->
-                    val t = l.trim()
-                    t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")
-                }
+                val code = lines.withIndex().filterNot { (_, l) -> isComment(l) }
                 val here = code.indexOfFirst { it.index == index }
                 val from = (here - WINDOW).coerceAtLeast(0)
                 val to = (here + WINDOW).coerceAtMost(code.lastIndex)
@@ -100,12 +96,6 @@ class PressGuardTest {
             )
         }
     }
-
-    private fun uiSources(): List<File> =
-        File("src/commonMain/kotlin/com/mytube/app/ui")
-            .walkTopDown()
-            .filter { it.isFile && it.extension == "kt" }
-            .toList()
 
     private companion object {
         val CLICKABLE = Regex("""\bclickable\(""")

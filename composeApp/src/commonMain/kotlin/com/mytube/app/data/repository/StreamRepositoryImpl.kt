@@ -12,7 +12,7 @@ class StreamRepositoryImpl(
 ) : StreamRepository {
 
     override suspend fun stream(videoId: String, maxHeight: Int): Stream {
-        val baseUrl = server.baseUrl().ifBlank { throw ServerNotConfigured() }
+        val baseUrl = server.requireBaseUrl()
         return gateway.stream(baseUrl, server.profileId(), videoId)
             .toDomain(baseUrl, maxHeight)
     }

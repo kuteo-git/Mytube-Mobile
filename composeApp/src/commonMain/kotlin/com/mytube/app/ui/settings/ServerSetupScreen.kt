@@ -1,6 +1,6 @@
 package com.mytube.app.ui.settings
 
-import androidx.compose.foundation.clickable
+import com.mytube.app.ui.shell.DetailBackIcon
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,9 +30,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -233,7 +230,7 @@ fun ServerSetupContent(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = SetupBackIcon,
+                    imageVector = DetailBackIcon,
                     contentDescription = strings.back,
                     tint = Tokens.text,
                     modifier = Modifier.size(24.dp),
@@ -242,27 +239,6 @@ fun ServerSetupContent(
         }
         }
     }
-}
-
-/** The same chevron every screen opened from another one carries. */
-private val SetupBackIcon: ImageVector by lazy {
-    ImageVector.Builder(
-        name = "SetupBack",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        path(fill = SolidColor(Color.White)) {
-            moveTo(15.5f, 4f)
-            lineTo(7.5f, 12f)
-            lineTo(15.5f, 20f)
-            lineTo(17f, 18.5f)
-            lineTo(10.5f, 12f)
-            lineTo(17f, 5.5f)
-            close()
-        }
-    }.build()
 }
 
 // The states worth looking at, rather than one preview of the happy path.

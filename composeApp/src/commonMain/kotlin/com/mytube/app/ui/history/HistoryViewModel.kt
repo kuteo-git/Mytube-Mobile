@@ -1,8 +1,8 @@
 package com.mytube.app.ui.history
 
+import com.mytube.app.ui.toScreenState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.VideoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,8 +60,6 @@ class HistoryViewModel(private val videos: VideoRepository) : ViewModel() {
         }
     }
 
-    private fun asState(error: Throwable): HistoryState = when (error) {
-        is ServerNotConfigured -> HistoryState.NeedsServer
-        else -> HistoryState.Failed(error.message ?: "could not reach the library")
-    }
+    private fun asState(error: Throwable): HistoryState =
+        error.toScreenState(HistoryState.NeedsServer, HistoryState::Failed)
 }

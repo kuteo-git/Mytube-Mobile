@@ -1,6 +1,5 @@
 package com.mytube.app
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.fail
 
@@ -64,7 +63,7 @@ class UntranslatedGuardTest {
                         val line = raw.trim()
                         if (line.startsWith("@Preview")) inPreviewBlock = true
                         if (inPreviewBlock && line == "}") inPreviewBlock = false
-                        if (inPreviewBlock || line.startsWith("//") || line.startsWith("*")) {
+                        if (inPreviewBlock || isComment(line)) {
                             return@forEachIndexed
                         }
 
@@ -97,15 +96,5 @@ class UntranslatedGuardTest {
          * dictionary or are data.
          */
         val COPY_SITE = Regex("""(Text\(|contentDescription\s*=\s*)"([^"$]*)"""")
-    }
-
-    private fun sourceRoot(): File {
-        var dir: File? = File(".").absoluteFile
-        while (dir != null) {
-            val candidate = File(dir, "composeApp/src")
-            if (candidate.isDirectory) return candidate
-            dir = dir.parentFile
-        }
-        fail("could not find composeApp/src from ${File(".").absolutePath}")
     }
 }

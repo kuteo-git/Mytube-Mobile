@@ -71,7 +71,7 @@ class Screenshots {
                     continueWatching = feed().take(2)
                         .map { it.copy(watchedFraction = 0.4) },
                 ),
-                mediaBase, {}, {}, {}, {}, {},
+                mediaBase, {}, {}, {}, {},
             )
         }
         renderer.render("home-feed-vi", VietnameseStrings) {
@@ -83,14 +83,14 @@ class Screenshots {
                     continueWatching = feed().take(2)
                         .map { it.copy(watchedFraction = 0.4) },
                 ),
-                mediaBase, {}, {}, {}, {}, {},
+                mediaBase, {}, {}, {}, {},
             )
         }
         renderer.render("home-no-server", EnglishStrings) {
-            HomeContent(HomeState.NeedsServer, "", {}, {}, {}, {}, {})
+            HomeContent(HomeState.NeedsServer, "", {}, {}, {}, {})
         }
         renderer.render("home-failed-vi", VietnameseStrings) {
-            HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {}, {})
+            HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {})
         }
     }
 

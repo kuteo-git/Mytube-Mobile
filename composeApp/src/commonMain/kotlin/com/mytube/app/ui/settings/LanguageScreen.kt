@@ -1,6 +1,6 @@
 package com.mytube.app.ui.settings
 
-import androidx.compose.foundation.clickable
+import com.mytube.app.ui.home.filled
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -10,10 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.ui.home.Space
@@ -85,23 +82,15 @@ private fun LanguageRow(label: String, selected: Boolean, onClick: () -> Unit) {
 
 /** Shared with [ProfileScreen], which answers a question of the same shape. */
 internal val TickIcon: ImageVector by lazy {
-    ImageVector.Builder(
-        name = "Tick",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        path(fill = SolidColor(Color.White)) {
-            moveTo(9f, 16.2f)
-            lineTo(4.8f, 12f)
-            lineTo(3.4f, 13.4f)
-            lineTo(9f, 19f)
-            lineTo(21f, 7f)
-            lineTo(19.6f, 5.6f)
-            close()
-        }
-    }.build()
+    filled("Tick") {
+        moveTo(9f, 16.2f)
+        lineTo(4.8f, 12f)
+        lineTo(3.4f, 13.4f)
+        lineTo(9f, 19f)
+        lineTo(21f, 7f)
+        lineTo(19.6f, 5.6f)
+        close()
+    }
 }
 
 @Preview

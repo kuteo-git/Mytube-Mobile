@@ -1,5 +1,6 @@
 package com.mytube.app.ui.saved
 
+import androidx.compose.runtime.remember
 import com.mytube.app.ui.home.videoMenu
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -106,11 +107,13 @@ fun SavedContent(
                         strings = strings,
                         onClick = { onOpenVideo(video.id) },
                         opening = false,
-                        menu = videoMenu(
-                            strings,
-                            onSave = { onUnsave(video) },
-                            saveLabel = strings.removeFromSaved,
-                        ),
+                        menu = remember(video, strings) {
+                            videoMenu(
+                                strings,
+                                onSave = { onUnsave(video) },
+                                saveLabel = strings.removeFromSaved,
+                            )
+                        },
                     )
                 }
             }

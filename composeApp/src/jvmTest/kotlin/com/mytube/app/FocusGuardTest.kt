@@ -1,6 +1,5 @@
 package com.mytube.app
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.fail
 
@@ -34,17 +33,13 @@ class FocusGuardTest {
         uiSources().forEach { file ->
             val lines = file.readText().lines()
             lines.forEachIndexed { index, line ->
-                val trimmed = line.trim()
-                if (trimmed.startsWith("//") || trimmed.startsWith("*")) return@forEachIndexed
+                if (isComment(line)) return@forEachIndexed
                 if (!GESTURE.containsMatchIn(line)) return@forEachIndexed
                 // Lines of code for the answer, raw lines for the reason — the
                 // two halves [PressGuardTest] learned to read apart: a paragraph
                 // explaining a gesture must not push its key handler out of the
                 // window, and the exemption lives in prose by design.
-                val code = lines.withIndex().filterNot { (_, l) ->
-                    val t = l.trim()
-                    t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")
-                }
+                val code = lines.withIndex().filterNot { (_, l) -> isComment(l) }
                 val here = code.indexOfFirst { it.index == index }
                 val chain = code
                     .subList((here - WINDOW).coerceAtLeast(0), (here + WINDOW).coerceAtMost(code.lastIndex) + 1)
@@ -53,7 +48,7 @@ class FocusGuardTest {
                     .subList((index - WINDOW * 2).coerceAtLeast(0), (index + WINDOW * 2).coerceAtMost(lines.lastIndex) + 1)
                     .joinToString("\n")
                 if (!KEYED.containsMatchIn(chain) && !EXEMPT.containsMatchIn(prose)) {
-                    offenders += "${file.name}:${index + 1}  $trimmed"
+                    offenders += "${file.name}:${index + 1}  ${line.trim()}"
                 }
             }
         }
@@ -71,12 +66,6 @@ class FocusGuardTest {
             )
         }
     }
-
-    private fun uiSources(): List<File> =
-        File("src/commonMain/kotlin/com/mytube/app/ui")
-            .walkTopDown()
-            .filter { it.isFile && it.extension == "kt" }
-            .toList()
 
     private companion object {
         /**

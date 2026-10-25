@@ -1,7 +1,6 @@
 package com.mytube.app.ui.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +18,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -118,36 +116,12 @@ private fun RailCard(
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(),
             )
             if (video.durationSeconds > 0) {
-                Text(
-                    text = formatDuration(video.durationSeconds),
-                    color = Tokens.text,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(Space.sm)
-                        .clip(RoundedCornerShape(Radius.badge))
-                        .background(BadgeBackground)
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                )
+                DurationBadge(video.durationSeconds)
             }
             // Always drawn here, unlike on a feed card. Every video in this rail
             // is by definition part way through, so the bar is the reason the
             // card is in the row at all.
-            Box(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .background(Tokens.line),
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth(video.watchedFraction.toFloat().coerceIn(0f, 1f))
-                        .fillMaxHeight()
-                        .background(Tokens.brand),
-                )
-            }
+            WatchedBar(video.watchedFraction)
         }
 
         Spacer(Modifier.height(Space.sm))
@@ -174,7 +148,6 @@ private fun RailCard(
                 )
             }
             VideoCardMenu(
-                video = video,
                 strings = LocalStrings.current,
                 onSave = onSave,
                 // No "not interested" on this rail. It holds videos this viewer

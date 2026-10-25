@@ -267,10 +267,7 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
     }
 
     override fun stop() {
-        narrator?.release()
-        narrator = null
-        narrationHost?.dispose()
-        narrationHost = null
+        releaseNarration()
         // Both, in this order. `stop()` alone leaves the item loaded, so Media3
         // keeps the session — and its notification — alive over a player with
         // nothing to play; clearing the queue is what tells the service the
@@ -283,6 +280,14 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
         _state.update { PlaybackState() }
     }
 
+    /** The narration's two players and their host, which `stop` and `release` both end. */
+    private fun releaseNarration() {
+        narrator?.release()
+        narrator = null
+        narrationHost?.dispose()
+        narrationHost = null
+    }
+
     /**
      * Lets go of the connection, and deliberately does **not** stop the player.
      *
@@ -293,10 +298,7 @@ class ExoVideoPlayer(private val context: Context) : VideoPlayer {
      */
     override fun release() {
         stopTicking()
-        narrator?.release()
-        narrator = null
-        narrationHost?.dispose()
-        narrationHost = null
+        releaseNarration()
         controller?.removeListener(listener)
         controller?.release()
         controller = null

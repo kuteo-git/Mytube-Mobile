@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -152,7 +154,13 @@ fun TvShell(
             Modifier
                 .fillMaxHeight()
                 .padding(start = RAIL_START, top = TV_SAFE_VERTICAL, bottom = TV_SAFE_VERTICAL)
-                .width(width)
+                // The animated width read at layout, not in composition: read
+                // here, every frame of the rail opening recomposed the shell.
+                .layout { measurable, constraints ->
+                    val fixed = constraints.constrainWidth(width.roundToPx())
+                    val placeable = measurable.measure(constraints.copy(minWidth = fixed, maxWidth = fixed))
+                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                }
                 .onFocusChanged { open = it.hasFocus }
                 // Redirected on the way in rather than restored: what is right
                 // is always the tab somebody is on, not the row they last

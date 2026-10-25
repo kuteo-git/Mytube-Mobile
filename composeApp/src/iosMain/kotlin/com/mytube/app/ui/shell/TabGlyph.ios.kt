@@ -47,7 +47,7 @@ import platform.posix.memcpy
 actual fun TabGlyph(tab: Tab, selected: Boolean, tint: Color, modifier: Modifier) {
     val name = tab.symbol(selected)
     val density = LocalDensity.current.density
-    val bitmap: ImageBitmap? = remember(name, density) { symbolBitmap(name, density) }
+    val bitmap: ImageBitmap? = remember(name, density) { symbolBitmap(name) }
     if (bitmap != null) {
         Icon(bitmap = bitmap, contentDescription = null, tint = tint, modifier = modifier)
     }
@@ -71,7 +71,7 @@ private fun Tab.symbol(selected: Boolean): String = when (this) {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-private fun symbolBitmap(name: String, density: Float): ImageBitmap? {
+private fun symbolBitmap(name: String): ImageBitmap? {
     // 24 points, the size every other glyph in this bar is drawn at, asked for
     // in points and rendered by UIKit at the screen's own scale.
     val configuration = UIImageSymbolConfiguration.configurationWithPointSize(GLYPH_POINTS)

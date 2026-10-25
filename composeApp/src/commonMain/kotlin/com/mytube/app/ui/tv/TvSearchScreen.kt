@@ -57,7 +57,7 @@ import com.mytube.app.ui.shell.LocalTelevision
 import com.mytube.app.ui.shell.pressableGlassControl
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
-import com.mytube.app.ui.watch.stroke
+import com.mytube.app.ui.home.stroke
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
@@ -277,8 +277,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.libraryResults(
                     opening = false,
                     onClick = { onOpenVideo(video.id) },
                     // Remembered: every key of the keyboard recomposes this list.
-                    menu = remember(video) { videoMenu(strings, onSave = { onSave(saveTargetOf(video)) }) },
-                    thumbWidth = RESULT_THUMB,
+                    menu = remember(video, strings) { videoMenu(strings, onSave = { onSave(saveTargetOf(video)) }) },
                     modifier = if (index == 0) Modifier.focusRequester(focus) else Modifier,
                 )
             }
@@ -314,8 +313,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.upstreamResults(
                     onClick = { onOpen(video) },
                     // No id yet; the sheet writes the row from the address on
                     // Save, as the phone's search does.
-                    menu = remember(video) { videoMenu(strings, onSave = { onSave(saveTargetOf(video)) }) },
-                    thumbWidth = RESULT_THUMB,
+                    menu = remember(video, strings) { videoMenu(strings, onSave = { onSave(saveTargetOf(video)) }) },
                     modifier = if (index == 0 && focus != null) Modifier.focusRequester(focus) else Modifier,
                 )
             }
@@ -347,9 +345,6 @@ private val BAR_HEIGHT = 48.dp
 
 /** The left column: the keyboard's width, which the query bar matches. */
 private val SEARCH_COLUMN = 460.dp
-
-/** A result's picture beside the keyboard: smaller than a page's, so two lines fit. */
-private val RESULT_THUMB = 176.dp
 
 private val MicIcon: ImageVector by lazy {
     stroke("Mic") {

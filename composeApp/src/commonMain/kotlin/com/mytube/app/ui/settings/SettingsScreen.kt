@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,47 +18,34 @@ import com.mytube.app.ui.tv.ReturnsToTop
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
-import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
-import com.mytube.app.domain.repository.FeedMix
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
-import com.mytube.app.ui.shell.GlassSlider
-import com.mytube.app.ui.shell.GlassTextField
 import com.mytube.app.ui.shell.ScreenTitle
 import com.mytube.app.ui.shell.pressSquish
 import com.mytube.app.ui.shell.rememberGlassPress
 import com.mytube.app.ui.shell.tabContentPadding
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
-import kotlin.math.roundToInt
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
@@ -93,27 +79,16 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 fun SettingsScreen(
     baseUrl: String,
     language: Language,
-    /** Null until the server has answered, or if it cannot. */
-    feedMix: FeedMix?,
     onOpenServer: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSubscriptions: () -> Unit,
     onOpenVoice: () -> Unit,
     onOpenLanguage: () -> Unit,
-    onPickLanguage: (Language) -> Unit,
-    onChangeMix: (FeedMix) -> Unit,
-    /** How loud the voice is, as a fraction of the video's own level. */
-    voiceLevel: Float = DEFAULT_VOICE_LEVEL,
-    /** What the video drops to while a line is being read. */
-    duckLevel: Float = DEFAULT_DUCK_LEVEL,
     /** The household's speech voice, or empty when the server did not answer. */
     voice: String = "",
     /** Who this device is watching as, or empty before the server has answered. */
     profileName: String = "",
-    onVoiceLevel: (Float) -> Unit = {},
-    onDuckLevel: (Float) -> Unit = {},
-    onVoice: (String) -> Unit = {},
 ) {
     val strings = LocalStrings.current
     val listState = rememberLazyListState()
@@ -222,8 +197,6 @@ fun SettingsScreen(
     }
 }
 
-private const val MAX_LEVEL = 2f
-
 @Composable
 private fun SettingRow(label: String, value: String, onClick: () -> Unit) {
     // A chevron and a fill while pressed, because nothing else here says this
@@ -294,15 +267,12 @@ private fun SettingsPreview() {
         SettingsScreen(
             baseUrl = "http://192.168.1.42:8180",
             language = Language.English,
-            feedMix = FeedMix(60, 20, 20, fixedPercent = 28),
             onOpenServer = {},
             onOpenProfile = {},
             onOpenHistory = {},
             onOpenVoice = {},
             onOpenLanguage = {},
             onOpenSubscriptions = {},
-            onPickLanguage = {},
-            onChangeMix = {},
         )
     }
 }
@@ -315,15 +285,12 @@ private fun SettingsUnconfiguredPreview() {
         SettingsScreen(
             baseUrl = "",
             language = Language.English,
-            feedMix = null,
             onOpenServer = {},
             onOpenProfile = {},
             onOpenHistory = {},
             onOpenVoice = {},
             onOpenLanguage = {},
             onOpenSubscriptions = {},
-            onPickLanguage = {},
-            onChangeMix = {},
         )
     }
 }
@@ -336,15 +303,12 @@ private fun SettingsVietnamesePreview() {
             SettingsScreen(
                 baseUrl = "http://192.168.1.42:8180",
                 language = Language.Vietnamese,
-                feedMix = FeedMix(60, 20, 20, fixedPercent = 28),
                 onOpenServer = {},
             onOpenProfile = {},
             onOpenHistory = {},
                 onOpenVoice = {},
                 onOpenLanguage = {},
                 onOpenSubscriptions = {},
-                onPickLanguage = {},
-                onChangeMix = {},
             )
         }
     }

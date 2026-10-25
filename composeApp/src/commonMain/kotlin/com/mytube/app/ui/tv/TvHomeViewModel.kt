@@ -1,8 +1,8 @@
 package com.mytube.app.ui.tv
 
+import com.mytube.app.ui.toScreenState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
@@ -329,8 +329,6 @@ class TvHomeViewModel(private val videos: VideoRepository) : ViewModel() {
         now.copy(shelves = now.shelves.map { if (it.kind.key == kind.key) change(it) else it })
     }
 
-    private fun asState(error: Throwable): TvHomeState = when (error) {
-        is ServerNotConfigured -> TvHomeState.NeedsServer
-        else -> TvHomeState.Failed(error.message ?: "could not reach the library")
-    }
+    private fun asState(error: Throwable): TvHomeState =
+        error.toScreenState(TvHomeState.NeedsServer, TvHomeState::Failed)
 }

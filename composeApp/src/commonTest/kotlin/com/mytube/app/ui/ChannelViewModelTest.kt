@@ -1,11 +1,9 @@
 package com.mytube.app.ui
 
+import com.mytube.app.StubVideoRepository
 import com.mytube.app.domain.model.Channel
-import com.mytube.app.domain.model.ExternalVideo
-import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.ChannelPage
-import com.mytube.app.domain.repository.VideoRepository
 import kotlinx.coroutines.delay
 import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.ui.channel.ChannelState
@@ -208,7 +206,7 @@ class ChannelViewModelTest {
         /** Pages by (sort token, page token), each with its next token; [page] otherwise. */
         private val pages: Map<Pair<String, String>, Pair<List<Video>, String>> = emptyMap(),
         private val delays: Map<Pair<String, String>, Long> = emptyMap(),
-    ) : VideoRepository {
+    ) : StubVideoRepository() {
         var ensureCalls = 0
             private set
 
@@ -236,38 +234,6 @@ class ChannelViewModelTest {
 
         override suspend fun feed(topic: String, pageToken: String) = throw NotImplementedError()
         override suspend fun video(id: String) = throw NotImplementedError()
-        override suspend fun search(query: String) = emptyList<Video>()
-        override suspend fun discover(query: String, limit: Int) = emptyList<ExternalVideo>()
-        override suspend fun resolveChannel(query: String) = ""
-        override suspend fun topics() = emptyList<com.mytube.app.domain.model.Topic>()
-        override suspend fun live() = emptyList<Video>()
-        override suspend fun missed(pageToken: String) =
-            com.mytube.app.domain.repository.FeedPage(emptyList(), "")
-        override suspend fun history(limit: Int) = emptyList<Video>()
-        override suspend fun saved() = emptyList<Video>()
-        override suspend fun feedMix() = throw NotImplementedError()
-        override suspend fun saveFeedMix(mix: com.mytube.app.domain.repository.FeedMix) = Unit
-        override suspend fun subscriptions() = emptyList<Channel>()
-        override suspend fun upNext(videoId: String, channelId: String) = emptyList<Video>()
-        override suspend fun recordProgress(
-            videoId: String,
-            positionSeconds: Double,
-            watchedFraction: Double,
-        ) = Unit
-        override suspend fun setReaction(
-            videoId: String,
-            reaction: com.mytube.app.domain.model.Reaction,
-        ) = Unit
-        override suspend fun setSaved(videoId: String, saved: Boolean) = Unit
-        override suspend fun setSubscribed(channelId: String, subscribed: Boolean) = Unit
-        override suspend fun setNotInterested(videoId: String) = Unit
-        override suspend fun subtitleCues(url: String) = emptyList<SubtitleCue>()
-        override suspend fun comments(videoId: String) =
-            emptyList<com.mytube.app.domain.model.Comment>()
-        override suspend fun importComments(videoId: String) = Unit
-        override suspend fun refreshMetadata(videoId: String) = Unit
-        override suspend fun playlists(videoId: String) =
-            emptyList<com.mytube.app.domain.model.Playlist>()
         override suspend fun playlist(playlistId: String, pageToken: String) =
             throw NotImplementedError()
         override suspend fun createPlaylist(title: String) = throw NotImplementedError()
@@ -276,8 +242,5 @@ class ChannelViewModelTest {
             title: String,
             description: String,
         ) = throw NotImplementedError()
-        override suspend fun deletePlaylist(playlistId: String) = Unit
-        override suspend fun addToPlaylist(playlistId: String, videoId: String) = Unit
-        override suspend fun removeFromPlaylist(playlistId: String, videoId: String) = Unit
     }
 }

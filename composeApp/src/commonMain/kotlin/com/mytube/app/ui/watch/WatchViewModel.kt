@@ -2,7 +2,7 @@ package com.mytube.app.ui.watch
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.data.repository.ServerNotConfigured
+import com.mytube.app.domain.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL

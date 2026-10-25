@@ -25,7 +25,7 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.Strings
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.theme.Tokens
-import com.mytube.app.ui.watch.stroke
+import com.mytube.app.ui.home.stroke
 
 /**
  * One key of the television's on-screen keyboard.

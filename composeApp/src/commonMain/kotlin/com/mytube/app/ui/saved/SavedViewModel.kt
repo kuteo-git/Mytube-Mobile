@@ -1,8 +1,8 @@
 package com.mytube.app.ui.saved
 
+import com.mytube.app.ui.toScreenState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.data.repository.ServerNotConfigured
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.VideoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,8 +59,6 @@ class SavedViewModel(private val videos: VideoRepository) : ViewModel() {
         }
     }
 
-    private fun asState(error: Throwable): SavedState = when (error) {
-        is ServerNotConfigured -> SavedState.NeedsServer
-        else -> SavedState.Failed(error.message ?: "could not reach the library")
-    }
+    private fun asState(error: Throwable): SavedState =
+        error.toScreenState(SavedState.NeedsServer, SavedState::Failed)
 }

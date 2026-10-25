@@ -1,5 +1,6 @@
 package com.mytube.app.ui.tv
 
+import com.mytube.app.ui.i18n.EnglishStrings
 import com.mytube.app.ui.shell.SkeletonLine
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -344,7 +345,7 @@ private fun ShelfRow(
                         }
                         // Remembered per video: a new list on every recomposition
                         // was a card that could never skip.
-                        val menu = remember(video) { videoMenu(strings, onSave = { save(video) }) }
+                        val menu = remember(video, strings) { videoMenu(strings, onSave = { save(video) }) }
                         TvVideoCard(
                             video = video,
                             mediaBaseUrl = mediaBaseUrl,
@@ -517,8 +518,8 @@ private val previewShelves = shelvesFrom(
 )
 
 @Composable
-private fun preview(state: TvHomeState) = MytubeTheme {
-    CompositionLocalProvider(LocalTelevision provides true) {
+private fun preview(state: TvHomeState, strings: Strings = EnglishStrings) = MytubeTheme {
+    CompositionLocalProvider(LocalTelevision provides true, LocalStrings provides strings) {
         Box(Modifier.fillMaxSize().background(Tokens.bg)) {
             TvHomeContent(state, "", {}, {}, {}, {}, {}, {}, {}, {})
         }
@@ -543,13 +544,4 @@ private fun TvHomeFailedPreview() = preview(TvHomeState.Failed("gateway answered
 
 @Preview(widthDp = 960, heightDp = 540)
 @Composable
-private fun TvHomeVietnamesePreview() = MytubeTheme {
-    CompositionLocalProvider(
-        LocalTelevision provides true,
-        LocalStrings provides VietnameseStrings,
-    ) {
-        Box(Modifier.fillMaxSize().background(Tokens.bg)) {
-            TvHomeContent(TvHomeState.Ready(previewShelves), "", {}, {}, {}, {}, {}, {}, {}, {})
-        }
-    }
-}
+private fun TvHomeVietnamesePreview() = preview(TvHomeState.Ready(previewShelves), VietnameseStrings)

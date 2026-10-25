@@ -5714,3 +5714,70 @@ on up to the top and makes it larger.
   experimental in foundation 1.11, hence the opt-in.
 - After the fix, over Downs, Rights and Ups on the Chromecast: 11% janky,
   p50 31ms, p99 65ms.
+
+## A pass for what the code repeated, carried and recomputed (2026-10-25)
+
+A review of the whole project from four angles: reuse, simplification,
+efficiency, and whether each fix sits at the right depth. Each change below
+leaves behaviour as it was unless the bullet says otherwise. Verified with the
+full command (398 tests) and driven on the TV and phone emulators: Home,
+shelves, rail, Settings, Voice, Subscriptions, the TV player's up next and
+panels, the phone's watch page, comments and drag to the miniplayer.
+
+- **Dead code removed.** Settings took eight parameters it never read, and App
+  wired about 45 lines of handlers into them. One effect fetched the feed mix
+  and threw the answer away. The feed mix UI had no caller, so it went, along
+  with its port methods, gateway calls and DTOs. Also removed: ten display
+  strings never shown, the skip glyphs, `PullGlass.extraTop` (always 0),
+  `LocalBarsHidden` (nothing read it), and a handful of unused parameters and
+  declarations.
+- **`ServerNotConfigured` is the port's, in `domain/repository`.** Nine
+  ViewModels mapped it to a screen state with the same five lines; that mapping
+  is now `toScreenState`. `ArchitectureGuardTest.uiNeverReachesIntoData` was
+  run red on the ten imports before the move, so the `ui → data` item is closed.
+- **One of each, where there were copies.** These were each defined once
+  instead of several times:
+  - `SkeletonLine` for every skeleton bar.
+  - One `filled` and one `stroke` icon builder.
+  - `DetailBackIcon`.
+  - `DurationBadge` and `WatchedBar` across the cards.
+  - `MAX_LEVEL` in the domain.
+  - One pane under both `GlassTextField`s.
+  - `controlLens` for the pill and the chip.
+  - `requireBaseUrl` for the repositories.
+  - `GuardSources.kt` for the guards. Their copies had drifted on whether a
+    line opening a block comment is code.
+  - `StubVideoRepository` for ten test fakes. Each fake had spelled out every
+    method, about 330 lines in all.
+- **The playhead no longer recomposes what does not show it.**
+  - The miniplayer collects the watch state inside itself. Read in App's own
+    scope, four ticks a second recomposed the whole app for as long as anything
+    played.
+  - App's composition reads only whether a drag is live, not its progress. It
+    had recomposed on every frame of the gesture.
+  - The TV's up next row and side panel are handed the fields they read rather
+    than the state, which is a new object on every tick. The phone's details
+    list does the same.
+  - The TV rail's animated width is read at layout.
+  - The TV grids remember each card's menu.
+- **Two requests concurrent, one parse off the main thread.** A channel page
+  asks for the channel and its uploads together. A subtitle file is parsed on
+  `Dispatchers.Default`.
+- **Behaviour that changed:**
+  - Subscriptions draws `ChannelAvatar`, so a channel with no picture shows its
+    initial rather than a grey disc. An absolute address is no longer pasted
+    after `/media/`.
+  - The TV's search rows keep their 176dp picture as the row's own size.
+- **Considered and left.**
+  - The bars' hidden fractions as lambdas. Tried and reverted: `topHidden` is
+    pinned to false by `barTravel` and `barsHidden` is a constant, so there was
+    no animation to save.
+  - iOS re-applying the subtitle selection on every tick. It could not be heard
+    on the phone in this pass.
+  - Moving `X-User-Id` and the address into the gateway. It reverses the
+    gateway's own documented choice, touches forty requests, and wants checking
+    against the running server rather than a cleanup pass.
+- **Found, not fixed.** `ServerRepositoryImpl.profiles()` swallows a failure and
+  answers an empty list. App's `.onSuccess { profiles = it }` then replaces a
+  known household with nobody, which is the opposite of what the comments
+  around it intend.

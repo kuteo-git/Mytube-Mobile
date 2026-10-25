@@ -149,8 +149,6 @@ fun AppShell(
     content: @Composable () -> Unit,
 ) {
     val strings = LocalStrings.current
-    val hide = barsHidden
-    val hideTop = topHidden
 
     // The provider wraps the Box rather than sitting inside it. `Modifier.align`
     // is `BoxScope`, and CompositionLocalProvider's content lambda is not one —
@@ -174,13 +172,7 @@ fun AppShell(
     var topBarPx by remember { mutableStateOf(0f) }
     val topBarHeight = with(LocalDensity.current) { topBarPx.toDp() }
 
-    CompositionLocalProvider(
-        // The top number: this reaches the chip row, and the chips are chrome
-        // pinned under the *top* bar. Giving them the bottom bar's answer is
-        // what left them on screen whenever something was playing.
-        LocalBarsHidden provides hideTop,
-        LocalTopBarHeight provides topBarHeight,
-    ) {
+    CompositionLocalProvider(LocalTopBarHeight provides topBarHeight) {
         Box(Modifier.fillMaxSize().background(Tokens.bg)) {
             // The recording, and the flag that stops a tab opening a second
             // one inside it — see [glassSource], which crashed here.
@@ -196,7 +188,7 @@ fun AppShell(
             // shell's flow before <main> displaces every page"*, which cost that
             // app a 44px gap under the search field on every screen.
             TopBar(
-                hidden = hideTop,
+                hidden = topHidden,
                 onHeight = { topBarPx = it },
                 underTopBar = underTopBar,
                 modifier = Modifier.align(Alignment.TopCenter),
@@ -213,7 +205,7 @@ fun AppShell(
                     .offset {
                         IntOffset(
                             0,
-                            (topBarHeight + PullGlass.extraTop + Space.sm).roundToPx(),
+                            (topBarHeight + Space.sm).roundToPx(),
                         )
                     },
             )
@@ -224,7 +216,7 @@ fun AppShell(
                 strings = { tab -> tabLabel(tab, strings) },
                 onSearch = onSearch,
                 searchLabel = strings.search,
-                hidden = hide,
+                hidden = barsHidden,
                 collapse = collapse,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )

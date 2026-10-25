@@ -100,6 +100,24 @@ class ArchitectureGuardTest {
     }
 
     /**
+     * `ui` reaches `data` only through the ports `domain/repository` declares.
+     *
+     * The one import that ever crossed was `ServerNotConfigured`, which every
+     * screen's ViewModel catches: the port's own failure, declared by the
+     * implementation. A screen that names an implementation's type is a screen
+     * that cannot be handed a different one.
+     */
+    @Test
+    fun uiNeverReachesIntoData() {
+        assertNoImports(
+            layer = "ui",
+            forbidden = listOf(
+                "com.mytube.app.data" to "the data layer",
+            ),
+        )
+    }
+
+    /**
      * `data` is the only layer allowed to be nullable, and the only one allowed
      * to know a wire format. Asserted from the other side: nothing else may
      * carry `@Serializable`.
@@ -141,24 +159,5 @@ class ArchitectureGuardTest {
                     problems.joinToString("\n"),
             )
         }
-    }
-
-    /**
-     * Found by walking up from the working directory rather than hard-coded.
-     *
-     * Gradle does not promise which directory a test runs in, and a path written
-     * as a literal is a test that passes on one machine and fails on another for
-     * a reason that has nothing to do with the code.
-     */
-    private fun sourceRoot(): File {
-        var dir: File? = File(".").absoluteFile
-        while (dir != null) {
-            val candidate = File(dir, "composeApp/src")
-            if (candidate.isDirectory) return candidate
-            val here = File(dir, "src/commonMain")
-            if (here.isDirectory) return File(dir, "src")
-            dir = dir.parentFile
-        }
-        fail("could not find composeApp/src from ${File(".").absolutePath}")
     }
 }

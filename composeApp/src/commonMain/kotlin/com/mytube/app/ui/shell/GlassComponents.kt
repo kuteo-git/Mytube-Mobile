@@ -270,6 +270,35 @@ fun GlassSlider(
  * The placeholder is drawn underneath rather than as a floating label: there is
  * one field per screen here and what it wants is written above it.
  */
+@Composable
+fun GlassTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    /** What the return key does. Default is nothing, which is what it did. */
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    /**
+     * Where to send focus from, for a caller that wants the cursor here on
+     * arrival. On the field rather than on [modifier], which lands on the pane
+     * around it — a `focusRequester` there requests focus for a `Box`, which
+     * takes it and never raises a keyboard.
+     */
+    focusRequester: FocusRequester? = null,
+) = GlassFieldPane(value.isEmpty(), placeholder, modifier, focusRequester) { fieldModifier, style ->
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        textStyle = style,
+        cursorBrush = SolidColor(Tokens.brand),
+        modifier = fieldModifier,
+    )
+}
+
 /**
  * The same field, driven by a [TextFieldValue] so the caller owns the caret.
  *
@@ -287,62 +316,34 @@ fun GlassTextField(
     modifier: Modifier = Modifier,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
-    singleLine: Boolean = true,
-    textAlign: TextAlign = TextAlign.Start,
     focusRequester: FocusRequester? = null,
-) {
-    Box(
-        modifier
-            .fillMaxWidth()
-            .height(FIELD_HEIGHT)
-            .glassControl(GlassRadius.control)
-            .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        if (value.text.isEmpty()) {
-            Text(
-                text = placeholder,
-                color = Tokens.text2,
-                fontSize = 15.sp,
-                textAlign = textAlign,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = singleLine,
-            keyboardOptions = keyboardOptions,
-            keyboardActions = keyboardActions,
-            textStyle = LocalTextStyle.current.merge(
-                TextStyle(color = Tokens.text, fontSize = 15.sp, textAlign = textAlign),
-            ),
-            cursorBrush = SolidColor(Tokens.brand),
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
-        )
-    }
+) = GlassFieldPane(value.text.isEmpty(), placeholder, modifier, focusRequester) { fieldModifier, style ->
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        textStyle = style,
+        cursorBrush = SolidColor(Tokens.brand),
+        modifier = fieldModifier,
+    )
 }
 
+/**
+ * The pane both fields sit on, and the placeholder under the text.
+ *
+ * The `BasicTextField` itself stays with each overload: a `String` one and a
+ * `TextFieldValue` one handle the caret differently, which is the reason there
+ * are two.
+ */
 @Composable
-fun GlassTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
+private fun GlassFieldPane(
+    isEmpty: Boolean,
     placeholder: String,
-    modifier: Modifier = Modifier,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
-    /** What the return key does. Default is nothing, which is what it did. */
-    keyboardActions: KeyboardActions = KeyboardActions.Default,
-    /**
-     * Where to send focus from, for a caller that wants the cursor here on
-     * arrival. On the field rather than on [modifier], which lands on the pane
-     * around it — a `focusRequester` there requests focus for a `Box`, which
-     * takes it and never raises a keyboard.
-     */
-    focusRequester: FocusRequester? = null,
-    singleLine: Boolean = true,
-    textAlign: TextAlign = TextAlign.Start,
+    modifier: Modifier,
+    focusRequester: FocusRequester?,
+    field: @Composable (fieldModifier: Modifier, style: TextStyle) -> Unit,
 ) {
     Box(
         modifier
@@ -352,28 +353,22 @@ fun GlassTextField(
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        if (value.isEmpty()) {
+        if (isEmpty) {
             Text(
                 text = placeholder,
                 color = Tokens.text2,
                 fontSize = 15.sp,
-                textAlign = textAlign,
+                textAlign = TextAlign.Start,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = singleLine,
-            keyboardOptions = keyboardOptions,
-            keyboardActions = keyboardActions,
-            textStyle = LocalTextStyle.current.merge(
-                TextStyle(color = Tokens.text, fontSize = 15.sp, textAlign = textAlign),
-            ),
-            cursorBrush = SolidColor(Tokens.brand),
-            modifier = Modifier
+        field(
+            Modifier
                 .fillMaxWidth()
                 .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+            LocalTextStyle.current.merge(
+                TextStyle(color = Tokens.text, fontSize = 15.sp, textAlign = TextAlign.Start),
+            ),
         )
     }
 }

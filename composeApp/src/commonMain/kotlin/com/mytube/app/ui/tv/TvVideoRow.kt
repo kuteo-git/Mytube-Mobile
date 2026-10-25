@@ -13,7 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.Strings
@@ -37,7 +37,6 @@ fun TvVideoRow(
     /** See [TvThumbnail]. */
     menu: List<MenuAction>,
     modifier: Modifier = Modifier,
-    thumbWidth: Dp = TV_ROW_THUMB,
 ) = TvVideoRow(
     thumbnail = imageModel(mediaBaseUrl, video.thumbnailPath),
     title = video.title,
@@ -49,7 +48,6 @@ fun TvVideoRow(
     onClick = onClick,
     menu = menu,
     modifier = modifier,
-    thumbWidth = thumbWidth,
 )
 
 /**
@@ -65,7 +63,6 @@ fun TvVideoRow(
     /** See [TvThumbnail]. */
     menu: List<MenuAction>,
     modifier: Modifier = Modifier,
-    thumbWidth: Dp = TV_ROW_THUMB,
 ) = TvVideoRow(
     thumbnail = video.thumbnailUrl,
     title = video.title,
@@ -77,7 +74,6 @@ fun TvVideoRow(
     onClick = onClick,
     menu = menu,
     modifier = modifier,
-    thumbWidth = thumbWidth,
 )
 
 /**
@@ -103,8 +99,6 @@ fun TvVideoRow(
     /** See [TvThumbnail]. */
     menu: List<MenuAction>,
     modifier: Modifier = Modifier,
-    /** The picture's width: a shelf card's on a page, narrower beside search's keyboard. */
-    thumbWidth: Dp = TV_ROW_THUMB,
 ) {
     Row(
         modifier
@@ -122,7 +116,7 @@ fun TvVideoRow(
             opening = opening,
             onClick = onClick,
             menu = menu,
-            modifier = Modifier.width(thumbWidth),
+            modifier = Modifier.width(TV_ROW_THUMB),
         )
         Spacer(Modifier.width(Space.lg))
         // The shelf card's type, for the shelf card's reason: YouTube's TV app,
@@ -144,5 +138,8 @@ fun TvVideoRow(
     }
 }
 
-/** A row's picture: the shelf card's width, so a list and a shelf agree. */
-val TV_ROW_THUMB = TV_CARD_WIDTH
+/**
+ * A row's picture: smaller than a shelf card's, so two lines fit beside it in
+ * the column search's keyboard leaves.
+ */
+private val TV_ROW_THUMB = 176.dp

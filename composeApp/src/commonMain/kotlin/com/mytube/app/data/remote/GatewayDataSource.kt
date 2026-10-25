@@ -8,7 +8,6 @@ import com.mytube.app.data.remote.dto.EnsureExternalDto
 import com.mytube.app.data.remote.dto.EnsureExternalRequest
 import com.mytube.app.data.remote.dto.CommentsDto
 import com.mytube.app.data.remote.dto.FeedDto
-import com.mytube.app.data.remote.dto.FeedMixDto
 import com.mytube.app.data.remote.dto.NarrationDto
 import com.mytube.app.data.remote.dto.PlaylistBody
 import com.mytube.app.data.remote.dto.PlaylistDto
@@ -156,19 +155,6 @@ class GatewayDataSource(private val client: HttpClient) {
      * from it — and settled on sending the *viewer's* answer under the older
      * name. The rename happens at the mapper, not here.
      */
-    suspend fun feedMix(baseUrl: String, userId: String): FeedMixDto =
-        client.get("${baseUrl.trimEnd('/')}/api/settings/feed-mix") {
-            identify(userId)
-        }.orThrow().body()
-
-    suspend fun saveFeedMix(baseUrl: String, userId: String, mix: FeedMixDto) {
-        client.post("${baseUrl.trimEnd('/')}/api/settings/feed-mix") {
-            identify(userId)
-            contentType(ContentType.Application.Json)
-            setBody(mix)
-        }.orThrow()
-    }
-
     suspend fun saved(baseUrl: String, userId: String): FeedDto =
         client.get("${baseUrl.trimEnd('/')}/api/pinned") { identify(userId) }.orThrow().body()
 

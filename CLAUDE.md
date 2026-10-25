@@ -300,7 +300,7 @@ press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden
   test** — `wholeSeconds`, `barTravel`, `tabAt`, `tabPress`, `dragOutcome`,
   `miniPlayerBottomInset`, `seekLineFromBottom`, `fillFromPinch`, `frameAt`,
   `scrubPreviewScale`, `shouldRecoverStall`, `channelToken`, `progressDue`,
-  `rebalance`, `focusScale`, `focusRimShape`, `tvSeekStep`, `shelvesFrom`,
+  `focusScale`, `focusRimShape`, `tvSeekStep`, `shelvesFrom`,
   `shelfCardWidth`, `asksWhoIsWatching`, `withTone`, `typed`, `caughtUp`,
   `rowEntryIndex`, `keptInPlace`, `isWaitingForBytes`.
 - **Regression tests go red on the reported symptom first.** Test bodies for wire
@@ -355,7 +355,7 @@ Everything on the external volume; `source env.sh` before working.
 ## 10. Status (v0.1.13, 2026-10-25)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
-  household's iPhone, release build via AltStore).** 400 tests, seven guards.
+  household's iPhone, release build via AltStore).** 398 tests, seven guards.
 - **Runs on the household's Chromecast with Google TV** (release build over
   `adb`): rail, shelves, the full-screen player with D-pad seeking, search with
   an on-screen keyboard and voice, the profile question. Released in v0.1.12;
@@ -364,12 +364,12 @@ Everything on the external volume; `source env.sh` before working.
   Channel, Watch (layer with drag-to-miniplayer, controls, subtitles, narration,
   storyboard scrub preview, pinch-to-fill, double-tap seek, comments, up next,
   autoplay with a queue), Playlists (create/rename/delete, save sheet), Saved,
-  History, Subscriptions, Profile, Settings (server, voice, language, feed mix).
+  History, Subscriptions, Profile, Settings (server, voice, language).
 - Background audio, the lock screen and narration have been heard on real
   phones.
 - **Known open items**: an iOS-only one-frame flicker of the watch layer during
   the drag (changelog 2026-09-21, unconfirmed fixed); `X-User-Id` attached by hand
-  at each call site; `ui → data` import of `ServerNotConfigured`; defaulted flags
+  at each call site; defaulted flags
   on `WatchSession`; playlist and channel ViewModels accumulating in the activity
   store; three screens without previews; the glass is flat below Android 12 (blur
   needs API 31, lens API 33) — accepted.
