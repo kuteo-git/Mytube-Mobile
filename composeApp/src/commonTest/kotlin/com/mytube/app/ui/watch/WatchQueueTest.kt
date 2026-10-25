@@ -347,6 +347,7 @@ class WatchQueueTest {
             narration = narration,
             preferences = FakePreferences,
             openedFrom = queue,
+            maxHeight = PHONE_MAX_HEIGHT,
             playerFactory = players,
         )
         advanceUntilIdle()

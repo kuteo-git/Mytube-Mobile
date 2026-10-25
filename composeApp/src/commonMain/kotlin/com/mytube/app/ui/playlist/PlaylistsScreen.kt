@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -42,6 +43,13 @@ import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
+import androidx.compose.ui.unit.Dp
+import com.mytube.app.ui.tv.fullWidthItem
+import com.mytube.app.ui.tv.headingItem
+import com.mytube.app.ui.tv.TvGrid
+import com.mytube.app.ui.tv.TvCard
+import com.mytube.app.ui.shell.LocalTelevision
+import com.mytube.app.ui.i18n.Strings
 import com.mytube.app.ui.shell.CollectionListSkeleton
 import com.mytube.app.ui.shell.DetailBack
 import com.mytube.app.ui.shell.EmptyState
@@ -150,6 +158,58 @@ fun PlaylistsContent(
         ) {
             val ready = state as? PlaylistsState.Ready ?: return@TabScaffold
 
+            // A grid of Home's cards on a television — see `TvGrid`. The same
+            // rows, the same order, the same actions.
+            if (LocalTelevision.current) {
+                TvGrid(Modifier.fillMaxSize()) {
+                    headingItem(key = "title") { PlaylistsTitle(strings, onStartCreating) }
+                    item(key = "saved") {
+                        TvCard(
+                            thumbnail = "",
+                            title = strings.savedTitle,
+                            channel = "",
+                            meta = "",
+                            durationSeconds = 0,
+                            watchedFraction = 0.0,
+                            onClick = onOpenSaved,
+                            withMeta = false,
+                            opening = false,
+                            // A shelf, not a video: nothing to save it to.
+                            menu = emptyList(),
+                            modifier = Modifier,
+                            width = Dp.Unspecified,
+                            placeholder = BookmarkIcon,
+                        )
+                    }
+                    items(ready.playlists, key = { it.id }) { playlist ->
+                        TvCard(
+                            thumbnail = playlist.thumbnailPaths.firstOrNull()
+                                ?.let { imageModel(mediaBaseUrl, it) }
+                                .orEmpty(),
+                            title = playlist.title,
+                            channel = strings.playlistCount(playlist.itemCount),
+                            meta = "",
+                            durationSeconds = 0,
+                            watchedFraction = 0.0,
+                            onClick = { onOpenPlaylist(playlist.id) },
+                            withMeta = true,
+                            opening = false,
+                            // Renamed and deleted from inside it, as on a phone.
+                            menu = emptyList(),
+                            modifier = Modifier,
+                            width = Dp.Unspecified,
+                            placeholder = PlaylistIcon,
+                        )
+                    }
+                    if (ready.playlists.isEmpty()) {
+                        fullWidthItem(key = "empty") {
+                            EmptyState(strings.noPlaylists, strings.noPlaylistsDetail)
+                        }
+                    }
+                }
+                return@TabScaffold
+            }
+
             LazyColumn(
                 Modifier.fillMaxSize(),
                 state = listState,
@@ -158,34 +218,7 @@ fun PlaylistsContent(
                 // the same fact that decides both.
                 contentPadding = if (onBack == null) tabContentPadding() else detailContentPadding(),
             ) {
-                item(key = "title") {
-                    // The "+" is in the title row, not at the end of the list.
-                    // A member with twelve collections would otherwise have to
-                    // scroll past all of them to make a thirteenth.
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        ScreenTitle(strings.playlists, Modifier.weight(1f))
-                        run {
-                            Icon(
-                                imageVector = PlusIcon,
-                                contentDescription = strings.newPlaylist,
-                                tint = Tokens.text,
-                                modifier = Modifier
-                                    .padding(end = Space.lg)
-                                    .size(Size.iconButton)
-                                    .clip(GlassRadius.control)
-                                    .pressableGlassControl(
-                                        GlassRadius.control,
-                                        onClick = onStartCreating,
-                                    )
-                                    .padding(Space.sm),
-                            )
-                        }
-                    }
-                }
-
+                item(key = "title") { PlaylistsTitle(strings, onStartCreating) }
 
                 // The saved shelf, first and fixed. It is not one of the rows
                 // below and never arrives in that list — see `Playlist`.
@@ -222,6 +255,37 @@ fun PlaylistsContent(
         }
 
         if (onBack != null) DetailBack(onBack, strings.back)
+    }
+}
+
+/**
+ * The page's heading, with the button that starts a new collection.
+ *
+ * The "+" is in the title row, not at the end of the list. A member with twelve
+ * collections would otherwise have to scroll past all of them to make a
+ * thirteenth.
+ */
+@Composable
+private fun PlaylistsTitle(strings: Strings, onStartCreating: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ScreenTitle(strings.playlists, Modifier.weight(1f))
+        Icon(
+            imageVector = PlusIcon,
+            contentDescription = strings.newPlaylist,
+            tint = Tokens.text,
+            modifier = Modifier
+                .padding(end = Space.lg)
+                .size(Size.iconButton)
+                .clip(GlassRadius.control)
+                .pressableGlassControl(
+                    GlassRadius.control,
+                    onClick = onStartCreating,
+                )
+                .padding(Space.sm),
+        )
     }
 }
 

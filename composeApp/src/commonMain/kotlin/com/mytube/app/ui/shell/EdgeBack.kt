@@ -61,6 +61,7 @@ fun Modifier.edgeBack(onBack: () -> Unit): Modifier = composed {
         var travelled = 0f
         var fromEdge = false
 
+        // focus-guard: a swipe from the screen's edge is the phone's back. A remote has a Back key, and `App` does not attach this on a television.
         detectHorizontalDragGestures(
             // Where the finger *landed* decides whether this is a back gesture
             // at all. Judging it later, from the direction of travel, would

@@ -542,32 +542,28 @@ fun WatchContent(
                         settingsOpen = settingsOpen,
                         onPlayNext = onPlayNext,
                         onPlayPrevious = onPlayPrevious,
-                        // The CC button is a shortcut, not a replacement for
-                        // the menu: it turns the first track on and off, which
-                        // is what somebody reaching for it nearly always wants.
-                        // Choosing *which* track stays in the sheet.
-                        onToggleSubtitles = {
-                            onSelectSubtitles(
-                                if (state.subtitleLanguage.isEmpty()) {
-                                    state.video.subtitles.first().language
-                                } else {
-                                    ""
-                                },
-                            )
-                        },
+                        // A shortcut beside the gear, not a replacement for
+                        // the sheet: the sheet still holds narration with
+                        // captions and autoplay. The rule for when it can be
+                        // offered is the sheet's own.
+                        onToggleNarration = onToggleNarration,
                         hasNext = state.nextId.isNotEmpty(),
                         hasPrevious = hasPrevious,
-                        hasSubtitles = state.video.subtitles.isNotEmpty(),
-                        subtitlesOn = state.subtitleLanguage.isNotEmpty(),
+                        canNarrate = state.canNarrate,
+                        narrating = state.narrating,
                     )
                     }
                     }
                 }
 
-                // Nothing here: the skeleton below draws the whole screen,
-                // picture included, so a spinner over it would be two things
-                // saying the same thing in different words.
-                is WatchState.Loading -> Unit
+                // The badge the player shows while it buffers, in the same
+                // place, so it stays put from the tap to the first frame. The
+                // skeleton below draws no picture (see `WatchSkeleton`), and
+                // with nothing here the slot was black for as long as the
+                // stream took to resolve — measured on the simulator, 1.5s.
+                is WatchState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    BufferingBadge(strings.loadingVideo)
+                }
 
                 // Every other state still gets the back arrow. Without it a
                 // video that will not play is a screen with no way out but the
@@ -784,7 +780,7 @@ fun WatchContent(
                 // switch on such a video turns on, does nothing, and turns
                 // itself off, which is the dead control §5 of the server
                 // charter refuses.
-                canNarrate = !state.isLive && state.video.subtitles.isNotEmpty(),
+                canNarrate = state.canNarrate,
                 narrating = state.narrating,
                 narration = state.narration,
                 autoplay = state.autoplay,

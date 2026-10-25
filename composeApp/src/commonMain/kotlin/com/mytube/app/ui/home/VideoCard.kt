@@ -285,7 +285,7 @@ fun VideoCard(
 }
 
 /** `157K views · 1 day ago`, or just the views when the date is unknown. */
-private fun metaLine(video: Video, strings: Strings): String {
+internal fun metaLine(video: Video, strings: Strings): String {
     val views = formatViews(video.viewCount, strings)
     if (!video.hasPublishedDate) return views
     val age = formatRelative(video.publishedAt, strings)
@@ -347,28 +347,7 @@ fun VideoCardMenu(
     // rail's — which is why the composable exists at all.
     val tick = rememberSelectionTick()
 
-    val items = buildList {
-        if (onSave != null) {
-            add(
-                MenuAction(
-                    // "Lưu vào playlist", because the press no longer writes one
-                    // bit — it opens the question that bit was standing in for.
-                    // So the label does not follow `video.saved` any more: a
-                    // video already on the shelf can still be wanted in a
-                    // collection, and "Saved" would say the question had been
-                    // answered.
-                    //
-                    // Unless the caller names it: on the saved shelf and on a
-                    // playlist page the row is the way *off* the list, which is
-                    // a different sentence.
-                    label = saveLabel.ifEmpty { strings.saveToPlaylist },
-                    onClick = onSave,
-                ),
-            )
-        }
-        if (onMarkWatched != null) add(MenuAction(strings.markWatched, onMarkWatched))
-        if (onNotInterested != null) add(MenuAction(strings.notInterested, onNotInterested))
-    }
+    val items = videoMenu(strings, onSave, saveLabel, onNotInterested, onMarkWatched)
 
     Icon(
         imageVector = MoreVertical,
@@ -380,6 +359,40 @@ fun VideoCardMenu(
             .clickable { tick(); show(items) }
             .padding(Space.sm),
     )
+}
+
+/**
+ * What a video's menu offers: the phone card's dots, and on a television a
+ * long press of OK on the card — the same actions in the same order, from one
+ * list, so the two cannot drift.
+ */
+internal fun videoMenu(
+    strings: Strings,
+    onSave: (() -> Unit)?,
+    saveLabel: String = "",
+    onNotInterested: (() -> Unit)? = null,
+    onMarkWatched: (() -> Unit)? = null,
+): List<MenuAction> = buildList {
+    if (onSave != null) {
+        add(
+            MenuAction(
+                // "Lưu vào playlist", because the press no longer writes one
+                // bit — it opens the question that bit was standing in for.
+                // So the label does not follow `video.saved` any more: a
+                // video already on the shelf can still be wanted in a
+                // collection, and "Saved" would say the question had been
+                // answered.
+                //
+                // Unless the caller names it: on the saved shelf and on a
+                // playlist page the row is the way *off* the list, which is
+                // a different sentence.
+                label = saveLabel.ifEmpty { strings.saveToPlaylist },
+                onClick = onSave,
+            ),
+        )
+    }
+    if (onMarkWatched != null) add(MenuAction(strings.markWatched, onMarkWatched))
+    if (onNotInterested != null) add(MenuAction(strings.notInterested, onNotInterested))
 }
 
 /**

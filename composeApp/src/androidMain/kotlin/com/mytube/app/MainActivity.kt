@@ -1,7 +1,9 @@
 package com.mytube.app
 
 import android.Manifest
+import android.app.UiModeManager
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -34,6 +36,17 @@ class MainActivity : ComponentActivity() {
             .launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
+
+    /**
+     * Whether this is a television, asked of the platform once.
+     *
+     * The UI mode, which is what Android itself uses to decide a device is a
+     * TV — not the window's size, which a tablet beats. One APK serves both, so
+     * this is the only line that knows which one it is running on.
+     */
+    private fun isTelevision(): Boolean =
+        getSystemService(UiModeManager::class.java)?.currentModeType ==
+            Configuration.UI_MODE_TYPE_TELEVISION
 
     /**
      * The container is built once for the process, not once per Activity.
@@ -74,6 +87,14 @@ class MainActivity : ComponentActivity() {
         }
         askForNotifications()
         val container = MytubeApp.container(applicationContext)
-        setContent { App(container) }
+        val television = isTelevision()
+        // On a television the shell paints `Tokens.bg` over the whole screen,
+        // so the window's own background under it was a second full-screen
+        // fill on every frame — measured with HWUI's overdraw view, the whole
+        // page one layer deep before anything was on it, on a GPU the trace
+        // showed already holding frames back. The theme's colour still shows
+        // as the app opens, before the first frame.
+        if (television) window.setBackgroundDrawable(null)
+        setContent { App(container, television = television) }
     }
 }

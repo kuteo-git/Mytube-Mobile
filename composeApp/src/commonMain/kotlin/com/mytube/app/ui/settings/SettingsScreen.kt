@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import com.mytube.app.ui.tv.ReturnsToTop
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -112,10 +116,15 @@ fun SettingsScreen(
     onVoice: (String) -> Unit = {},
 ) {
     val strings = LocalStrings.current
+    val listState = rememberLazyListState()
+    val focus = remember { FocusRequester() }
+    // On a television, the rail's Settings picked again.
+    ReturnsToTop(focus) { listState.scrollToItem(0) }
 
     Surface(color = Tokens.bg, modifier = Modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().focusRequester(focus),
+            state = listState,
             contentPadding = tabContentPadding(),
         ) {
             item(key = "title") { ScreenTitle(strings.navSettings) }

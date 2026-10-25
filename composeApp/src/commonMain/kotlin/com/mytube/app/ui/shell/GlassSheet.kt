@@ -183,7 +183,8 @@ fun BoxScope.GlassSheet(
         visibleState = shown,
         enter = slideInVertically { it } + fadeIn(),
         exit = slideOutVertically { it } + fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+        // A modal for the remote on a television — see [tvModal].
+        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().tvModal(visible),
     ) {
       Box(Modifier.fillMaxWidth()) {
         Box(
@@ -256,6 +257,7 @@ fun BoxScope.GlassSheet(
                         .fillMaxWidth()
                         .height(28.dp)
                         .pointerInput(sheetHeight) {
+                            // focus-guard: the drag down is one way to shut a sheet; Back is the other, and a remote has it.
                             detectVerticalDragGestures(
                                 onDragEnd = {
                                     if (offset.value >= sheetHeight * DISMISS_FRACTION) {

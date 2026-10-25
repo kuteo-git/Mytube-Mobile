@@ -1,5 +1,6 @@
 package com.mytube.app.ui.saved
 
+import com.mytube.app.ui.home.videoMenu
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -15,6 +16,14 @@ import androidx.compose.ui.unit.dp
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.theme.Tokens
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.fillMaxWidth
+import com.mytube.app.ui.tv.fullWidthItem
+import com.mytube.app.ui.tv.headingItem
+import com.mytube.app.ui.tv.TvGridCard
+import com.mytube.app.ui.tv.TvGrid
+import com.mytube.app.ui.shell.LocalTelevision
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -80,6 +89,33 @@ fun SavedContent(
         onRetry = onRetry,
     ) {
         val ready = state as? SavedState.Ready ?: return@TabScaffold
+
+        // A grid of Home's cards on a television, as the playlists beside it —
+        // see `TvGrid`. "Remove from saved" stays the phone's, for the reason
+        // the playlist page gives.
+        if (LocalTelevision.current) {
+            TvGrid(Modifier.fillMaxSize()) {
+                headingItem(key = "title") { ScreenTitle(strings.savedTitle) }
+                if (ready.videos.isEmpty()) {
+                    fullWidthItem(key = "empty") { EmptyState(strings.noSaved, strings.noSavedDetail) }
+                }
+                items(ready.videos, key = { it.id }) { video ->
+                    TvGridCard(
+                        video = video,
+                        mediaBaseUrl = mediaBaseUrl,
+                        strings = strings,
+                        onClick = { onOpenVideo(video.id) },
+                        opening = false,
+                        menu = videoMenu(
+                            strings,
+                            onSave = { onUnsave(video) },
+                            saveLabel = strings.removeFromSaved,
+                        ),
+                    )
+                }
+            }
+            return@TabScaffold
+        }
 
         LazyColumn(Modifier.fillMaxSize(), contentPadding = detailContentPadding()) {
             item(key = "title") { ScreenTitle(strings.savedTitle) }

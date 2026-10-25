@@ -47,6 +47,16 @@ import kotlinx.coroutines.launch
 const val PHONE_MAX_HEIGHT = 720
 
 /**
+ * The same ceiling for a television: 1080p.
+ *
+ * A Chromecast with Google TV draws 1920×1080, so this is the screen rather
+ * than a saving. Above it the server's ladder is AV1 only — `av01` at 1440 and
+ * 2160 — and most Google TV boxes decode AV1 in software if at all, which is a
+ * stutter bought with bytes the panel cannot show.
+ */
+const val TV_MAX_HEIGHT = 1080
+
+/**
  * How often the viewer's position is sent to the server, in seconds of playback.
  *
  * Ten. What it feeds is Continue watching and the ranker's WATCH signal, and the
@@ -218,7 +228,15 @@ sealed interface WatchState {
          * channel page was showing. See [nextId].
          */
         val nextId: String = "",
-    ) : WatchState
+    ) : WatchState {
+        /**
+         * Whether narration is offered for this recorded video: one with
+         * captions to read. Four places draw the switch — both players' rows
+         * and both settings panels — and the television's row had already
+         * drifted from its panel when the rule was written out at each.
+         */
+        val canNarrate: Boolean get() = !isLive && video.subtitles.isNotEmpty()
+    }
 }
 
 /**
@@ -290,6 +308,15 @@ class WatchViewModel(
      * only ever a way of finding one video to leave the list by.
      */
     openedFrom: List<QueueItem> = emptyList(),
+    /**
+     * The tallest rung to ask the server for: [PHONE_MAX_HEIGHT] or
+     * [TV_MAX_HEIGHT].
+     *
+     * **No default**, for [startAtBeginning]'s reason. A defaulted 720 would be
+     * right on every phone and silently wrong on the one television, where it
+     * reads as the app being blurry rather than as a missing argument.
+     */
+    private val maxHeight: Int,
     playerFactory: VideoPlayerFactory,
 ) : ViewModel() {
 
@@ -451,6 +478,15 @@ class WatchViewModel(
         val playing = (_state.value as? WatchState.Playing)?.playback?.isPlaying ?: return
         if (playing) player.pause() else player.play()
     }
+
+    /**
+     * Pause, whatever the player is doing.
+     *
+     * Separate from [playPause] because the television's Home button means
+     * "pause" and never "resume": a toggle there would start a paused video
+     * playing behind the launcher.
+     */
+    fun pause() = player.pause()
 
     fun seekTo(seconds: Double) {
         player.seekTo(seconds)
@@ -927,7 +963,7 @@ class WatchViewModel(
                 // the one that was asked for.
                 val playing = ensureInCatalogue(id)
                 val video = videos.video(playing)
-                when (val stream = streams.stream(playing, PHONE_MAX_HEIGHT)) {
+                when (val stream = streams.stream(playing, maxHeight)) {
                     is Stream.Playable -> {
                         // Where the viewer left off. The server already knows —
                         // it is in the video's own user state — so the position
@@ -1044,7 +1080,13 @@ class WatchViewModel(
 
                         WatchState.Playing(
                             video = playable,
-                            playback = PlaybackState(),
+                            // What the player has said since `load`, not a
+                            // blank: its reports while this was still Loading
+                            // went nowhere, and the one that matters — buffering
+                            // — is not repeated until the first frame. Blank,
+                            // the spinner went with the Loading state and the
+                            // screen stayed black for seconds.
+                            playback = player.state.value,
                             isLive = stream.isLive,
                             hasLiveCaptions = stream.hasLiveCaptions,
                             subtitleLanguage = language,

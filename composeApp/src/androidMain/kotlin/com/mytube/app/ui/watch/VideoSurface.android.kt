@@ -1,5 +1,6 @@
 package com.mytube.app.ui.watch
 
+import android.view.LayoutInflater
 import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -8,7 +9,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.mytube.app.domain.repository.VideoPlayer
+import com.mytube.app.R
 import com.mytube.app.player.ExoVideoPlayer
+import com.mytube.app.ui.shell.LocalTelevision
 
 @UnstableApi
 @Composable
@@ -17,11 +20,19 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) 
     // until then, which is a fraction of a second and is why the watch screen
     // keeps a black box of the right shape underneath.
     val controller = (player as? ExoVideoPlayer)?.controller ?: return
+    val television = LocalTelevision.current
 
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            PlayerView(context).apply {
+            // A TextureView on the television — see `tv_player_view.xml` for
+            // what the SurfaceView left over the picture there.
+            val view = if (television) {
+                LayoutInflater.from(context).inflate(R.layout.tv_player_view, null) as PlayerView
+            } else {
+                PlayerView(context)
+            }
+            view.apply {
                 this.player = controller
                 // The app draws its own controls, in Compose, shared with iOS.
                 // Media3's are Android-only and would make the two platforms

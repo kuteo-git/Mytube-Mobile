@@ -5226,3 +5226,438 @@ playlists it saw. Put back through the Profile page. And `simctl spawn defaults
 write com.xtube.com …` does **not** reach an app's own preferences — it reported
 the new value back while the app went on reading the old one from its
 container.
+
+## Android TV, built for a remote rather than shrunk from a phone (2026-10-24)
+
+The household's television is a **Chromecast with Google TV** — Android 14,
+1920×1080 at 320dpi, so 960×540dp — and it installs the same APK the phones do.
+The server's Phase 3 `/tv` web UI is replaced by it (server charter §7); the
+decisions below were settled up front with the household and then measured on
+that Chromecast, driven over `adb` at `10.25.113.114`.
+
+**One APK, one flag.** `LEANBACK_LAUNCHER` and a banner put the app on the TV's
+home screen; `touchscreen` and `leanback` are declared not-required so phones
+keep installing it. `MainActivity` asks `UiModeManager` whether this is a
+television — never the window's size, which a tablet beats — and passes
+`television` to `App` with **no default**. `LocalTelevision` carries it. iOS
+passes `false`.
+
+**What differs on the TV, and nothing else.**
+- `TvShell`: a rail on the left (Search, Home, Playlists, Settings) that opens
+  with labels while focus is in it, instead of the phone's bottom bar.
+- `TvHomeScreen`: every phone chip as a shelf — Continue watching, Missed,
+  Live, Recommended, then each topic, fetched as the remote reaches it
+  (`TvHomeViewModel`, `shelvesFrom`). An empty shelf is not drawn.
+- `TvWatchScreen`: the picture fills the screen, always; no miniplayer and no
+  drag. The phone's `WatchViewModel` drives it unchanged except for a ceiling
+  parameter (`maxHeight`, no default: 720 on a phone, **1080** on the TV, the
+  screen's own height — above it the server's ladder is AV1 only).
+- `WhoIsWatchingScreen`: asked on every launch when the household has more than
+  one member (`asksWhoIsWatching`), the last viewer focused.
+- `TvSearchScreen`: a keyboard on the page, YouTube's TV app's seven columns,
+  with a Vietnamese layout (ă â đ ê ô ơ ư and five tone keys — `withTone` puts
+  the mark where spelling puts it, including *qu*, *gi* and *ươ*) and the
+  remote's microphone through `RecognizerIntent` (`rememberVoiceSearch`, null
+  and undrawn where there is no recogniser). The system keyboard on this
+  Chromecast covered the results and asked to be typed on from a phone.
+- The phone's list pages (search results, a channel, a playlist, saved,
+  history) are reused: `VideoCard` and `ExternalVideoCard` draw a `TvVideoRow`
+  on a television, because the phone's full-width picture is half a 960dp
+  screen.
+- Home's button pauses (`LifecycleEventEffect(ON_STOP)` → `watch.pause()`, never
+  a toggle). Measured: PLAYING → Home → PAUSED, and still paused on return.
+
+**Focus is the press's other half.** `clickable` is focusable and answers OK, so
+every control that goes through `pressable` was reachable from a D-pad without
+being touched. Focus is worn by `GlassPress` beside the press: a rise of up to
+`FOCUS_SCALE` (1.08) capped at 16dp past each edge (`focusScale`), and a white
+rim with a dark hairline inside it, so it reads on a selected (white) row too.
+Only in keyboard input mode — a phone never shows it. Measured fixes on the way:
+- A shelf card is nearly square, and the rim's shape-from-size rule ringed it
+  with a **circle**; now only small squares are circles, and cards pass their
+  shape (`rimShape`).
+- A full-width settings row grown 3% lost both ends of its rim to the list's
+  clip; anything 480dp or wider keeps its size and wears the rim only.
+- **Every row on Home rose four to six dp and settled back with each left or
+  right press**, measured frame by frame off a `screenrecord`: the focus target
+  sat inside the rise's `graphicsLayer`, so it reported its bounds part-way
+  grown and the list scrolled to fit them. `pressable` now orders lift → target
+  → bloom (`pressLift`, `pressBloom`). An override of the TV's pivoting
+  `BringIntoViewSpec` was tried first and was not the cause; it was removed,
+  and with it the focused row centring that the household had noticed was gone.
+
+**The floating back arrow was a trap.** `DetailBack` floats over a page's list,
+and Compose's two-dimensional search does not count the list as *below* it, so
+a remote that landed on the arrow could go nowhere — down and right did nothing
+on every page reached from a menu. A remote has a Back key; on a television the
+arrow is not drawn.
+
+**The picture.** A SurfaceView shows through a hole punched in the window, and
+on this Chromecast the hole is punched only where a frame redraws. With the
+controls hidden at the start of a video, a 1024px tile and then jagged patches
+of `#101010` — Home's ground, measured by pixel — sat over the film. Removing
+the window background looked like a fix once, only because a full-screen
+overlay had happened to redraw everything. The TV's `PlayerView` uses a
+**TextureView** (`tv_player_view.xml`; only an XML attribute can choose it);
+the phone keeps its SurfaceView.
+
+**Back, one layer at a time, from one handler.** On the TV a video opens with
+nothing over it; down brings the controls with focus on the suggestions; Back
+takes away the panel, then the controls, and only then closes the player —
+which on a television is the close button (stop, and cancel narration). It was
+a second `BackHandler` inside the player first, and the same press hid the
+controls on one run and closed the video on the next: which of two handlers is
+asked first is not a thing to rely on. The player hands `App` a step instead
+(`onBackStep`), and `App`'s one handler asks it before closing.
+
+**Focus comes back to where it was.** Closing the player handed focus to each
+page's first control, and the page scrolled up to meet it — reported as every
+list "resetting". `focusRestorer` did not do it. Every `pressable` and
+`focusStop` writes itself into a `FocusMemory` as it gains focus (TV only);
+`App` marks it when the player opens and restores it two frames after it
+closes. Measured: the screen before opening and after closing are byte-for-byte
+identical on Home and on a playlist.
+
+**Measured against YouTube's own TV app**, on the same Chromecast, by the height
+of a capital in its screenshot: shelf cards 264dp (360dp on the first shelf),
+18dp apart; titles 18sp on a 24sp line; channel and views 13sp on two lines;
+the rail's glyphs centred 39dp in and the shelves starting at 78dp. Shelf
+headings are 20sp rather than its 16, at the household's request — beside 18sp
+titles, 16 read as lost.
+
+**Painted glass only.** No sampled backdrop on the TV: `LocalBackdrop` is null
+there, so every glass falls back to its painted form, and the search field —
+sampled glass on a phone — gets a solid floor, because painted glass over a list
+is the list showing through.
+
+**Guards.** `FocusGuardTest`: a pointer gesture (`detectTapGestures` and the
+drags) needs a key handler in its chain or a `focus-guard: <reason>` beside it.
+Proven to fail on the level slider before the slider learned left and right.
+Six guards, 349 tests.
+
+## The television's second evening: back, focus, grids and a second activity (2026-10-24)
+
+Reported by the household from the Chromecast while it was being built, each
+measured there before and after.
+
+**Two narration voices were two activities.** Narration on, Home, the app's
+tile again, play: two voices on the same line, and the switch silenced only one.
+`dumpsys activity activities` showed the task holding **two** `MainActivity`s —
+the launcher's intent did not match the task's, so Android stacked a second one,
+and each composed its own player with its own pair of narration speakers over
+the one shared video. `android:launchMode="singleTask"`; `ManifestGuardTest`
+went red on the manifest first. After: one activity.
+
+**Back from a page put focus on the wrong thing — the same cause everywhere.**
+Settings → Subscriptions → back landed on the first row (and once on the rail),
+and every list "reset" when a video was put away. Three faults under one
+symptom:
+- *The covered page was rebuilt.* The tabs are now composed under every page
+  opened from them on a television, the way pages stay under the player, so
+  coming back is uncovering. Nothing covered may take focus (`onEnter` →
+  `cancelFocusChange()` while covered).
+- *Not every control said where focus was.* `FocusMemory` was written from
+  `pressable` alone; Settings' rows hold their own `GlassPress`, so the memory
+  still held the rail and restored focus there — measured with a logged build:
+  the restore "succeeded", onto the rail item. It is written in `pressLift` now,
+  which every press goes through. The memory is a **stack**: a page covers a
+  tab, the player covers the page, and each uncover restores its own mark.
+- *A page arriving asked for focus before it had any.* Two frames in, the
+  playlist page showed only its skeleton, the request found nothing, and focus
+  stayed on the hidden tab — the remote moved through a page nobody could see.
+  Focus is cleared from the covered tabs at once and the page is asked every
+  frame until a control takes it.
+Measured: the screen before opening a page and after coming back are
+byte-for-byte identical on Settings and on a playlist.
+
+**Layered back in the player.** A video now opens with nothing over it; down
+brings the controls with focus on the suggestions; Back takes away the panel,
+then the controls, then closes. A video that ends with autoplay off brings the
+suggestions up on its own, as down would.
+
+**Grids.** The playlists tab, a playlist, the saved shelf, history and a
+channel are grids of the shelves' cards on a television (`TvGrid`), three
+across — `GridCells.Adaptive(264dp)` fitted two once the gaps were counted.
+~~A grid scrolls only to uncover the focused card: the TV's pivot, kept for
+Home's shelves, pulled a channel's grid up and cut its avatar off.~~
+**Superseded the same night** — the household wanted the focused card held
+where Home holds it; the grids pivot again and a page's heading brings itself
+whole (`headingItem`). See "The television's third evening". Pages keep
+no bottom margin, so a grid runs off the screen's edge as the shelves do.
+Their loading skeleton is the grid's, not the phone's column of full-width
+pictures — on a television one grey block the height of the screen.
+
+**Search** is two columns — the query and an on-screen keyboard held still on
+the left, results scrolling on the right — because stacked, the Vietnamese
+keyboard's six rows walked the query off the top of the screen.
+
+**Narration from the controls.** A speaker button beside the player's settings
+on the television; on the **phone** it replaces the captions button by the gear
+(captions stay in the gear's sheet), at the household's request. Filled and
+outline glyphs for on and off.
+
+**Smaller measured fixes.** The rail's rows 12dp apart, so the focused row's rim
+and the selected row's white pill no longer touch; a card's title holds no blank
+second line before its channel; the up-next row in the player is smaller and
+without meta lines, which were cut off at the bottom.
+
+**Cleanup** after a four-angle review: one `TvThumbnail` for the card, the row
+and the playlist tile; `TvVideoRow` overloads for a library video and an
+upstream one; one section title; `tabLabel` shared by both shells; the watch
+callbacks shared by both players; the TV backdrop decided once; dead TV branches
+removed from the phone's search components.
+
+## The television's third evening: rows keep their place, Home catches up, long press (2026-10-24)
+
+Reported from the sofa; fixed on the TV emulator (`mytube_tv`, 1920×1080) while
+the set was off for the night, each measured there by screenshot.
+
+**Down landed on the next shelf's second card, every time.** Compose's default
+search is geometric, and a shelf that has scrolled holds its focused card a
+third of the way across — over the next shelf's second card. Each row now
+remembers the card it was left on (`RowMemory`, hoisted above the column) and
+focus *moved* into a row goes there, followed by id if the row has reordered,
+or its first card if never visited (`rowEntryIndex`, `entersAt`). Up next in
+the player always enters at its first video. Measured: right twice on the first
+shelf, down → the second shelf's first card; up → the card left on.
+- **Only a move is redirected.** A card asked for by name arrives as
+  `FocusDirection.Enter` and is let through — the first build sent the save
+  sheet's focus hand-back to up next's first card instead of the one it was
+  opened from.
+
+**Up past the seek bar did nothing.** With up next showing, up walked to the
+seek bar and stopped there; the controls stayed. Up that finds nothing above it
+now takes the controls away, as Back does — handled in `onKeyEvent` on the
+player, after the focused control and before the root moves focus.
+
+**Home did not refresh after a video.** Home stays composed under the player,
+so nothing asked again: Continue watching and Missed were the launch's.
+`TvHomeViewModel.catchUp()` asks again as the player goes, with the shelves left
+on screen — fixed shelves taken whole, topic shelves already asked for kept
+(`caughtUp`), a failure leaving what was there. Test red first on the reported
+symptom.
+- **The card focus was handed back to could vanish.** Watched from Missed, the
+  video left Missed in the new answer; the focused node left the composition and
+  Compose gave focus to the first thing on screen — the rail, which opened over
+  the shelves (screenshot). The focused card stays in its row until focus leaves
+  it (`keptInPlace`), and a shelf that empties while focused stays too.
+
+**The rail's current tab picked again goes to the top**, as YouTube's TV app
+does: Home scrolls every shelf and the column to the start, focuses the first
+card and catches up; the playlists grid and Settings scroll to the top
+(`ReturnToTop`). Two traps on the way: `scrollToItem` on a shelf scrolled out of
+the column waits for a layout that never comes (`requestScrollToItem` instead),
+and picking a tab moved focus right *after* Home had taken it, stepping off its
+first card — the rail now moves focus only if it still has it.
+
+**Grids pivot like Home** (`TvGrid`), reversing the evening before at the
+household's request. The heading is what the pivot cut off, so the heading
+asks for itself: `headingItem` wraps a page's heading in a
+`BringIntoViewResponder` that answers any focused control inside with the
+heading's whole rectangle, and since the heading is the grid's first item the
+grid can only stop at its top. A channel's sorts moved into its heading item —
+as a second item, its own top would have been held a third of the way down.
+Measured on 3Blue1Brown: subscribe and the sort chips both show the avatar.
+
+**A card's menu from the sofa: hold OK.** A card on a television has no dots a
+remote can aim at. `pressable(onLongClick)` uses `combinedClickable`, which times
+a held OK the way it times a held finger (only when there is a long press — every
+other control still goes through `clickable`). Every TV card and row offers the
+phone's menu for the same video, from one list (`videoMenu`): save to playlist,
+or remove on the saved shelf and a playlist; search's upstream rows save from
+the address. The menu is a solid pane on a television — the painted fallback let
+the card title under it read through, a word from its own label. The player's
+controls stay up while focus is outside them (a sheet opened from up next), or
+the card focus returns to would have been hidden and gone.
+
+**QA and cleanup.** A test agent added 34 tests and found two real faults in
+`catchUp`, both red before the fix: it cancelled the fixed shelves' next pages
+*before* knowing the new answer would arrive, so a failed catch-up left a row
+`loadingMore` for ever; and a next page asked for *during* the catch-up was
+never cancelled, appending the old ranking's second page to the fresh first.
+The cancel now happens as the new answers land, over whatever is in flight then.
+A four-angle review: each shelf's card left on is plain fields with a requester
+per card chosen as focus arrives (as snapshot state, every left or right
+recomposed every card on the shelf), menus remembered per video, a menu anchor's
+bounds computed when it opens rather than on every scroll frame of every card,
+`saveTargetOf`, `videoMenu` for the phone's upstream dots too, and
+`FocusMemory` handing focus back to the control focused before the marked one
+when that one has gone — a card removed from the saved shelf by its own menu.
+Skipped: a solid fallback for every sheet on the TV (not reported), moving
+`catchUp` into the player-close effect (it is declared before the profile it
+needs), refetching only two of Home's five answers (Recommended changing after
+a video is wanted).
+
+390 tests, all green; phone checked on the `mytube` emulator — Home, the dots
+menu — unchanged.
+
+**A second review, of the whole television branch.** Applied:
+- `pressLift`'s lift is set at placement, not by `zIndex(...)` in composition —
+  every press of the remote recomposed the control losing focus and the one
+  gaining it.
+- The three `pressableGlass*` variants are one body with the material passed in;
+  `pressSquish`'s unused rim parameter is gone.
+- `FocusMemory.mark()` returns a `FocusTrail` the caller keeps. The shared stack
+  could hand one effect another's mark: opening a channel from the player closes
+  the player and changes the route in the same frame.
+- One `claimFocus` for "clear, then ask every frame for ten seconds", which the
+  page and the modal had each written out.
+- `WatchState.Playing.canNarrate`, which the doc had named and nothing defined;
+  the television's row and its settings panel had drifted apart (`live` against
+  `isLive`).
+- Up next's and search's menus remembered per video (the playhead tick and every
+  key of the keyboard recomposed those rows); the watch screen waits two frames
+  (`awaitPlaced`) before moving focus, not one; `commitDraft`/`showControls`.
+- `TvGridCard` for the four pages of videos, and a card in a grid fills its cell
+  itself; `saveTargetOf` for an upstream result; the phone skeleton's line
+  reused on the television.
+- The phone `VideoCard`'s television branch was dead — every page that draws it
+  returns its own grid first on a television — and went, with `TvVideoRow`'s
+  `trailing`.
+Skipped: one `pressTarget` primitive for the nine controls that still squash
+around their click (phone components, beyond this branch); `TabScaffold`
+drawing `TvMessage` (changes the error screens); a `TvWatchActions` holder;
+one load-ahead helper for three list types; `switchProfile` shared by the two
+profile pickers (different jobs: only the Profile page clears a sitting).
+
+## The television, walked through case by case (2026-10-25)
+
+Forty-five cases written down and run by hand on the TV emulator, a screenshot
+at each check — the cases and every result are in [`docs/tv-qa.md`](tv-qa.md).
+38 passed first time; of the 7 that failed, 6 are fixed and re-checked.
+
+- **A channel's sort stuck on its skeleton for good.** While a sort is out the
+  grid has no cards, so its "near the end" check asks for the next page — of the
+  old order — and that answer was written over the state as it had been when it
+  was asked, `sorting = true` included. `loadMore` waits while sorting and merges
+  into the state as it is now, only if the order is still the same. Red test
+  first: `aNextPageAskedForDuringASortDoesNotUndoTheSort`.
+- **A focused card that a new answer moves takes the row with it** — Continue
+  watching puts the video just watched first, and the card sat cut off at the
+  left edge.
+- **The narration button lost its rim when switched**: on and off were two
+  modifiers, two remembered presses and two focus targets.
+  `pressableGlassSurface(selected)` is one.
+- **Closing the player's side panel hands focus back to the button that opened
+  it**, not to play.
+- **Captions are not drawn under the player's controls**, where they read
+  through up next's scrim.
+- **A modal pane with nothing to sample is solid** (`GlassBackdrop`'s fallback at
+  `TINT_MODAL`): on the television the save sheet let the card titles behind it
+  read through.
+- **Search opens on the keyboard**, not the microphone: a page may name its
+  first control (`LocalPageEntry`), asked before the page itself.
+
+Open: a page reached from a page starts from its first control when it is come
+back to — it is composed again. Keeping each page's saved state is the fix and
+is larger than this pass.
+
+391 tests, all green.
+
+
+## The profile question once, the spinner until the picture, a refusal read right (2026-10-25)
+
+- **The television asks who is watching once.** It asked on every launch, and
+  the same person answered it every evening. `asksWhoIsWatching` now also takes
+  the stored profile id: asked only while it names nobody in the household —
+  never answered, or the member chosen was removed on the server. Changing hands
+  is Settings → Profile, as on a phone. Red first on the reported symptom
+  (`a television that has been answered for does not ask again`); checked on the
+  TV emulator — straight to Home, and a profile switched in Settings survived a
+  relaunch.
+- **A video opening keeps its spinner until the first frame.** Reported: a
+  spinner, then seconds of black, then the picture. Measured on the TV emulator
+  with Media3's `EventLogger` on the service's player: BUFFERING 0.19s after the
+  press, the first frame 3.24s later, READY a millisecond after that — and the
+  spinner shown only for the 0.2s the stream took to resolve. The player's
+  buffering report arrived while `WatchState` was still `Loading`, was dropped
+  ("nowhere to go"), and `Playing` was then built with `playback =
+  PlaybackState()`, a blank that says nothing is loading. Media3 reports nothing
+  more until READY. `Playing` now starts from `player.state.value`. The test
+  (`WatchBufferingTest`) first passed for the wrong reason: its fake settings
+  answered at once, so the report never fell in the gap; on a device those reads
+  suspend, and with a `delay` they do in the test too — red, then green.
+  Re-recorded: the spinner in every frame until the picture.
+- **The iPhone, the same request, three faults.** Recorded on the simulator
+  at 4 fps, a cold video opened to 1.5s of black with nothing on it, then the
+  "Loading video…" badge, then the picture; one opened from up next showed the
+  *pause* icon over black for 2.5s.
+  - The phone's player slot drew nothing while the stream resolved: the
+    comment said the skeleton draws the picture, and the skeleton's own KDoc
+    says it deliberately does not. The badge is drawn there now, in the place
+    the buffering badge takes, so it stays put from the tap to the first frame.
+  - `AvVideoPlayer` never set `isBuffering`.
+  - AVPlayer's own `Playing` is not a picture — that was the pause icon over
+    black. `isWaitingForBytes(wantsToPlay, waitingToPlay, playedSinceLoad,
+    itemFailed)` decides: asked to play, and either AVPlayer is waiting or the
+    playhead has not advanced across two ticks since the last load, seek or
+    reattach. A failed item is never waiting, or `failed` (withheld while
+    buffering) would trade "could not play" for an endless spinner. Six cases,
+    red first. Re-recorded: the badge from the first black frame to the first
+    frame of picture, gone on the next.
+- **A private video said "Illegal input: Unexpected JSON token at offset 15".**
+  Found while driving the simulator: the gateway has answered a refusal as
+  `{"unavailable":{"reason":"private"}}` since 2026-08-15 (server `0af7dc3`), and
+  `StreamDto` read `unavailable` as a Boolean with `reason` beside it. The
+  mapping test fed `{"unavailable":true,"reason":"members_only"}` — a body
+  nobody had seen the gateway send, in a class whose KDoc forbids exactly that.
+  The test now carries the running gateway's body (red, the same parse error),
+  and the DTO reads the object. The phone and the television both now say the
+  video is private on YouTube.
+
+400 tests, all green.
+
+## The television, measured on the Chromecast (2026-10-25)
+
+Reported: Home's shelves slow for a moment and then fine; the picture catching
+as the controls and up next came up. Measured on the household's Chromecast
+(Android 14, 4 cores, 2 GB, armeabi-v7a, Mali GPU) with `dumpsys gfxinfo` over a
+scripted run — Home's first scroll after a cold start (six down, six right), the
+same rows again, and the first and second Down in the player — and Perfetto
+traces read with `trace_processor`.
+
+| | Home, first scroll | Home, again | Player, first Down |
+|---|---|---|---|
+| as installed (`status=verify`) | 52% janky, p99 350ms | 24%, p50 36ms | worst frame 350ms |
+| compiled (`speed`) | 31%, p99 89ms | 24%, p50 36ms | 57ms |
+| + nothing painted twice | 10%, p99 48ms | 7%, p50 22ms | 150ms (one frame) |
+| + controls composed with the player | 10%, p99 69ms | 6.5%, p50 22ms | 109ms (one frame) |
+
+- **The app had never been compiled.** `adb install` leaves `status=verify`:
+  interpreted and JIT until the TV's nightly maintenance, which every install
+  restarts. That is the "slow, then fine". `tools/tv-install.sh` installs and
+  runs `cmd package compile -m speed`.
+- **Every pixel was painted at least twice, a thumbnail's four times or more**
+  (HWUI's overdraw view: the page blue, every thumbnail red). The trace said
+  why it mattered: the render thread spent 7ms of each 28ms frame in
+  `dequeueBuffer`, waiting on the GPU. On the TV the window's background is
+  dropped (the shell paints the same colour over all of it), and a thumbnail's
+  surface is Coil's placeholder rather than a background under every loaded
+  picture. Afterwards: the page true colour, thumbnails blue.
+- **The player's controls are composed with the player and faded.** Inside
+  `AnimatedVisibility` they were built on the press that showed them — one
+  218ms frame, 70ms composing, 103ms measuring, 43ms drawing, with the picture
+  frozen for it. Hidden, they are at alpha 0 (not drawn), their semantics are
+  cleared and focus cannot enter them; up next goes back to its start as they
+  hide. Walked on the emulator: Down to up next #1, along it, hide and Down to
+  #1 again, Up through Play and the seek bar to hidden, Left seeking.
+  What is left is the first *draw* (64ms on the render thread), which alpha 0
+  does not do.
+- **Tried and reverted:** `CompositingStrategy.ModulateAlpha` for the fade —
+  janky frames went from 4% to 33%: alpha on every translucent draw costs more
+  than one offscreen blend on this GPU.
+- **Not this app's to change:** the household's TV has Switch Access and a
+  launcher's key service enabled as accessibility services, and with either on
+  Compose diffs its semantics tree after every frame — 1.3s of a 14s Home trace
+  (`checkForSemanticsChanges`, `sendAccessibilitySemanticsStructureChangeEvents`).
+- **Not done, a decision:** the release is not run through R8
+  (`isMinifyEnabled = false`, §9). The remaining main-thread time is Compose's
+  own; R8 is what strips its source-information and trace calls. One trial
+  build: it built with no keep rules of its own, shrank the APK from 14.4MB to
+  3.9MB, launched and loaded Home on the TV — and measured *worse* (p50 46ms),
+  in a run where the TV had 241MB free and its swap full. The control run on
+  the plain build lost its frames to the TV going to sleep. Inconclusive; to be
+  measured again A/B/A with the TV kept awake. `composeApp/proguard-rules.pro`
+  is the trial's, otherwise empty.
+
+400 tests, all green.

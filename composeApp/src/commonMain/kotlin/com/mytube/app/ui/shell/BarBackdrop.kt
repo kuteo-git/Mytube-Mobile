@@ -233,6 +233,15 @@ fun GlassBackdrop(
     // 0.94 against 0.72: nearly opaque at the screen's edge, where the clock and
     // the tab labels have to stay legible, thinning toward the inside so a
     // thumbnail visibly passes *under* the bar rather than being clipped by it.
+    //
+    // A modal pane — a sheet, an alert — is a surface somebody reads and
+    // answers, and with nothing sampled under it the wash let the page show
+    // through its rows: on the television, where nothing is ever sampled, the
+    // card titles behind the save sheet read through it. Solid there.
+    if (tint >= TINT_MODAL) {
+        Box(modifier.clip(shape).background(Tokens.surface))
+        return
+    }
     val edge = Tokens.bg.copy(alpha = 0.94f)
     val inner = Tokens.bg.copy(alpha = 0.72f)
     val stops = if (fromTop) listOf(edge, inner) else listOf(inner, edge)

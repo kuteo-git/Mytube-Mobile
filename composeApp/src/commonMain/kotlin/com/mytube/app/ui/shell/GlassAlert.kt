@@ -110,6 +110,8 @@ fun BoxScope.GlassAlert(
             // no edge it came from.
             enter = fadeIn() + scaleIn(initialScale = 0.92f),
             exit = fadeOut() + scaleOut(targetScale = 0.92f),
+            // A modal for the remote on a television — see [tvModal].
+            modifier = Modifier.tvModal(visible),
         ) {
             Box(
                 Modifier

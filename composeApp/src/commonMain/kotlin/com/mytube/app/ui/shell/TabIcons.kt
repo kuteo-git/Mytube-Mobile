@@ -1,5 +1,6 @@
 package com.mytube.app.ui.shell
 
+import com.mytube.app.ui.i18n.Strings
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -93,6 +94,13 @@ private val SettingsIcon: ImageVector by lazy {
         moveTo(18.6f, 5.4f); lineTo(16.7f, 7.3f)
         moveTo(7.3f, 16.7f); lineTo(5.4f, 18.6f)
     }
+}
+
+/** A tab's name, for both shells' labels — the phone's bar and the television's rail. */
+fun tabLabel(tab: Tab, strings: Strings): String = when (tab) {
+    Tab.Home -> strings.navHome
+    Tab.Playlists -> strings.playlists
+    Tab.Settings -> strings.navSettings
 }
 
 /** The magnifier in the search field's own segment, as the web app draws it. */

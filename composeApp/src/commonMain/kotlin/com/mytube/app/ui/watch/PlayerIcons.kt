@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
  * picture rather than on a surface, and an outline there reads as a shape the
  * video is showing through.
  */
-private fun stroke(name: String, body: PathBuilder.() -> Unit) =
+internal fun stroke(name: String, body: PathBuilder.() -> Unit) =
     ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,
@@ -297,5 +297,38 @@ internal val SaveIcon: ImageVector by lazy {
 internal val SeekArrowIcon: ImageVector by lazy {
     filled("SeekArrow") {
         moveTo(7f, 4f); lineTo(18f, 12f); lineTo(7f, 20f); close()
+    }
+}
+
+/**
+ * A speech bubble, for the television's comments panel.
+ *
+ * A phone reaches its comments by scrolling under the picture; a television's
+ * picture fills the screen, so they are a control in the row instead, and a
+ * control needs a mark.
+ */
+internal val CommentsIcon: ImageVector by lazy {
+    stroke("Comments") {
+        moveTo(5f, 5f); lineTo(19f, 5f)
+        curveTo(20.1f, 5f, 21f, 5.9f, 21f, 7f); lineTo(21f, 15f)
+        curveTo(21f, 16.1f, 20.1f, 17f, 19f, 17f); lineTo(10f, 17f)
+        lineTo(6f, 20.5f); lineTo(6f, 17f); lineTo(5f, 17f)
+        curveTo(3.9f, 17f, 3f, 16.1f, 3f, 15f); lineTo(3f, 7f)
+        curveTo(3f, 5.9f, 3.9f, 5f, 5f, 5f)
+        close()
+    }
+}
+
+/** A lower-case i in a circle, for the television's description panel. */
+internal val DescriptionIcon: ImageVector by lazy {
+    stroke("Description") {
+        moveTo(12f, 3f)
+        curveTo(17f, 3f, 21f, 7f, 21f, 12f)
+        curveTo(21f, 17f, 17f, 21f, 12f, 21f)
+        curveTo(7f, 21f, 3f, 17f, 3f, 12f)
+        curveTo(3f, 7f, 7f, 3f, 12f, 3f)
+        close()
+        moveTo(12f, 11f); lineTo(12f, 16.5f)
+        moveTo(12f, 7.5f); lineTo(12f, 7.6f)
     }
 }

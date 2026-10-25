@@ -1,5 +1,8 @@
 package com.mytube.app.ui.search
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import com.mytube.app.ui.home.videoMenu
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -19,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,12 +41,9 @@ import com.mytube.app.ui.home.Radius
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
 import com.mytube.app.ui.home.MoreVertical
 import com.mytube.app.ui.home.Size
-import com.mytube.app.ui.shell.MenuAction
 import com.mytube.app.ui.shell.rememberMenuAnchor
 import com.mytube.app.ui.home.OpeningOverlay
 import com.mytube.app.ui.home.Space
@@ -221,7 +220,7 @@ private fun ExternalCardMenu(strings: Strings, onSaveToPlaylist: () -> Unit) {
         modifier = anchor
             .size(Size.iconButton)
             .clip(CircleShape)
-            .clickable { show(listOf(MenuAction(strings.saveToPlaylist, onSaveToPlaylist))) }
+            .clickable { show(videoMenu(strings, onSave = onSaveToPlaylist)) }
             .padding(Space.sm),
     )
 }

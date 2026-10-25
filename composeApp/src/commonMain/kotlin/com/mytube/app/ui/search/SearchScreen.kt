@@ -69,6 +69,7 @@ import com.mytube.app.ui.home.VideoCard
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.playlist.SaveTarget
+import com.mytube.app.ui.playlist.saveTargetOf
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.GLASS_MARGIN
 import com.mytube.app.ui.shell.GLASS_SHAPE
@@ -371,7 +372,7 @@ fun SearchContent(
                                         onOpenChannel = { onOpenChannel(video.channel.id) },
                                         onSave = {
                                             onSaveToPlaylist(
-                                                SaveTarget(video.id, saved = video.saved),
+                                                saveTargetOf(video),
                                             )
                                         },
                                     )
@@ -427,7 +428,7 @@ fun SearchContent(
                             onSaveToPlaylist = {
                                 keyboard?.hide()
                                 onSaveToPlaylist(
-                                    SaveTarget(videoId = "", sourceUrl = video.sourceUrl),
+                                    saveTargetOf(video),
                                 )
                             },
                         )

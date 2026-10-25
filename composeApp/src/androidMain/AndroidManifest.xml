@@ -21,21 +21,56 @@
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      One APK for the phone and the television. Declared not-required, both of
+      them: a television has no touchscreen, and Android assumes one unless told
+      otherwise, so without the first line the TV's store and its sideloading
+      checks treat this as a phone-only app. The second says the TV launcher is
+      welcome rather than demanded, so phones keep installing it.
+    -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+
+    <!--
+      Voice search on the television asks whether a speech recogniser exists
+      before it draws a microphone. From Android 11 another app's activities
+      are invisible to that question unless the kind is declared here, and the
+      answer would always be "none".
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
     <application
         android:label="Mytube"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:usesCleartextTraffic="true"
+        android:banner="@drawable/tv_banner"
         android:supportsRtl="true"
         android:theme="@style/Theme.Mytube">
+        <!--
+          singleTask: one activity, one sitting. Opened again from a launcher
+          whose intent did not match the task's, Android stacked a second
+          MainActivity on the first - measured on the household's Chromecast -
+          and each held its own player and narrator over the one shared video:
+          two voices, and the switch silenced only one. ManifestGuardTest holds
+          this line.
+        -->
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTask"
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:windowSoftInputMode="adjustNothing">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <!-- What puts the app on a television's home screen. A phone's
+                     launcher ignores it. -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
 

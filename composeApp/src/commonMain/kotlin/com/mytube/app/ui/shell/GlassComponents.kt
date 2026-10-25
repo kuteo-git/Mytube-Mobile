@@ -44,6 +44,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -187,10 +192,31 @@ fun GlassSlider(
             onValueChange(valueRange.start + f * span)
         }
 
+        // A remote has no thumb to drag with, so the slider is also a stop for
+        // focus that left and right move by a notch — the same twentieth the
+        // tick marks, which is a step large enough to see and small enough to
+        // land where it was meant to.
+
         Box(
             Modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
+                .onKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    val step = span / SLIDER_NOTCHES
+                    when (event.key) {
+                        Key.DirectionLeft -> {
+                            onValueChange((value - step).coerceIn(valueRange))
+                            true
+                        }
+                        Key.DirectionRight -> {
+                            onValueChange((value + step).coerceIn(valueRange))
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                .focusStop(rimShape = GlassRadius.control)
                 // Both gestures read the same node, so a tap lands where the
                 // knob is drawn rather than a knob's width away.
                 .pointerInput(Unit) {

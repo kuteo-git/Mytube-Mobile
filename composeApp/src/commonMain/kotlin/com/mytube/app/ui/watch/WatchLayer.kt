@@ -170,6 +170,7 @@ fun WatchLayer(
             // content passes under — and at 0.95 nothing shows through it at
             // all, which is a solid page with an expensive way of being black.
             .pointerInput(height, pictureHeight) {
+                // focus-guard: the drag into the miniplayer, which exists only on a phone. The television's player is `TvWatchScreen`.
                 detectVerticalDragGestures(
                     onDragStart = { startedAt = TimeSource.Monotonic.markNow() },
                     onDragEnd = {

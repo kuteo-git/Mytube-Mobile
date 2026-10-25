@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The television's player view: the same PlayerView, with the picture drawn
+    into a TextureView instead of a SurfaceView.
+
+    A SurfaceView shows through a hole punched in the window, and on the
+    household's Chromecast the hole is only punched where a frame redraws. The
+    regions that did not redraw since Home was on screen kept Home's pixels — a
+    1024px tile, then jagged patches of #101010 over the film, changing as the
+    controls came and went. A TextureView is drawn inside the window like
+    everything else, so there is no hole to punch. It costs a copy per frame,
+    which a 1080p stream on that box absorbs; the phone keeps its SurfaceView.
+
+    Only an XML attribute can choose the surface type, which is why this file
+    exists at all.
+-->
+<androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    app:surface_type="texture_view"
+    app:use_controller="false" />

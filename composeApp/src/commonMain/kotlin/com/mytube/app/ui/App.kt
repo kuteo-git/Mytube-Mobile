@@ -1,5 +1,9 @@
 package com.mytube.app.ui
 
+import com.mytube.app.ui.shell.LocalPageEntry
+import com.mytube.app.ui.shell.claimFocus
+import com.mytube.app.ui.shell.FocusTrail
+import com.mytube.app.ui.playlist.saveTargetOf
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -15,6 +19,14 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusDirection
+import com.mytube.app.ui.shell.awaitPlaced
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -44,8 +56,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.mytube.app.AppContainer
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
@@ -92,6 +107,11 @@ import com.mytube.app.ui.shell.LocalBackdrop
 import com.mytube.app.ui.shell.LocalGlassSourceActive
 import com.mytube.app.ui.shell.LocalMiniPlayerShowing
 import com.mytube.app.ui.shell.LocalNativeGlass
+import com.mytube.app.ui.shell.FocusMemory
+import com.mytube.app.ui.shell.LocalFocusMemory
+import com.mytube.app.ui.shell.LocalTelevision
+import com.mytube.app.ui.shell.TV_SAFE_HORIZONTAL
+import com.mytube.app.ui.shell.TV_SAFE_VERTICAL
 import com.mytube.app.ui.shell.NativeGlassBridge
 import com.mytube.app.ui.shell.NativeGlassRegistry
 import com.mytube.app.ui.shell.Tab
@@ -106,9 +126,18 @@ import com.mytube.app.ui.shell.rememberLandingKnock
 import com.mytube.app.ui.subscriptions.SubscriptionsScreen
 import com.mytube.app.ui.subscriptions.SubscriptionsViewModel
 import com.mytube.app.ui.theme.MytubeTheme
+import com.mytube.app.ui.tv.TvHomeScreen
+import com.mytube.app.ui.tv.TvHomeViewModel
+import com.mytube.app.ui.tv.TvSearchScreen
+import com.mytube.app.ui.tv.TvShell
+import com.mytube.app.ui.tv.TvWatchScreen
+import com.mytube.app.ui.tv.WhoIsWatchingScreen
+import com.mytube.app.ui.tv.asksWhoIsWatching
 import com.mytube.app.ui.theme.Tokens
 import com.mytube.app.ui.watch.MiniPlayer
+import com.mytube.app.ui.watch.PHONE_MAX_HEIGHT
 import com.mytube.app.ui.watch.QueueItem
+import com.mytube.app.ui.watch.TV_MAX_HEIGHT
 import com.mytube.app.ui.watch.WatchLayer
 import com.mytube.app.ui.watch.WatchScreen
 import com.mytube.app.ui.watch.WatchState
@@ -133,6 +162,11 @@ import kotlinx.coroutines.launch
 internal sealed interface Route {
     data object Deciding : Route
     data object Setup : Route
+    /**
+     * The television's "who's watching?", asked before Home on every launch.
+     * See `WhoIsWatchingScreen` for why a phone never asks.
+     */
+    data object WhoIsWatching : Route
     data object Home : Route
     data object Search : Route
     data object Saved : Route
@@ -237,7 +271,9 @@ private const val ROUTE_MILLIS = 260
  * into from one.
  */
 private fun depth(route: Route): Int = when (route) {
-    is Route.Deciding, is Route.Home -> 0
+    // Ground, with Home: it is where a television's evening starts, and Home
+    // arriving from it should slide in as a step forward, not back.
+    is Route.Deciding, is Route.Home, is Route.WhoIsWatching -> 0
     // One level in, like every other row in Settings. It was ground with Home,
     // on the reasoning that it is where the app starts before there is a
     // library — and the consequence was that leaving it slid the wrong way, the
@@ -319,6 +355,15 @@ fun App(
      * over a video Compose cannot sample.
      */
     nativeGlass: Boolean = false,
+    /**
+     * Whether this is a television, decided by the entry point from what the
+     * platform says the device is — see [LocalTelevision].
+     *
+     * **No default.** The rare value is the one that matters: a defaulted
+     * `false` would be right on every phone and would put the phone's shell on
+     * the one television, which is the call site nobody remembers.
+     */
+    television: Boolean,
 ) {
     // Null until the stored choice has been read. Nothing is drawn before then:
     // showing English for a frame to somebody who chose Vietnamese is the exact
@@ -341,6 +386,10 @@ fun App(
         // one fact about the shell — whether a platform layer is drawing over
         // this scene — and the entry point is the only thing that knows it.
         LocalNativeGlass provides nativeGlass,
+        LocalTelevision provides television,
+        // Where focus goes back to when the player is put away — on a
+        // television only; see `FocusMemory`.
+        LocalFocusMemory provides remember(television) { if (television) FocusMemory() else null },
     ) {
         MytubeTheme {
             var route: Route by remember { mutableStateOf(Route.Deciding) }
@@ -474,6 +523,72 @@ fun App(
                 bars.reveal()
                 watching = open.copy(minimised = true)
             }
+            // The close button's act, for the television's back. Held here
+            // rather than in the handler because the ViewModel is built further
+            // down and this has to reach it: see `stopWatch`, set where it is.
+            var stopWatch: () -> Unit by remember { mutableStateOf({}) }
+            // The television player's half of back: takes away what is over the
+            // picture and says whether there was anything. See `TvWatchContent`.
+            var tvWatchBackStep: () -> Boolean by remember { mutableStateOf({ false }) }
+            fun closeWatch() {
+                stopWatch()
+                watching = null
+                trail.clear()
+            }
+            // Focus handed back to the page the player was opened from, on a
+            // television. Marked as the player opens — before anything in it
+            // takes focus — and restored once it has gone and the page under it
+            // is drawn again: two frames, one to remove the player and one to
+            // place what it covered.
+            val focusMemory = LocalFocusMemory.current
+            // The television's player is up. One predicate for every rule that
+            // depends on it — the page under it hidden, nothing under it
+            // focusable, focus marked and handed back — so they cannot disagree.
+            // A television never minimises, so "expanded" is "open" there.
+            val tvPlayerUp = television && watching?.minimised == false
+            var playerMark by remember { mutableStateOf(FocusTrail.None) }
+            LaunchedEffect(tvPlayerUp) {
+                if (focusMemory == null) return@LaunchedEffect
+                if (tvPlayerUp) {
+                    playerMark = focusMemory.mark()
+                } else {
+                    awaitPlaced()
+                    playerMark.restore()
+                    playerMark = FocusTrail.None
+                }
+            }
+            // The same for a page opened from the tabs, which stay composed
+            // underneath it on a television: marked as Home is left, restored as
+            // it is come back to. A page arriving is handed focus — nothing on
+            // it asks, and focus left on the covered tabs would drive them
+            // unseen.
+            val pageFocus = remember { FocusRequester() }
+            // The control a page names as its first, when the first in its
+            // tree is not it — see [LocalPageEntry].
+            val pageEntry = remember { FocusRequester() }
+            val focusManager = LocalFocusManager.current
+            var lastRoute: Route by remember { mutableStateOf(Route.Deciding) }
+            var tabsMark by remember { mutableStateOf(FocusTrail.None) }
+            LaunchedEffect(route) {
+                if (focusMemory == null) return@LaunchedEffect
+                val from = lastRoute
+                lastRoute = route
+                if (from is Route.Home && route !is Route.Home) tabsMark = focusMemory.mark()
+                awaitPlaced()
+                when {
+                    // Off the covered tabs at once, and onto the page when it
+                    // has something to hold focus — see [claimFocus].
+                    //
+                    // A page reached from a page is composed again when it is
+                    // come back to — only the tabs stay composed under what
+                    // they open — so it starts from its first control too.
+                    route !is Route.Home -> claimFocus(focusManager, pageEntry, pageFocus)
+                    from !is Route.Home -> {
+                        tabsMark.restore()
+                        tabsMark = FocusTrail.None
+                    }
+                }
+            }
             // Two answers to "get out of the way", and which one applies is
             // decided by whether there is anything to keep on screen.
             //
@@ -555,6 +670,10 @@ fun App(
             // address is re-read — somebody who closed the bar deliberately
             // would find it back a moment later.
             LaunchedEffect(Unit) {
+                // Not on a television. There is no miniplayer there to put it
+                // back into, and a video restored *expanded* on launch is the
+                // sound-starting-on-its-own nobody wants, with a picture.
+                if (television) return@LaunchedEffect
                 val last = container.preferencesRepository.lastVideoId()
                 if (last.isNotEmpty()) {
                     watching = WatchSession(last, minimised = true, autoPlay = false)
@@ -628,7 +747,23 @@ fun App(
             LaunchedEffect(route) {
                 baseUrl = container.serverRepository.baseUrl()
                 if (route is Route.Deciding) {
-                    route = if (baseUrl.isBlank()) Route.Setup else Route.Home
+                    route = when {
+                        baseUrl.isBlank() -> Route.Setup
+                        // Asked here rather than left to the fetch below: the
+                        // first route depends on the answer, and drawing Home
+                        // for the moment it takes would show one member's
+                        // shelves to whoever is about to say they are someone
+                        // else.
+                        television -> {
+                            val household = runCatching { container.serverRepository.profiles() }
+                                .getOrDefault(emptyList())
+                            profiles = household
+                            profileId = runCatching { container.serverRepository.profileId() }
+                                .getOrDefault(profileId)
+                            if (asksWhoIsWatching(television, household, profileId)) Route.WhoIsWatching else Route.Home
+                        }
+                        else -> Route.Home
+                    }
                 }
             }
 
@@ -652,7 +787,7 @@ fun App(
             // with nothing to do swallows the gesture, which traps the app open.
             // Measured: it did, for one build.
             val backable = watching?.minimised == false ||
-                route !is Route.Home ||
+                (route !is Route.Home && route !is Route.WhoIsWatching) ||
                 tab != Tab.Home
             // The glass over the picture, pushed to the same platform layer
                 // that draws the tab bar.
@@ -668,6 +803,16 @@ fun App(
             BackHandler(backable) {
                 val session = watching
                 when {
+                    // On a television, back is the close button. There is no
+                    // miniplayer to collapse into, so "keep playing somewhere
+                    // smaller" has nowhere to go — the decision recorded for
+                    // the TV, and the stop is what cancels narration.
+                    television && session != null && !session.minimised -> {
+                        // The player first, one layer at a time; closed only
+                        // with nothing left over the picture.
+                        if (!tvWatchBackStep()) closeWatch()
+                    }
+
                     // Expanded video: collapse it rather than close it. The
                     // sound carries on, which is what the drag down does too.
                     session != null && !session.minimised -> collapseWatch()
@@ -714,85 +859,153 @@ fun App(
             // Without it the recording has transparent pixels wherever a screen
             // does not paint, and the glass shows them as holes — which is the
             // first thing the library's own guide warns about.
-            val backdrop = rememberLayerBackdrop {
-                drawRect(Tokens.bg)
-                drawContent()
+            //
+            // **None on a television**, decided here once: every glass falls
+            // back to its painted form when there is nothing to sample — see
+            // the decision recorded in `TvShell` — and a sheet drawn from here
+            // that forgot a per-call guard would sample on the TV's GPU.
+            // `television` cannot change while the app runs, so the call is
+            // either always made or never.
+            val backdrop: LayerBackdrop? = if (television) {
+                null
+            } else {
+                rememberLayerBackdrop {
+                    drawRect(Tokens.bg)
+                    drawContent()
+                }
             }
 
             CompositionLocalProvider(
                 LocalMiniPlayerShowing provides (watching?.minimised == true),
                 LocalBackdrop provides backdrop,
             ) {
-            // The one place a touch can be seen before anything acts on it, which
-            // is what closing a menu without swallowing the gesture needs.
-            Box(Modifier.fillMaxSize().dismissMenuOnOutsidePress()) {
-                // Screens arrive and leave the way they do on the platforms this
-                // runs on: a page pushed on slides in from the right over the one
-                // it covers, and the one underneath drifts a little to the left
-                // rather than sitting still — the parallax that says the two are
-                // stacked. Going back reverses it.
-                //
-                // There was no transition at all before this: the whole window
-                // was replaced between frames, which reads as the app having
-                // jumped rather than moved, and leaves nothing to say *where*
-                // the screen that was there has gone.
-                //
-                // `depth` rather than a boolean about which route is which: the
-                // direction is a fact about the pair, and asking "is this deeper
-                // than that" is one comparison instead of a matrix that grows
-                // with every route added.
-                AnimatedContent(
-                    targetState = route,
-                    transitionSpec = {
-                        val forward = depth(targetState) >= depth(initialState)
-                        val enter = slideInHorizontally(tween(ROUTE_MILLIS)) { width ->
-                            if (forward) width else -width / 4
-                        } + fadeIn(tween(ROUTE_MILLIS))
-                        val exit = slideOutHorizontally(tween(ROUTE_MILLIS)) { width ->
-                            if (forward) -width / 4 else width
-                        } + fadeOut(tween(ROUTE_MILLIS))
-                        enter togetherWith exit
-                    },
-                    label = "route",
-                ) { current ->
-                // Only the page arriving records. Every page shares one
-                // backdrop, and a page's recording node clears that backdrop's
-                // position when it detaches — which, for the page leaving, is
-                // after its exit animation, so *after* the arriving page had
-                // registered. Measured: Home → Search → close left every pane on
-                // Home sampling nothing, flat grey for good. Withdrawing the
-                // leaving page's recording as the transition starts puts its
-                // detach before the arriving page is placed.
-                CompositionLocalProvider(LocalGlassSourceActive provides (current == route)) {
-                // Only the screens that *have* a back. On Home the strip would
-                // be a gesture that does nothing, which is worse than none: a
-                // reader who finds it once expects it everywhere.
-                Box(
-                    if (depth(current) > 0) {
-                        Modifier.fillMaxSize().edgeBack { route = Route.Home }
+            // The tabs, as one piece, so the route switch below can draw them
+            // where each platform needs them: inside the transition on a phone,
+            // and on a television underneath every page reached from them —
+            // see where it is called there.
+            val homeRoute: @Composable () -> Unit = {
+                    // The two tabs a television draws exactly as a phone does —
+                    // they are lists of rows, which a remote moves through like
+                    // any other list. Only Home is drawn differently there.
+                    val playlistsTab: @Composable () -> Unit = {
+                        PlaylistsScreen(
+                            viewModel = playlists,
+                            mediaBaseUrl = baseUrl,
+                            listState = tabScroll.getValue(Tab.Playlists),
+                            onBack = null,
+                            onOpenSettings = { route = Route.Setup },
+                            onOpenSaved = { route = Route.Saved },
+                            onOpenPlaylist = { route = Route.Playlist(it) },
+                            edits = playlistEdits,
+                        )
+                    }
+                    val settingsTab: @Composable () -> Unit = {
+                        SettingsScreen(
+                            baseUrl = baseUrl,
+                            language = chosen,
+                            feedMix = feedMix,
+                            onOpenServer = { route = Route.Setup },
+                            onOpenProfile = { route = Route.Profile },
+                            onOpenHistory = { route = Route.History },
+                            onOpenSubscriptions = { route = Route.Subscriptions },
+                            profileName = currentProfile?.name.orEmpty(),
+                            onChangeMix = { next ->
+                                // Drawn immediately, sent after: a
+                                // slider that waits for a round trip
+                                // before moving is one that feels stuck.
+                                feedMix = next
+                                scope.launch {
+                                    runCatching {
+                                        container.videoRepository.saveFeedMix(next)
+                                    }
+                                }
+                            },
+                            voiceLevel = voiceLevel,
+                            duckLevel = duckLevel,
+                            voice = voice,
+                            // Drawn immediately, written after — the
+                            // same rule the feed mix follows. A slider
+                            // that waits for a write before it moves is
+                            // one somebody drags twice.
+                            onVoiceLevel = { level ->
+                                voiceLevel = level
+                                scope.launch {
+                                    runCatching {
+                                        container.preferencesRepository
+                                            .setVoiceLevel(level)
+                                    }
+                                }
+                            },
+                            onDuckLevel = { level ->
+                                duckLevel = level
+                                scope.launch {
+                                    runCatching {
+                                        container.preferencesRepository
+                                            .setDuckLevel(level)
+                                    }
+                                }
+                            },
+                            onVoice = { name ->
+                                voice = name
+                                scope.launch {
+                                    runCatching {
+                                        container.serverRepository.setTtsVoice(name)
+                                    }
+                                }
+                            },
+                            onPickLanguage = { picked ->
+                                language = picked
+                                scope.launch {
+                                    container.serverRepository.setLanguage(picked.code)
+                                }
+                            },
+                            onOpenVoice = { route = Route.Voice },
+                            onOpenLanguage = { route = Route.Language },
+                        )
+                    }
+
+                    if (television) {
+                        val tvHome = viewModel(key = "tv-home-$baseUrl-$profileId") {
+                            TvHomeViewModel(container.videoRepository)
+                        }
+                        // Home stays composed under the player, so what was
+                        // just watched is asked again as the player goes —
+                        // Continue watching and Missed are about it.
+                        var playerWasUp by remember { mutableStateOf(false) }
+                        LaunchedEffect(tvPlayerUp) {
+                            if (playerWasUp && !tvPlayerUp) tvHome.catchUp()
+                            playerWasUp = tvPlayerUp
+                        }
+                        TvShell(
+                            current = tab,
+                            onSelect = { tab = it },
+                            onSearch = { route = Route.Search },
+                        ) {
+                            when (tab) {
+                                Tab.Home -> TvHomeScreen(
+                                    viewModel = tvHome,
+                                    mediaBaseUrl = baseUrl,
+                                    onOpenVideo = { watching = WatchSession(it.id) },
+                                    onOpenSettings = { route = Route.Setup },
+                                    onSaveToPlaylist = {
+                                        openSaveSheet(saveTargetOf(it))
+                                    },
+                                )
+
+                                // The overscan margin on the right, which the
+                                // shelves do without: the playlists tab's add
+                                // button sat flush against the screen's edge on
+                                // the first build.
+                                Tab.Playlists -> Box(Modifier.padding(end = TV_SAFE_HORIZONTAL)) {
+                                    playlistsTab()
+                                }
+
+                                Tab.Settings -> Box(Modifier.padding(end = TV_SAFE_HORIZONTAL)) {
+                                    settingsTab()
+                                }
+                            }
+                        }
                     } else {
-                        Modifier.fillMaxSize()
-                    },
-                ) {
-                when (current) {
-                    is Route.Deciding -> Unit
-
-                    is Route.Setup -> ServerSetupScreen(
-                        viewModel = viewModel { ServerSetupViewModel(container.serverRepository) },
-                        onDone = { route = Route.Home },
-                        // A way out only once there is a library to go back to.
-                        // On a fresh install this screen *is* the app, and an
-                        // arrow there would lead nowhere.
-                        onBack = if (baseUrl.isEmpty()) null else ({ route = Route.Home }),
-                    )
-
-                    // The four tabs and the watch screen are one branch. The
-                    // watch screen is a layer *over* the tab, so the tab has to be
-                    // composed underneath it — otherwise dragging down reveals an
-                    // empty background and the feed snaps in at the end. The
-                    // miniplayer needs the same thing for a different reason: it
-                    // sits on the tab bar while somebody browses another tab.
-                    is Route.Home -> {
                     // Hoisted out of the HomeScreen call so the shell can draw
                     // this tab's chips inside the top bar. Same key, same
                     // lifetime — `viewModel()` returns the one instance either
@@ -860,7 +1073,7 @@ fun App(
                                     onOpenVideo = { watching = WatchSession(it) },
                                     onOpenChannel = openChannel,
                                     onSaveToPlaylist = {
-                                        openSaveSheet(SaveTarget(it.id, saved = it.saved))
+                                        openSaveSheet(saveTargetOf(it))
                                     },
                                 )
 
@@ -874,82 +1087,145 @@ fun App(
                                 // `onBack = null`: a tab is not reached from
                                 // anywhere, so an arrow on it would lead
                                 // nowhere. Same rule as the setup screen's.
-                                Tab.Playlists -> PlaylistsScreen(
-                                    viewModel = playlists,
-                                    mediaBaseUrl = baseUrl,
-                                    listState = tabScroll.getValue(Tab.Playlists),
-                                    onBack = null,
-                                    onOpenSettings = { route = Route.Setup },
-                                    onOpenSaved = { route = Route.Saved },
-                                    onOpenPlaylist = { route = Route.Playlist(it) },
-                                    edits = playlistEdits,
-                                )
+                                Tab.Playlists -> playlistsTab()
 
-                                Tab.Settings -> SettingsScreen(
-                                    baseUrl = baseUrl,
-                                    language = chosen,
-                                    feedMix = feedMix,
-                                    onOpenServer = { route = Route.Setup },
-                                    onOpenProfile = { route = Route.Profile },
-                                    onOpenHistory = { route = Route.History },
-                                    onOpenSubscriptions = { route = Route.Subscriptions },
-                                    profileName = currentProfile?.name.orEmpty(),
-                                    onChangeMix = { next ->
-                                        // Drawn immediately, sent after: a
-                                        // slider that waits for a round trip
-                                        // before moving is one that feels stuck.
-                                        feedMix = next
-                                        scope.launch {
-                                            runCatching {
-                                                container.videoRepository.saveFeedMix(next)
-                                            }
-                                        }
-                                    },
-                                    voiceLevel = voiceLevel,
-                                    duckLevel = duckLevel,
-                                    voice = voice,
-                                    // Drawn immediately, written after — the
-                                    // same rule the feed mix follows. A slider
-                                    // that waits for a write before it moves is
-                                    // one somebody drags twice.
-                                    onVoiceLevel = { level ->
-                                        voiceLevel = level
-                                        scope.launch {
-                                            runCatching {
-                                                container.preferencesRepository
-                                                    .setVoiceLevel(level)
-                                            }
-                                        }
-                                    },
-                                    onDuckLevel = { level ->
-                                        duckLevel = level
-                                        scope.launch {
-                                            runCatching {
-                                                container.preferencesRepository
-                                                    .setDuckLevel(level)
-                                            }
-                                        }
-                                    },
-                                    onVoice = { name ->
-                                        voice = name
-                                        scope.launch {
-                                            runCatching {
-                                                container.serverRepository.setTtsVoice(name)
-                                            }
-                                        }
-                                    },
-                                    onPickLanguage = { picked ->
-                                        language = picked
-                                        scope.launch {
-                                            container.serverRepository.setLanguage(picked.code)
-                                        }
-                                    },
-                                    onOpenVoice = { route = Route.Voice },
-                                    onOpenLanguage = { route = Route.Language },
-                                )
+                                Tab.Settings -> settingsTab()
                             }
                         }
                     }
+            }
+
+            // The one place a touch can be seen before anything acts on it, which
+            // is what closing a menu without swallowing the gesture needs.
+            Box(Modifier.fillMaxSize().dismissMenuOnOutsidePress()) {
+                // Screens arrive and leave the way they do on the platforms this
+                // runs on: a page pushed on slides in from the right over the one
+                // it covers, and the one underneath drifts a little to the left
+                // rather than sitting still — the parallax that says the two are
+                // stacked. Going back reverses it.
+                //
+                // There was no transition at all before this: the whole window
+                // was replaced between frames, which reads as the app having
+                // jumped rather than moved, and leaves nothing to say *where*
+                // the screen that was there has gone.
+                //
+                // `depth` rather than a boolean about which route is which: the
+                // direction is a fact about the pair, and asking "is this deeper
+                // than that" is one comparison instead of a matrix that grows
+                // with every route added.
+                // On a television the player covers the whole screen, and the
+                // page under it is kept composed — it is where closing returns
+                // to, with focus on the card that was pressed — but not drawn:
+                // a page of shelves redrawn under every frame of a film is GPU
+                // a Chromecast does not have to spare. Alpha zero skips the draw
+                // and keeps the state.
+                // **On a television the tabs stay composed under every page
+                // opened from them**, the way they stay under the player — so
+                // coming back is uncovering, and focus is handed back to the row
+                // that was pressed (see `FocusMemory`). Built afresh on the way
+                // back, Settings put focus on its first row whichever one had
+                // been opened. Pages slide in over it, opaque. Nothing covered
+                // may take focus: the remote would wander into a page that is
+                // not on screen.
+                if (television && route !is Route.Deciding && route !is Route.WhoIsWatching) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = if (tvPlayerUp) 0f else 1f }
+                            .focusProperties {
+                                onEnter = { if (route !is Route.Home || tvPlayerUp) cancelFocusChange() }
+                            }
+                            .focusGroup(),
+                    ) { homeRoute() }
+                }
+                AnimatedContent(
+                    targetState = route,
+                    modifier = Modifier
+                        .graphicsLayer { alpha = if (tvPlayerUp) 0f else 1f }
+                        .focusProperties { onEnter = { if (tvPlayerUp) cancelFocusChange() } }
+                        .focusGroup(),
+                    transitionSpec = {
+                        val forward = depth(targetState) >= depth(initialState)
+                        val enter = slideInHorizontally(tween(ROUTE_MILLIS)) { width ->
+                            if (forward) width else -width / 4
+                        } + fadeIn(tween(ROUTE_MILLIS))
+                        val exit = slideOutHorizontally(tween(ROUTE_MILLIS)) { width ->
+                            if (forward) -width / 4 else width
+                        } + fadeOut(tween(ROUTE_MILLIS))
+                        enter togetherWith exit
+                    },
+                    label = "route",
+                ) { current ->
+                // Only the page arriving records. Every page shares one
+                // backdrop, and a page's recording node clears that backdrop's
+                // position when it detaches — which, for the page leaving, is
+                // after its exit animation, so *after* the arriving page had
+                // registered. Measured: Home → Search → close left every pane on
+                // Home sampling nothing, flat grey for good. Withdrawing the
+                // leaving page's recording as the transition starts puts its
+                // detach before the arriving page is placed.
+                CompositionLocalProvider(
+                    LocalGlassSourceActive provides (current == route),
+                    LocalPageEntry provides (if (television && current == route) pageEntry else null),
+                ) {
+                // Only the screens that *have* a back. On Home the strip would
+                // be a gesture that does nothing, which is worse than none: a
+                // reader who finds it once expects it everywhere.
+                Box(
+                    // The arriving page is the one handed focus as it opens.
+                    (if (television && current == route) Modifier.focusRequester(pageFocus) else Modifier)
+                        .then(
+                    when {
+                        // No edge to swipe from on a television, and its pages
+                        // keep inside the overscan margins — at the sides and
+                        // the top. Not the bottom: a page's list runs off it, as
+                        // Home's shelves do, and a margin there drew every grid
+                        // cut short above the screen's edge. Home and the
+                        // profile question lay out their own margins.
+                        television -> if (depth(current) > 0) {
+                            Modifier
+                                .fillMaxSize()
+                                .background(Tokens.bg)
+                                .padding(start = TV_SAFE_HORIZONTAL, end = TV_SAFE_HORIZONTAL, top = TV_SAFE_VERTICAL)
+                        } else {
+                            Modifier.fillMaxSize()
+                        }
+                        depth(current) > 0 -> Modifier.fillMaxSize().edgeBack { route = Route.Home }
+                        else -> Modifier.fillMaxSize()
+                    },
+                        ),
+                ) {
+                when (current) {
+                    is Route.Deciding -> Unit
+
+                    is Route.WhoIsWatching -> WhoIsWatchingScreen(
+                        profiles = profiles,
+                        currentId = currentProfile?.id.orEmpty(),
+                        onPick = { picked ->
+                            if (picked.id != profileId) {
+                                profileId = picked.id
+                                scope.launch { container.serverRepository.setProfileId(picked.id) }
+                            }
+                            route = Route.Home
+                        },
+                    )
+
+                    is Route.Setup -> ServerSetupScreen(
+                        viewModel = viewModel { ServerSetupViewModel(container.serverRepository) },
+                        onDone = { route = Route.Home },
+                        // A way out only once there is a library to go back to.
+                        // On a fresh install this screen *is* the app, and an
+                        // arrow there would lead nowhere.
+                        onBack = if (baseUrl.isEmpty()) null else ({ route = Route.Home }),
+                    )
+
+                    // The four tabs and the watch screen are one branch. The
+                    // watch screen is a layer *over* the tab, so the tab has to be
+                    // composed underneath it — otherwise dragging down reveals an
+                    // empty background and the feed snaps in at the end. The
+                    // miniplayer needs the same thing for a different reason: it
+                    // sits on the tab bar while somebody browses another tab.
+                    is Route.Home -> if (!television) homeRoute()
 
                     is Route.Voice -> VoiceScreen(
                         voiceLevel = voiceLevel,
@@ -991,7 +1267,7 @@ fun App(
                         onOpenVideo = { watching = WatchSession(it) },
                         onOpenChannel = openChannel,
                         onSaveToPlaylist = {
-                            openSaveSheet(SaveTarget(it.id, saved = it.saved))
+                            openSaveSheet(saveTargetOf(it))
                         },
                     )
 
@@ -1082,16 +1358,29 @@ fun App(
                     onOpenChannel = openChannel,
                 )
 
-                is Route.Search -> SearchScreen(
-                        viewModel = viewModel(key = "search-$baseUrl-$profileId") {
-                            SearchViewModel(container.videoRepository)
-                        },
+                // A keyboard on the page beside the results, on a television —
+                // see `TvSearchScreen`. The same ViewModel either way.
+                is Route.Search -> {
+                    val search = viewModel(key = "search-$baseUrl-$profileId") {
+                        SearchViewModel(container.videoRepository)
+                    }
+                    if (television) TvSearchScreen(
+                        viewModel = search,
+                        mediaBaseUrl = baseUrl,
+                        languageCode = chosen.code,
+                        onOpenVideo = { watching = WatchSession(it) },
+                        onOpenChannel = openChannel,
+                        onSaveToPlaylist = openSaveSheet,
+                    )
+                    else SearchScreen(
+                        viewModel = search,
                         mediaBaseUrl = baseUrl,
                         onBack = { route = Route.Home },
                         onOpenVideo = { watching = WatchSession(it) },
                         onOpenChannel = openChannel,
                         onSaveToPlaylist = openSaveSheet,
                     )
+                }
 
                     is Route.Channel -> ChannelScreen(
                         viewModel = viewModel(key = "channel-${current.channelId}") {
@@ -1106,7 +1395,7 @@ fun App(
                             watching = WatchSession(id, queue = queue)
                         },
                         onSaveToPlaylist = {
-                            openSaveSheet(SaveTarget(it.id, saved = it.saved))
+                            openSaveSheet(saveTargetOf(it))
                         },
                     )
                 }
@@ -1225,10 +1514,24 @@ fun App(
                                 startAtBeginning = true,
                             )
                         },
+                        maxHeight = if (television) TV_MAX_HEIGHT else PHONE_MAX_HEIGHT,
                         playerFactory = container.playerFactory,
                     )
                 }
                 DisposableEffect(watch) { onDispose { watch.close() } }
+                // The close button's act, reachable from the back handler above.
+                // Set as state in composition, so the handler always stops the
+                // ViewModel that is actually playing.
+                stopWatch = { watch.stop() }
+
+                // The television's Home button pauses. There is no screen to
+                // turn off on a TV, so the sound carrying on behind the
+                // launcher is not background audio — it is a video somebody
+                // walked away from still talking. Pause, never toggle: Home on
+                // a paused video must not start it.
+                if (television) {
+                    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { watch.pause() }
+                }
 
                 // The session is the truth and the ViewModel follows it.
                 //
@@ -1250,7 +1553,63 @@ fun App(
                     watch.applyNarrationLevels(voiceLevel, duckLevel)
                 }
 
-                if (browsing) {
+                // Moving between videos within the sitting, for both players.
+                //
+                // Picked from the rail: the same sitting, resumed rather than
+                // restarted. Advancing starts the next video at the beginning;
+                // choosing one resumes it — two different acts, and the
+                // difference is what stops "next" dropping somebody into the
+                // middle of a track. Previous resumes too: going back means
+                // returning to where you were. `copy`, so the sitting — and with
+                // it the player and its connection — survives moving between
+                // videos; a new `WatchSession` would rebuild the ViewModel and
+                // tear the sound down between two tracks meant to run on.
+                //
+                // Written once: the television's player and the phone's had a
+                // copy each, and `startAtBeginning` is the flag the charter says
+                // a call site forgets.
+                val openFromRail: (String) -> Unit = {
+                    trail.add(session.videoId)
+                    watching = session.copy(videoId = it, startAtBeginning = false)
+                }
+                val advanceTo: (String) -> Unit = {
+                    trail.add(session.videoId)
+                    watching = session.copy(videoId = it, startAtBeginning = true)
+                }
+                val playPrevious: () -> Unit = {
+                    val previous = trail.removeLastOrNull()
+                    if (previous != null) {
+                        watching = session.copy(videoId = previous, startAtBeginning = false)
+                    }
+                }
+
+                if (television && browsing) {
+                    // The whole screen, always, and nothing to drag: see
+                    // `TvWatchScreen`. Drawn over the route, which stays
+                    // composed underneath so closing returns to the card that
+                    // was pressed.
+                    TvWatchScreen(
+                        viewModel = watch,
+                        mediaBaseUrl = baseUrl,
+                        onOpenVideo = openFromRail,
+                        onAdvanceTo = advanceTo,
+                        onPlayPrevious = playPrevious,
+                        hasPrevious = trail.isNotEmpty(),
+                        // A channel is a page, and a television has nowhere to
+                        // keep a video playing while it is read: opening one is
+                        // closing the player, as YouTube's TV app does.
+                        onOpenChannel = {
+                            closeWatch()
+                            openChannel(it)
+                        },
+                        onSaveToPlaylist = { saved ->
+                            openSaveSheet(SaveTarget(session.videoId, saved = saved))
+                            savedSink = watch::markSaved
+                        },
+                        onSaveVideo = { openSaveSheet(saveTargetOf(it)) },
+                        onBackStep = { tvWatchBackStep = it },
+                    )
+                } else if (browsing) {
 
                 // How far the drag toward the bar has got, reported by the
                 // watch layer. It lives here because the bar the picture is
@@ -1452,42 +1811,9 @@ fun App(
                             viewModel = watch,
                             mediaBaseUrl = baseUrl,
                             onBack = { collapseWatch() },
-                            // Picked from the rail: the same sitting, resumed
-                            // rather than restarted.
-                            onOpenVideo = {
-                                trail.add(session.videoId)
-                                watching = session.copy(
-                                    videoId = it,
-                                    startAtBeginning = false,
-                                )
-                            },
-                            // Advancing starts the next video at the beginning;
-                            // choosing one resumes it. Two different acts, and
-                            // the difference is what stops "next" dropping
-                            // somebody into the middle of a track.
-                            // `copy`, so the sitting — and with it the player and
-                            // its connection — survives moving between videos.
-                            // A new `WatchSession` here would rebuild the
-                            // ViewModel and tear the sound down between two
-                            // tracks that are meant to run on.
-                            onAdvanceTo = {
-                                trail.add(session.videoId)
-                                watching = session.copy(
-                                    videoId = it,
-                                    startAtBeginning = true,
-                                )
-                            },
-                            onPlayPrevious = {
-                                val previous = trail.removeLastOrNull()
-                                // Resumed, not restarted: going back means
-                                // returning to where you were.
-                                if (previous != null) {
-                                    watching = session.copy(
-                                        videoId = previous,
-                                        startAtBeginning = false,
-                                    )
-                                }
-                            },
+                            onOpenVideo = openFromRail,
+                            onAdvanceTo = advanceTo,
+                            onPlayPrevious = playPrevious,
                             hasPrevious = trail.isNotEmpty(),
                             onOpenChannel = {
                                 // The video keeps playing, collapsed, so opening

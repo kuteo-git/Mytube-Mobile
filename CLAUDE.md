@@ -29,11 +29,15 @@ Kotlin Multiplatform with Compose Multiplatform, **Android and iOS**. Not a
 box-ticking clone of the web app — the web app is better on a desktop and stays
 the primary client.
 
+The same Android APK is also the household's **television** client (Android TV
+/ Google TV), laid out for a remote: it replaced the server's planned `/tv` web
+UI (server charter §7, changelog 2026-10-24).
+
 ## 2. Hard constraints
 
 | | |
 |---|---|
-| Platforms | Android + iOS. **No desktop** — the browser already serves that well, and desktop JVM is the one target with no clear video path |
+| Platforms | Android (phone **and** TV, one APK) + iOS. **No desktop** — the browser already serves that well, and desktop JVM is the one target with no clear video path |
 | Reach | **House wifi only.** The server is LAN-only, plain HTTP, no TLS, and `X-User-Id` is a header anyone can set |
 | Storage | **Streams only.** Nothing is downloaded to the phone |
 | Video tiers | Tried in the order **live → hls → local**. `local` is a file the *household* downloaded, served over the LAN; it was "phase 3" until a downloaded video said YouTube had refused it (changelog, 2026-08-31) |
@@ -62,7 +66,8 @@ composeApp/src/
     data/local/          settings storage, one expect/actual per platform
     data/repository/     implementations of domain/repository
     ui/<screen>/         Composable + ViewModel
-    ui/shell/            AppShell, bars, glass material, press, BarTravel
+    ui/shell/            AppShell, bars, glass material, press, BarTravel, focus
+    ui/tv/               the television's shell, Home, player, search, profile question
   androidMain/           Media3/ExoPlayer, MediaSessionService, foreground service
   iosMain/               AVPlayer, AVAudioSession, MPNowPlayingInfoCenter
   jvmTest/               the guards — see §8
@@ -115,6 +120,21 @@ iOS are built together rather than one after the other.
 
 `expect/actual` is how KMP supplies an implementation. It is not licence for `ui`
 to reach for ExoPlayer directly.
+
+### The television
+
+- **`television` is decided once, by `MainActivity`, from the UI mode** — never
+  the window's size — and passed to `App` with no default. `LocalTelevision`
+  carries it. Only the shell, Home, the player, search, and the profile question
+  have TV versions (`ui/tv/`); every other page is the phone's, reached by focus.
+- **On the TV the player's `PlayerView` is a TextureView** (`tv_player_view.xml`);
+  a SurfaceView there left stale pixels over the film.
+- **No sampled glass on the TV**: `LocalBackdrop` is null, so every material
+  falls back to paint.
+- **Focus is worn by `GlassPress`**, only in keyboard input mode, so a phone
+  never draws it.
+- **The profile question is asked once**: while the stored profile id names
+  nobody in the household (`asksWhoIsWatching`). Settings → Profile changes it.
 
 ## 4. Versions — read `gradle/libs.versions.toml` before changing anything
 
@@ -202,7 +222,13 @@ DELETE /api/videos/{id}/narration            cancel (204 whether or not running)
 
 **Tabs**: Home · Playlists · Settings, with Search beside them. **Routes**: Watch
 (a layer, not a route), Search, Channel, Playlist, Saved, History, Subscriptions,
-Profile, Voice, Language, Setup.
+Profile, Voice, Language, Setup — and, on a television only, WhoIsWatching.
+
+On the TV: a rail instead of the tab bar; Home as shelves; the player always
+full screen with no miniplayer (Back closes it, after taking away whatever is
+over the picture); search with an on-screen keyboard and voice; Home's button
+pauses; a held OK opens a card's menu; the rail's current tab picked again goes
+to its top (and Home asks again, as it does whenever the player closes).
 
 Deliberately absent, with reasons:
 
@@ -257,7 +283,9 @@ Written alongside, not after.
 Guards, each **proven to fail** before it was believed: `ArchitectureGuardTest`
 (dependency direction), `UntranslatedGuardTest` (literals in composables),
 `PressGuardTest` (every `clickable(` answers a finger, or says `press-guard:
-<reason>`), `ScrollRoomGuardTest` (a horizontal scroll row carries padding so a
+<reason>`), `FocusGuardTest` (every pointer gesture has a key handler, or says
+`focus-guard: <reason>`), `ManifestGuardTest` (`MainActivity` is
+`singleTask`), `ScrollRoomGuardTest` (a horizontal scroll row carries padding so a
 press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden ⇔
 `rendersSubtitles = false`). They read source at run time, so `jvmTest` declares
 `src` as a task input — otherwise Gradle calls them up to date. Guards count
@@ -272,7 +300,9 @@ press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden
   test** — `wholeSeconds`, `barTravel`, `tabAt`, `tabPress`, `dragOutcome`,
   `miniPlayerBottomInset`, `seekLineFromBottom`, `fillFromPinch`, `frameAt`,
   `scrubPreviewScale`, `shouldRecoverStall`, `channelToken`, `progressDue`,
-  `rebalance`.
+  `rebalance`, `focusScale`, `focusRimShape`, `tvSeekStep`, `shelvesFrom`,
+  `shelfCardWidth`, `asksWhoIsWatching`, `withTone`, `typed`, `caughtUp`,
+  `rowEntryIndex`, `keptInPlace`, `isWaitingForBytes`.
 - **Regression tests go red on the reported symptom first.** Test bodies for wire
   mapping are copied from the running gateway, not invented.
 - **A `jvm` target exists only to run tests.** It does not contradict "no desktop".
@@ -305,6 +335,9 @@ Everything on the external volume; `source env.sh` before working.
 - **compileSdk 36** because `androidx.navigationevent` refuses anything older.
 - **Android release**: signed when `keystore.properties` exists, unsigned
   otherwise (never the debug key); `isMinifyEnabled = false` on purpose.
+- **The television is installed with `tools/tv-install.sh <serial>`**, which
+  compiles ahead of time: a sideloaded APK runs interpreted until the TV's
+  nightly maintenance, and that was half of its jank.
 - **iOS**: `iosApp/iosApp.xcodeproj` is hand-written; the framework is static.
   `tools/ios-ipa.sh` archives and zips the IPA by hand (no `-exportArchive`,
   which embeds the 7-day profile). The household uses a free Apple ID, so the
@@ -318,10 +351,13 @@ Everything on the external volume; `source env.sh` before working.
   elements by label at the moment of the tap, not by remembered coordinates.
 - **When Data2 is not mounted, this project cannot be built.**
 
-## 10. Status (v0.1.11, 2026-10-03)
+## 10. Status (v0.1.11, 2026-10-03; Android TV unreleased, 2026-10-24)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
-  household's iPhone, release build via AltStore).** 247 tests, five guards.
+  household's iPhone, release build via AltStore).** 400 tests, seven guards.
+- **Runs on the household's Chromecast with Google TV** (release build over
+  `adb`): rail, shelves, the full-screen player with D-pad seeking, search with
+  an on-screen keyboard and voice, the profile question. Not yet in a release.
 - Built: Home with chips (incl. Live and Missed), Search (library + YouTube),
   Channel, Watch (layer with drag-to-miniplayer, controls, subtitles, narration,
   storyboard scrub preview, pinch-to-fill, double-tap seek, comments, up next,
@@ -481,6 +517,11 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   the server's `watchPositionSeconds`, never `duration × fraction`.
 - **`load` buffers; `play` is separate** on both platforms; `playWhenReady` is
   set from intent on every load.
+- **`Playing` starts from `player.state.value`, never a blank**: a report made
+  while the screen was still `Loading` is otherwise lost, and buffering is not
+  repeated before the first frame. On iOS, AVPlayer's `Playing` is not a
+  picture: buffering lasts until the playhead has moved (`isWaitingForBytes`).
+  [The profile question once, the spinner until the picture…]
 - **A video that has ended is not stalled** (`shouldRecoverStall`); a broadcast has
   no end, no zero and no progress to report; draw LIVE, not a bar.
 - **Lock screen**: duration travels on every tick; late artwork applies only if
@@ -493,6 +534,50 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   window flag / `idleTimerDisabled`, as state.
 - **Preferences per device** (subtitles language, narration, autoplay) live in
   `PreferencesRepository`; a per-sitting choice (fill) does not persist.
+
+### Television
+
+- **The focus target sits between the lift and the bloom** (`pressLift` →
+  target → `pressBloom`). Inside the scale it reports grown bounds and the list
+  scrolls to fit them on every key. [Android TV, built for a remote…]
+- **A control floating over a list is a focus trap** — the list is not "below"
+  it to the two-dimensional search. On a TV such a control is not drawn
+  (`DetailBack`).
+- **Back from the TV player is one handler**, asking the player's step first
+  (`onBackStep`), never a second `BackHandler`.
+- **What is covered stays composed and is handed focus back** — the tabs under
+  a page, a page under the player — through `FocusMemory`, written in
+  `pressLift`. Each cover keeps the `FocusTrail` its `mark()` returned (no shared
+  stack: uncovers do not always come back in order), and a restore falls back
+  through the controls focused before when the marked one has gone.
+  `focusRestorer` alone gives a page its first control. Nothing covered may take
+  focus. [The television's second evening…]
+- **A page arriving is asked for focus until it has a control** (`claimFocus`,
+  trying the control it names in `LocalPageEntry` first), after focus is
+  cleared from what it covers; its controls come with its data.
+- **One activity** (`singleTask`): a second one is a second player and a second
+  narrator over the same video.
+- **Everything pivots; a heading asks for itself whole** (`headingItem`): the
+  grid's first item, answering focus inside it with its own rectangle, so a
+  channel's subscribe and sorts show its avatar. Anything over the cards goes
+  in that one item. [The television's third evening…]
+- **A row is entered where it was left**, by id, or at its first card —
+  only a *move* is redirected; `Enter` (focus handed back) is let through.
+- **A focused node that leaves the composition takes focus to the rail.** A
+  refresh under the remote keeps the focused card (`keptInPlace`), and
+  `scrollToItem` on a lazy state with no layout waits for ever
+  (`requestScrollToItem`).
+- **Every pointer gesture has a key, or `focus-guard:` says why not.**
+- **A rim must read on a white surface** — white rim, dark hairline inside;
+  anything 480dp or wider keeps its size and wears the rim only.
+- **Measure against YouTube's TV app on the same set**, by the height of a
+  capital in a screenshot, before choosing a size.
+- **Nothing is painted twice on the TV's GPU**: no window background under the
+  shell, a picture's surface is its placeholder. Check with
+  `setprop debug.hwui.overdraw show`. [The television, measured on the Chromecast]
+- **What a key press shows is composed before the press** — the player's
+  controls stay composed, faded to alpha 0, semantics cleared, focus barred.
+  Built on the press, it froze the picture for 218ms.
 
 ### Measuring
 
@@ -509,6 +594,10 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   `(X,Y)→(1080−Y, X)` in landscape; `-gpu host` survives rotation; pause the
   video before diffing presses; screenshot before reading code when a control in
   the tree does not respond (keyboard panels sit outside the app window).
+- **Performance on the TV**: `dumpsys gfxinfo <pkg> reset` around a scripted
+  run of key presses, and a Perfetto trace (`perfetto -a com.mytube.app gfx
+  view input sched …`) read with `trace_processor` in
+  `/Volumes/Data2/dev/perfetto-venv`. Mute the Chromecast first.
 - **iOS device crash logs**: `xcrun devicectl device info files --domain-type
   systemCrashLogs`, then `device copy from`.
 - **macOS is case-insensitive** — `a.png` overwrites `A.png`.

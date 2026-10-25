@@ -1,5 +1,9 @@
 package com.mytube.app.ui.shell
 
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
@@ -33,7 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -187,7 +190,8 @@ fun BoxScope.GlassMenu() {
                 ),
             ),
         exit = fadeOut() + scaleOut(targetScale = 0.85f, transformOrigin = origin),
-        modifier = Modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) },
+        // A modal for the remote on a television — see [tvModal].
+        modifier = Modifier.offset { IntOffset(x.roundToInt(), y.roundToInt()) }.tvModal(MenuHost.open),
     ) {
         Box(
             Modifier
@@ -202,7 +206,14 @@ fun BoxScope.GlassMenu() {
         ) {
             // Real glass: this node is a sibling of the recording, so it may
             // sample it. That is the whole change.
-            GlassBackdrop(
+            // A television samples nothing (see the charter's "The television"),
+            // and the wash a pane falls back to let the card title under the
+            // menu read through it, a word away from the menu's own. A
+            // solid pane there: nothing behind a menu opened from a card is
+            // worth seeing through to.
+            if (LocalTelevision.current) Box(
+                Modifier.matchParentSize().clip(GlassRadius.menu).background(Tokens.surface),
+            ) else GlassBackdrop(
                 Modifier.matchParentSize(),
                 LocalBackdrop.current,
                 fromTop = true,
@@ -290,9 +301,21 @@ fun BoxScope.GlassMenu() {
  */
 @Composable
 fun rememberMenuAnchor(): Pair<Modifier, (List<MenuAction>) -> Unit> {
-    var bounds by remember { mutableStateOf(Rect.Zero) }
-    val modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }
-    return modifier to { items: List<MenuAction> -> MenuHost.show(bounds, items) }
+    // Where the anchor is, asked only when the menu opens. Kept as bounds from
+    // `onGloballyPositioned` it was a walk up the tree and a state write for
+    // every card on screen on every frame of a scroll — and on a television
+    // every card is an anchor.
+    val placed = remember { PlacedAnchor() }
+    val modifier = Modifier.onPlaced { placed.coordinates = it }
+    return modifier to { items: List<MenuAction> ->
+        val bounds = placed.coordinates?.takeIf { it.isAttached }?.boundsInRoot() ?: Rect.Zero
+        MenuHost.show(bounds, items)
+    }
+}
+
+/** The anchor's layout, read when the menu opens — not state: nothing draws from it. */
+private class PlacedAnchor {
+    var coordinates: LayoutCoordinates? = null
 }
 
 /**

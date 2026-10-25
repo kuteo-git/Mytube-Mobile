@@ -1,5 +1,6 @@
 package com.mytube.app.ui.playlist
 
+import com.mytube.app.ui.home.videoMenu
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import com.mytube.app.ui.tv.fullWidthItem
+import com.mytube.app.ui.tv.headingItem
+import com.mytube.app.ui.tv.TvGridCard
+import com.mytube.app.ui.tv.TvGrid
+import com.mytube.app.ui.shell.LocalTelevision
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -159,36 +167,68 @@ fun PlaylistContent(
             // alert and an animating header. `ChannelContent` says the same.
             val queue = remember(ready.videos) { ready.videos.map { it.asQueueItem() } }
 
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = detailContentPadding()) {
-                item(key = "header") {
-                    PlaylistHeader(
-                        state = ready,
-                        canPlay = queue.isNotEmpty(),
-                        onPlayAll = { queue.firstOrNull()?.let { onOpenVideo(it.id, queue) } },
-                        // Shuffled **here**, and the shuffled order is what is
-                        // handed over as the queue — not a random first video
-                        // followed by the list in its own order, which is what
-                        // "shuffle" means to nobody. The player already takes a
-                        // queue and reads next and autoplay from it, so there is
-                        // nothing to teach it: a shuffle is an ordering, and
-                        // this screen is where the ordering is decided.
-                        //
-                        // Not persisted, and not a mode. There is no shuffle
-                        // toggle in the player to keep in step with, so this is
-                        // one press that starts one sitting.
-                        onShuffle = {
-                            val shuffled = queue.shuffled()
-                            shuffled.firstOrNull()?.let { onOpenVideo(it.id, shuffled) }
-                        },
-                        onStartRenaming = onStartRenaming,
-                        onCancelRenaming = onCancelRenaming,
-                        onNameChanged = onNameChanged,
-                        onRename = onRename,
-                        onAskDelete = onAskDelete,
-                        onCancelDelete = onCancelDelete,
-                        onDelete = onDelete,
-                    )
+            // One header for both layouts below, so the two cannot drift.
+            val header: @Composable () -> Unit = {
+                PlaylistHeader(
+                    state = ready,
+                    canPlay = queue.isNotEmpty(),
+                    onPlayAll = { queue.firstOrNull()?.let { onOpenVideo(it.id, queue) } },
+                    // Shuffled **here**, and the shuffled order is what is
+                    // handed over as the queue — not a random first video
+                    // followed by the list in its own order, which is what
+                    // "shuffle" means to nobody. The player already takes a
+                    // queue and reads next and autoplay from it, so there is
+                    // nothing to teach it: a shuffle is an ordering, and
+                    // this screen is where the ordering is decided.
+                    //
+                    // Not persisted, and not a mode. There is no shuffle
+                    // toggle in the player to keep in step with, so this is
+                    // one press that starts one sitting.
+                    onShuffle = {
+                        val shuffled = queue.shuffled()
+                        shuffled.firstOrNull()?.let { onOpenVideo(it.id, shuffled) }
+                    },
+                    onStartRenaming = onStartRenaming,
+                    onCancelRenaming = onCancelRenaming,
+                    onNameChanged = onNameChanged,
+                    onRename = onRename,
+                    onAskDelete = onAskDelete,
+                    onCancelDelete = onCancelDelete,
+                    onDelete = onDelete,
+                )
+            }
+
+            // A grid of Home's cards on a television — see `TvGrid`. Removing
+            // from the playlist is a held OK on the card, the phone's dots
+            // without a second stop beside every card.
+            if (LocalTelevision.current) {
+                TvGrid(Modifier.fillMaxSize()) {
+                    headingItem(key = "header") { header() }
+                    if (ready.videos.isEmpty()) {
+                        fullWidthItem(key = "empty") {
+                            EmptyState(strings.emptyPlaylist, strings.emptyPlaylistDetail)
+                        }
+                    }
+                    items(ready.videos, key = { it.id }) { video ->
+                        TvGridCard(
+                            video = video,
+                            mediaBaseUrl = mediaBaseUrl,
+                            strings = strings,
+                            onClick = { onOpenVideo(video.id, queue) },
+                            opening = false,
+                            menu = videoMenu(
+                                strings,
+                                onSave = { onRemove(video) },
+                                saveLabel = strings.removeFromPlaylist,
+                            ),
+                        )
+                    }
                 }
+                return@TabScaffold
+            }
+
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = detailContentPadding()) {
+                item(key = "header") { header() }
 
                 if (ready.videos.isEmpty()) {
                     item(key = "empty") {

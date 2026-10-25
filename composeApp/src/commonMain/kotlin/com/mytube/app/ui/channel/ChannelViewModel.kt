@@ -1,5 +1,6 @@
 package com.mytube.app.ui.channel
 
+import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mytube.app.data.repository.ServerNotConfigured
@@ -190,25 +191,34 @@ class ChannelViewModel(
 
     fun loadMore() {
         val current = _state.value as? ChannelState.Ready ?: return
-        if (current.loadingMore || current.nextPageToken.isEmpty()) return
+        // Not while another order is on its way: its next page is the old
+        // order's. Reported from the television, where a sort empties the grid
+        // and the grid's "near the end" check asks at once.
+        if (current.sorting || current.loadingMore || current.nextPageToken.isEmpty()) return
 
         _state.update { current.copy(loadingMore = true) }
         viewModelScope.launch {
-            _state.value = runCatching {
+            val page = runCatching {
                 videos.channelPage(channelId, current.sortToken, current.nextPageToken)
-            }.fold(
-                onSuccess = {
-                    current.copy(
-                        videos = current.videos.appendNew(it.videos),
-                        nextPageToken = it.nextPageToken,
+            }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+            // Into the state as it is *now*, and only if it is still the same
+            // order. Written back over the snapshot taken when it was asked,
+            // a page landing after a sort put the sort's skeleton back for good.
+            _state.update { now ->
+                if (now !is ChannelState.Ready || now.sortToken != current.sortToken) return@update now
+                if (page == null) {
+                    // A page that failed leaves what is on screen alone.
+                    // Replacing a working list with an error because the
+                    // *next* page failed takes away what the viewer had.
+                    now.copy(loadingMore = false)
+                } else {
+                    now.copy(
+                        videos = now.videos.appendNew(page.videos),
+                        nextPageToken = page.nextPageToken,
                         loadingMore = false,
                     )
-                },
-                // A page that failed leaves what is on screen alone. Replacing a
-                // working list with an error because the *next* page failed
-                // takes away what the viewer had.
-                onFailure = { current.copy(loadingMore = false) },
-            )
+                }
+            }
         }
     }
 

@@ -73,6 +73,7 @@ import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.tv.TvGridSkeleton
 
 /**
  * The padding every scrolling tab needs, in one place.
@@ -122,6 +123,13 @@ fun detailContentPadding(): PaddingValues = PaddingValues(
  */
 @Composable
 fun BoxScope.DetailBack(onBack: () -> Unit, label: String) {
+    // Not on a television, which has a Back key for this — and where the arrow
+    // was a trap rather than a spare. It floats over the page's list, and the
+    // list as a whole is not *below* it, so a remote that landed on the arrow
+    // had nowhere to go: down and right did nothing on every page reached from
+    // a menu. Drawing it unreachable would be the dead button the charter
+    // forbids, so it is not drawn.
+    if (LocalTelevision.current) return
     Box(
         Modifier
             .align(Alignment.TopStart)
@@ -620,7 +628,7 @@ private val RAIL_THUMB_RADIUS = 8.dp
 
 /** One line of stand-in text, at the height the real line occupies. */
 @Composable
-private fun SkeletonLine(shade: Color, width: Float, height: Dp) {
+internal fun SkeletonLine(shade: Color, width: Float, height: Dp) {
     Box(
         Modifier
             .fillMaxWidth(width)
@@ -682,6 +690,12 @@ private fun SkeletonPane(
  */
 @Composable
 fun FeedSkeleton(modifier: Modifier = Modifier, cards: Int = 3) {
+    // A grid on a television, where this column of full-width pictures was one
+    // grey block the height of the screen — see `TvGridSkeleton`.
+    if (LocalTelevision.current) {
+        TvGridSkeleton()
+        return
+    }
     val shade = skeletonShade()
 
     Column(modifier.fillMaxWidth()) {
@@ -797,6 +811,11 @@ fun ChannelListSkeleton(modifier: Modifier = Modifier, rows: Int = 8) {
  */
 @Composable
 fun CollectionListSkeleton(modifier: Modifier = Modifier, rows: Int = 6) {
+    // The playlists are a grid on a television, and so is what stands in for them.
+    if (LocalTelevision.current) {
+        TvGridSkeleton()
+        return
+    }
     val shade = skeletonShade()
 
     Column(modifier.fillMaxWidth()) {

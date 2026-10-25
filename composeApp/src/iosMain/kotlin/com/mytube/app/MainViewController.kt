@@ -24,7 +24,7 @@ import platform.UIKit.UIViewController
  */
 fun MainViewController(nativeGlass: Boolean): UIViewController =
     ComposeUIViewController {
-        App(container, nativeGlass = nativeGlass)
+        App(container, nativeGlass = nativeGlass, television = false)
     }
 
 private val container: AppContainer by lazy {

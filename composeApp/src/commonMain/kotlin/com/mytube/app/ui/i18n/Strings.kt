@@ -60,6 +60,20 @@ interface Strings {
     /** New uploads from followed channels, not yet watched. */
     val chipMissed: String
     val chipLive: String
+
+    // --- television --------------------------------------------------------
+    /** The question a shared screen asks before it knows whose evening it is. */
+    val whoIsWatching: String
+    /** The shelf of the ranked feed, which on a phone is the "All" chip. */
+    val shelfRecommended: String
+    /** The panel holding a video's description, beside the picture. */
+    val description: String
+    /** The on-screen keyboard's space bar. */
+    val keySpace: String
+    /** The on-screen keyboard's delete-one-letter key, for a screen reader. */
+    val keyBackspace: String
+    /** The microphone beside the search box, for a screen reader. */
+    val voiceSearch: String
     /** Shown when a topic or Live has nothing in it. */
     val nothingHere: String
 
@@ -336,6 +350,12 @@ object EnglishStrings : Strings {
     override val chipAll = "All"
     override val chipMissed = "Missed"
     override val chipLive = "Live"
+    override val whoIsWatching = "Who's watching?"
+    override val shelfRecommended = "Recommended"
+    override val description = "Description"
+    override val keySpace = "Space"
+    override val keyBackspace = "Delete"
+    override val voiceSearch = "Search by voice"
     override val nothingHere = "Nothing here"
 
     override val couldNotPlay = "Could not play this"
@@ -522,6 +542,12 @@ object VietnameseStrings : Strings {
     // Kept in English: it is what every player and every television calls a
     // broadcast, and "trực tiếp" is longer than the chip it sits in.
     override val chipLive = "Live"
+    override val whoIsWatching = "Ai đang xem?"
+    override val shelfRecommended = "Đề xuất"
+    override val description = "Mô tả"
+    override val keySpace = "Dấu cách"
+    override val keyBackspace = "Xoá một chữ"
+    override val voiceSearch = "Tìm bằng giọng nói"
     override val nothingHere = "Chưa có gì ở đây"
 
     override val couldNotPlay = "Không phát được"

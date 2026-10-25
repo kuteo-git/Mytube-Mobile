@@ -1,5 +1,7 @@
 package com.mytube.app.ui.playlist
 
+import com.mytube.app.domain.model.ExternalVideo
+import com.mytube.app.domain.model.Video
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mytube.app.domain.model.Playlist
@@ -26,6 +28,12 @@ data class SaveTarget(
 ) {
     val isExternal: Boolean get() = videoId.isEmpty() && sourceUrl.isNotEmpty()
 }
+
+/** A library video as the sheet's target: its id, and whether it is already saved. */
+fun saveTargetOf(video: Video) = SaveTarget(video.id, saved = video.saved)
+
+/** An upstream result as the sheet's target: no id yet, so the address the row is written from. */
+fun saveTargetOf(video: ExternalVideo) = SaveTarget(videoId = "", sourceUrl = video.sourceUrl)
 
 sealed interface SaveSheetState {
     data object Loading : SaveSheetState

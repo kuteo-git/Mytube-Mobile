@@ -1,7 +1,16 @@
 package com.mytube.app.ui.history
 
+import com.mytube.app.ui.home.videoMenu
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.fillMaxWidth
+import com.mytube.app.ui.tv.fullWidthItem
+import com.mytube.app.ui.tv.headingItem
+import com.mytube.app.ui.tv.TvGridCard
+import com.mytube.app.ui.tv.TvGrid
+import com.mytube.app.ui.shell.LocalTelevision
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -133,6 +142,29 @@ fun HistoryContent(
             modifier = Modifier.fillMaxSize(),
             indicator = { TabRefreshIndicator(refreshState, ready.refreshing) },
         ) {
+            // A grid of Home's cards on a television, as the playlists' pages
+            // are — see `TvGrid`.
+            if (LocalTelevision.current) {
+                TvGrid(Modifier.fillMaxSize()) {
+                    headingItem(key = "title") { ScreenTitle(strings.historyTitle) }
+                    if (ready.videos.isEmpty()) {
+                        fullWidthItem(key = "empty") {
+                            EmptyState(strings.noHistory, strings.noHistoryDetail)
+                        }
+                    }
+                    items(ready.videos, key = { it.id }) { video ->
+                        TvGridCard(
+                            video = video,
+                            mediaBaseUrl = mediaBaseUrl,
+                            strings = strings,
+                            onClick = { onOpenVideo(video.id) },
+                            opening = false,
+                            menu = videoMenu(strings, onSave = { onSaveVideo(video) }),
+                        )
+                    }
+                }
+                return@PullToRefreshBox
+            }
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),

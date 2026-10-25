@@ -97,6 +97,7 @@ class WatchArtworkTest {
             storyboards = FakeStoryboards,
             narration = FakeNarration,
             preferences = FakePreferences,
+            maxHeight = PHONE_MAX_HEIGHT,
             playerFactory = factory,
         )
         advanceUntilIdle()

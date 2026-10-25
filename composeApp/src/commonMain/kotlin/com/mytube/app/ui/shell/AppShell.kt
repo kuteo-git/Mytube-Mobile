@@ -221,13 +221,7 @@ fun AppShell(
             BottomBar(
                 current = current,
                 onSelect = onSelect,
-                strings = { tab ->
-                    when (tab) {
-                        Tab.Home -> strings.navHome
-                        Tab.Playlists -> strings.playlists
-                        Tab.Settings -> strings.navSettings
-                    }
-                },
+                strings = { tab -> tabLabel(tab, strings) },
                 onSearch = onSearch,
                 searchLabel = strings.search,
                 hidden = hide,
@@ -475,6 +469,7 @@ private fun BottomBar(
                             held = null
                         }
 
+                        // focus-guard: sliding along the phone's tab bar. A television has no tab bar — its rail is `TvShell`, reached with left and right.
                         detectHorizontalDragGestures(
                             onDragStart = { offset ->
                                 dragFrom = currentIndex

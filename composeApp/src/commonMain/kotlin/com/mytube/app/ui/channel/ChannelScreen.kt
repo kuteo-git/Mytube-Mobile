@@ -1,5 +1,6 @@
 package com.mytube.app.ui.channel
 
+import com.mytube.app.ui.home.videoMenu
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -17,6 +18,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import com.mytube.app.ui.tv.fullWidthItem
+import com.mytube.app.ui.tv.headingItem
+import com.mytube.app.ui.tv.TvGridCard
+import com.mytube.app.ui.tv.TvGrid
+import com.mytube.app.ui.tv.TvGridSkeleton
+import com.mytube.app.ui.shell.LocalTelevision
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -155,6 +165,68 @@ fun ChannelContent(
         // card: it is the same list for every row, and rebuilding it inside
         // `items` would allocate one per visible thumbnail on every scroll frame.
         val queue = remember(ready.videos) { ready.videos.map { it.asQueueItem() } }
+
+        // A grid of Home's cards on a television, as the other pages of
+        // videos are — see `TvGrid`. The same header, sorts, skeleton and
+        // next-page rule; the cards are what change.
+        if (LocalTelevision.current) {
+            val gridState = rememberLazyGridState()
+            val gridAtEnd by remember {
+                derivedStateOf {
+                    val last = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                    last >= gridState.layoutInfo.totalItemsCount - 4
+                }
+            }
+            LaunchedEffect(gridState) {
+                snapshotFlow { gridAtEnd }.collect { if (it) onLoadMore() }
+            }
+            TvGrid(Modifier.fillMaxSize(), state = gridState) {
+                // One heading, sorts and all: focus on a sort chip brings the
+                // avatar back too — see `headingItem`.
+                headingItem(key = "header") {
+                    Header(ready.channel, ready.videoCount, mediaBaseUrl, onToggleSubscribed)
+                    if (ready.sortOptions.isNotEmpty()) {
+                        SortRow(ready.sortOptions, ready.sortIndex, onSelectSort)
+                    }
+                }
+                if (ready.sorting) {
+                    fullWidthItem(key = "sorting") { TvGridSkeleton(rows = 1) }
+                }
+                if (ready.videos.isEmpty() && !ready.sorting) {
+                    fullWidthItem(key = "empty") {
+                        EmptyState(strings.nothingHere, strings.noResultsDetail)
+                    }
+                }
+                if (openFailed) {
+                    fullWidthItem(key = "open-failed") {
+                        Text(
+                            text = strings.youtubeUnreachable,
+                            color = Tokens.text2,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = Space.lg, vertical = Space.sm),
+                        )
+                    }
+                }
+                items(if (ready.sorting) emptyList() else ready.videos, key = { it.id }) { video ->
+                    TvGridCard(
+                        video = video,
+                        mediaBaseUrl = mediaBaseUrl,
+                        strings = strings,
+                        onClick = { onOpenVideo(video, queue) },
+                        opening = opening == video.id,
+                        menu = videoMenu(strings, onSave = { onSaveVideo(video) }),
+                    )
+                }
+                if (ready.loadingMore) {
+                    fullWidthItem(key = "more") {
+                        Box(Modifier.fillMaxWidth().padding(Space.lg), Alignment.Center) {
+                            AdaptiveCircularProgressIndicator()
+                        }
+                    }
+                }
+            }
+            return@TabScaffold
+        }
 
         LazyColumn(
             state = listState,

@@ -6,6 +6,8 @@ import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.ChannelPage
 import com.mytube.app.domain.repository.VideoRepository
+import kotlinx.coroutines.delay
+import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.ui.channel.ChannelState
 import com.mytube.app.ui.channel.ChannelViewModel
 import com.mytube.app.ui.watch.QueueItem
@@ -139,6 +141,41 @@ class ChannelViewModelTest {
         assertEquals(listOf("abc"), state.videos.map { it.id })
     }
 
+    /**
+     * Reported from the television: pick Oldest on a channel and the page stayed
+     * a skeleton for good. While a sort is out the grid has no cards, so its
+     * "near the end" check is true and asks for the next page — of the *old*
+     * order. That answer was written back over the state as it had been when
+     * it was asked, `sorting = true` included, after the sorted page had
+     * already landed.
+     */
+    @Test
+    fun aNextPageAskedForDuringASortDoesNotUndoTheSort() = runTest(dispatcher) {
+        val latest = SortOption("Latest", "")
+        val oldest = SortOption("Oldest", "old")
+        val videos = FakeVideos(
+            sorts = listOf(latest, oldest),
+            pages = mapOf(
+                ("" to "") to (listOf(upstream("new1")) to "p2"),
+                // The old order's continuation, asked with the new order's
+                // token beside it — the gateway reads only `pageToken`.
+                ("old" to "p2") to (listOf(upstream("new2")) to ""),
+                ("old" to "") to (listOf(upstream("old1")) to ""),
+            ),
+            delays = mapOf(("old" to "p2") to 1_000L, ("old" to "") to 100L),
+        )
+        val model = ChannelViewModel("chan", videos)
+        advance()
+
+        model.selectSort(oldest)
+        model.loadMore()
+        advance()
+
+        val ready = assertIs<ChannelState.Ready>(model.state.value)
+        assertEquals(false, ready.sorting)
+        assertEquals(listOf("old1"), ready.videos.map { it.id })
+    }
+
     private suspend fun kotlinx.coroutines.test.TestScope.advance() =
         testScheduler.advanceUntilIdle()
 
@@ -167,6 +204,10 @@ class ChannelViewModelTest {
     private inner class FakeVideos(
         private val page: List<Video> = emptyList(),
         private val ensured: String = "written-id",
+        private val sorts: List<SortOption> = emptyList(),
+        /** Pages by (sort token, page token), each with its next token; [page] otherwise. */
+        private val pages: Map<Pair<String, String>, Pair<List<Video>, String>> = emptyMap(),
+        private val delays: Map<Pair<String, String>, Long> = emptyMap(),
     ) : VideoRepository {
         var ensureCalls = 0
             private set
@@ -175,13 +216,18 @@ class ChannelViewModelTest {
             channelId: String,
             sortToken: String,
             pageToken: String,
-        ) = ChannelPage(
-            channel = channel(),
-            videoCount = page.size,
-            videos = page,
-            sortOptions = emptyList(),
-            nextPageToken = "",
-        )
+        ): ChannelPage {
+            val key = sortToken to pageToken
+            delays[key]?.let { delay(it) }
+            val (videos, next) = pages[key] ?: (page to "")
+            return ChannelPage(
+                channel = channel(),
+                videoCount = videos.size,
+                videos = videos,
+                sortOptions = sorts,
+                nextPageToken = next,
+            )
+        }
 
         override suspend fun ensureExternal(sourceUrl: String): String {
             ensureCalls++

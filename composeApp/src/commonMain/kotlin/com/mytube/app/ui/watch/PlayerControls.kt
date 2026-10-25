@@ -181,11 +181,17 @@ fun PlayerControls(
     onOpenSettings: () -> Unit,
     onPlayNext: () -> Unit,
     onPlayPrevious: () -> Unit,
-    onToggleSubtitles: () -> Unit,
+    /** Narration on or off — the Vietnamese voice, a press from the picture. */
+    onToggleNarration: () -> Unit,
     hasNext: Boolean,
     hasPrevious: Boolean,
-    hasSubtitles: Boolean,
-    subtitlesOn: Boolean,
+    /**
+     * Whether narration can be offered for what is playing: not a broadcast,
+     * and only with a caption track to read. Absent rather than disabled
+     * otherwise, the settings panel's rule.
+     */
+    canNarrate: Boolean,
+    narrating: Boolean,
     /**
      * Whether the player's own settings sheet is up.
      *
@@ -274,6 +280,7 @@ fun PlayerControls(
             // 300ms. That delay is the price of the two gestures never
             // disagreeing, and it is what the reference does too.
             .pointerInput(Unit) {
+                // focus-guard: the phone's player. The television's is `TvWatchScreen`, which reads the remote itself.
                 detectTapGestures(
                     onTap = {
                         visible = !visible
@@ -471,37 +478,23 @@ fun PlayerControls(
                     // behind it.
                     GlassPane("player-top-right", GlassPaneShape.Capsule) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (hasSubtitles) {
-                        // On is marked by an underline, not a second glyph.
-                        //
-                        // The filled version of this icon was a white box with
-                        // the letters knocked out in black — and `Icon` applies
-                        // a *tint*, which repaints every path in one colour. The
-                        // letters turned white with the box and the button
-                        // became a solid white square. Anything two-toned inside
-                        // an `Icon` has the same fault waiting in it.
+                    // Narration, where captions used to be — the household
+                    // reaches for the voice far more than for captions, and it
+                    // was two presses deep in the gear's sheet; captions stay in
+                    // that sheet. On and off are the speaker's two glyphs,
+                    // filled and drawn in outline: a change of kind, the
+                    // charter's rule for a state.
+                    if (canNarrate) {
                         GlassItem(
-                            id = "cc",
-                            symbol = "captions.bubble",
-                            on = subtitlesOn,
-                            onPress = { onToggleSubtitles(); lastTouch++ },
+                            id = "narration",
+                            symbol = if (narrating) "speaker.wave.2.fill" else "speaker.wave.2",
+                            onPress = { onToggleNarration(); lastTouch++ },
                         ) {
-                        Box(contentAlignment = Alignment.BottomCenter) {
                             ControlButton(
-                                icon = CaptionsIcon,
-                                label = strings.subtitles,
-                                onClick = { onToggleSubtitles(); lastTouch++ },
+                                icon = if (narrating) SpeakerFilledIcon else SpeakerIcon,
+                                label = strings.narration,
+                                onClick = { onToggleNarration(); lastTouch++ },
                             )
-                            if (subtitlesOn) {
-                                Box(
-                                    Modifier
-                                        .padding(bottom = 8.dp)
-                                        .width(22.dp)
-                                        .height(2.dp)
-                                        .background(Color.White),
-                                )
-                            }
-                        }
                         }
                     }
                     GlassItem(
@@ -870,7 +863,7 @@ fun PlayerControls(
  * the gesture is always answered.
  */
 @Composable
-private fun ScrubPreview(
+internal fun ScrubPreview(
     storyboard: StoryboardState,
     seconds: Double,
     mediaBaseUrl: String,
@@ -1149,6 +1142,7 @@ private fun SeekBar(
             // from a drag that never passed the slop threshold.
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
+                // focus-guard: the phone's seek bar, dragged by a thumb. The television's moves with left and right in `TvWatchScreen`.
                 detectTapGestures { offset ->
                     onSeekFraction((offset.x / width).coerceIn(0f, 1f).toDouble())
                 }
