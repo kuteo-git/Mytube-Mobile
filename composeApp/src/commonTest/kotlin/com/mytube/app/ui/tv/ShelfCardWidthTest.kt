@@ -6,20 +6,29 @@ import kotlin.test.assertEquals
 
 /**
  * How wide a card is on each shelf of the television's Home: YouTube's TV app's
- * own sizes, two and a half across on the first shelf and three and a half on
- * every other.
+ * own sizes, measured on the household's Chromecast. The shelf the remote is on
+ * is the large one, two and a half across; every other shelf is three and a
+ * half across.
  */
 class ShelfCardWidthTest {
 
     @Test
-    fun `the first shelf's cards are 360dp`() {
-        assertEquals(360.dp, shelfCardWidth(0))
+    fun `before any shelf has been on, the first shelf is the large one`() {
+        assertEquals(360.dp, shelfCardWidth(shelfIndex = 0, current = NO_SHELF))
+        assertEquals(264.dp, shelfCardWidth(shelfIndex = 1, current = NO_SHELF))
     }
 
     @Test
-    fun `every other shelf's cards are 264dp`() {
-        assertEquals(264.dp, shelfCardWidth(1))
-        assertEquals(264.dp, shelfCardWidth(2))
-        assertEquals(264.dp, shelfCardWidth(40))
+    fun `the shelf the remote moved down to is the large one`() {
+        // Reported from the television: every shelf under the first stayed
+        // small with the remote on it. YouTube's grows the row it moves to.
+        assertEquals(360.dp, shelfCardWidth(shelfIndex = 3, current = 3))
+    }
+
+    @Test
+    fun `every shelf the remote is not on is 264dp, the first included`() {
+        assertEquals(264.dp, shelfCardWidth(shelfIndex = 0, current = 3))
+        assertEquals(264.dp, shelfCardWidth(shelfIndex = 2, current = 3))
+        assertEquals(264.dp, shelfCardWidth(shelfIndex = 40, current = 3))
     }
 }

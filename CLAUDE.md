@@ -563,6 +563,11 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   grid's first item, answering focus inside it with its own rectangle, so a
   channel's subscribe and sorts show its avatar. Anything over the cards goes
   in that one item. [The television's third evening…]
+- **The shelf the remote is on is at the top and large**
+  (`shelfCardWidth(index, current)`), snapped rather than animated. The home
+  column's `BringIntoViewSpec` is `OnlyIntoSight`, not the TV's pivot, which
+  pulled a top shelf back to the middle on every left or right. The rows keep
+  the pivot. [The shelf the remote is on moves to the top…]
 - **A row is entered where it was left**, by id, or at its first card —
   only a *move* is redirected; `Enter` (focus handed back) is let through.
 - **A focused node that leaves the composition takes focus to the rail.** A

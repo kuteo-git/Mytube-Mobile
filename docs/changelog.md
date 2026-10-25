@@ -5682,3 +5682,35 @@ Android `PlayerControls` is composed after the badge, so it covered it too.
   `idb ui tap` reached the simulator that day (idb: "Failed to initialize IO
   ports for device IO client"), so no picture of the fix was taken. It has to
   be seen on the phone.
+
+## The shelf the remote is on moves to the top and grows, as on YouTube (2026-10-25)
+
+Reported from the television: every shelf after Continue watching was too
+small. Measured against YouTube's TV app on the same Chromecast, with both
+apps screenshotted: YouTube's row in focus is **720px** wide per card, two and
+a half across, and the rows around it are 528px. Here only the first shelf was
+ever 720px (`shelfCardWidth(0)`), and every other shelf stayed 528px with the
+remote on it. The user described the mechanism: a Down moves the row it lands
+on up to the top and makes it larger.
+
+- **`shelfCardWidth(shelfIndex, current)`.** Large for the shelf the remote is
+  on or was last on, by key, so a shelf that empties above it (Missed) does
+  not move the choice. Before any shelf has had focus, the first is large.
+  Focus going to the rail leaves it as it was.
+- **The column scrolls that shelf to the top** (`animateScrollToItem`).
+- **The width snaps; it is not animated.** Measured on the Chromecast over the
+  same run of six Downs and six Ups: animated over 250ms, 48% janky frames,
+  p50 44ms, p90 200ms. Snapped, 13% janky, p50 23ms, p90 53ms. Every frame of
+  the animation laid out each visible card again and re-wrapped its two-line
+  title.
+- **The column no longer pivots** (`OnlyIntoSight`). A television's default
+  `BringIntoViewSpec` is `PivotBringIntoViewSpec`, which moves every newly
+  focused card to the same height on screen. Once shelves sat at the top, a
+  press of left or right pulled the row back down to the middle. This was
+  reported from the television within minutes of the change. The column now
+  moves only to bring a card that is out of sight back into sight. The rows
+  read the platform's spec before the column replaces it and provide it
+  again, so left and right still pivot. `LocalBringIntoViewSpec` is
+  experimental in foundation 1.11, hence the opt-in.
+- After the fix, over Downs, Rights and Ups on the Chromecast: 11% janky,
+  p50 31ms, p99 65ms.

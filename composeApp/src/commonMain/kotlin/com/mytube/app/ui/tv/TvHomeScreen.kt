@@ -2,6 +2,10 @@ package com.mytube.app.ui.tv
 
 import com.mytube.app.ui.shell.SkeletonLine
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.runtime.getValue
 import com.mytube.app.ui.home.videoMenu
 import androidx.compose.foundation.background
@@ -145,6 +149,8 @@ fun TvHomeContent(
     }
 }
 
+// `LocalBringIntoViewSpec` is experimental in foundation 1.11 — see the column.
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Shelves(
     shelves: List<Shelf>,
@@ -168,6 +174,15 @@ private fun Shelves(
     // video is watched — stays until focus leaves, for [keptInPlace]'s reason.
     val shown = shelves.filter { it.shows || rows[it.kind.key]?.holding == true }
     val columnState = rememberLazyListState()
+    // The shelf the remote is on, or was last on, by key: an index would point
+    // at the wrong shelf once Missed empties and everything under it moves up.
+    //
+    // YouTube's TV app moves the row a Down lands on to the top of the screen
+    // and grows it — see [shelfCardWidth]. Not cleared when focus goes to the
+    // rail, which leaves the shelf where it was, as YouTube's does.
+    var currentKey by remember { mutableStateOf("") }
+    val current = shown.indexOfFirst { it.kind.key == currentKey }
+    LaunchedEffect(current) { if (current >= 0) columnState.animateScrollToItem(current) }
     val focus = remember { FocusRequester() }
     val firstShelf = remember { FocusRequester() }
     // Focus on arrival. Coming back from the player is not an arrival — the
@@ -187,6 +202,17 @@ private fun Shelves(
         columnState.scrollToItem(0)
     }
 
+    // The shelves' own scrolling, left and right, keeps the platform's pivot,
+    // which is read here before the column is given its own rule below.
+    val rowSpec = LocalBringIntoViewSpec.current
+    // The column moves only to bring a focused card that is out of sight back
+    // into sight. Where a shelf sits is decided by `current` above.
+    //
+    // A television's default spec pivots: every focus change scrolls the
+    // focused card to the same height on screen. Reported from the television
+    // once shelves moved to the top: a press of left or right pulled the row
+    // back down to the middle.
+    CompositionLocalProvider(LocalBringIntoViewSpec provides OnlyIntoSight) {
     LazyColumn(
         Modifier
             .fillMaxSize()
@@ -198,10 +224,12 @@ private fun Shelves(
     ) {
         itemsIndexed(shown, key = { _, shelf -> shelf.kind.key }) { index, shelf ->
             LaunchedEffect(shelf.kind.key) { onShelfShown(shelf.kind) }
+            CompositionLocalProvider(LocalBringIntoViewSpec provides rowSpec) {
             ShelfRow(
                 shelf = shelf,
                 title = shelfTitle(shelf.kind, strings),
-                cardWidth = shelfCardWidth(index),
+                cardWidth = shelfCardWidth(index, current),
+                onCurrent = { currentKey = shelf.kind.key },
                 memory = rows.getOrPut(shelf.kind.key) { RowMemory() },
                 mediaBaseUrl = mediaBaseUrl,
                 strings = strings,
@@ -211,8 +239,23 @@ private fun Shelves(
                 onRetry = { onRetryShelf(shelf.kind) },
                 modifier = if (index == 0) Modifier.focusRequester(firstShelf) else Modifier,
             )
+            }
         }
     }
+    }
+}
+
+/**
+ * Scrolls only as far as it takes to bring a rectangle into sight, and not at
+ * all when it is already in sight. See the column in [Shelves].
+ */
+private object OnlyIntoSight : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
+        when {
+            offset < 0f -> offset
+            offset + size > containerSize -> (offset + size - containerSize).coerceAtMost(offset)
+            else -> 0f
+        }
 }
 
 @Composable
@@ -220,6 +263,8 @@ private fun ShelfRow(
     shelf: Shelf,
     title: String,
     cardWidth: Dp,
+    /** Focus has come into this shelf — see `currentKey`. */
+    onCurrent: () -> Unit,
     memory: RowMemory,
     mediaBaseUrl: String,
     strings: Strings,
@@ -230,7 +275,7 @@ private fun ShelfRow(
     modifier: Modifier,
 ) {
     val rowState = memory.scroll
-    Column(Modifier.fillMaxWidth()) {
+    Column(Modifier.fillMaxWidth().onFocusChanged { if (it.hasFocus) onCurrent() }) {
         TvSectionTitle(title)
         when (shelf.load) {
             ShelfLoad.Waiting, ShelfLoad.Loading -> SkeletonCards(cardWidth)
@@ -427,9 +472,9 @@ private fun ShelvesSkeleton() {
         // the shelves will be: the first large, the rest ordinary.
         Column {
             TvSectionTitle(strings.shelfRecommended)
-            SkeletonCards(shelfCardWidth(0))
+            SkeletonCards(shelfCardWidth(0, NO_SHELF))
         }
-        SkeletonCards(shelfCardWidth(1))
+        SkeletonCards(shelfCardWidth(1, NO_SHELF))
     }
 }
 

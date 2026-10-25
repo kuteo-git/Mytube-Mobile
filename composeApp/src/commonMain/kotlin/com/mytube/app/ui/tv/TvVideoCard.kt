@@ -98,7 +98,7 @@ fun TvCard(
     withMeta: Boolean,
     modifier: Modifier,
     /**
-     * [TV_CARD_WIDTH], or [TV_CARD_WIDTH_LARGE] on the first shelf — see
+     * [TV_CARD_WIDTH], or [TV_CARD_WIDTH_LARGE] on the shelf the remote is on — see
      * [shelfCardWidth] — or `Dp.Unspecified` for a grid cell, which it fills.
      */
     width: Dp,
@@ -161,15 +161,26 @@ internal fun TvMetaText(text: String) {
 internal val TITLE_GAP = 14.dp
 
 /**
- * How wide the cards on a shelf are, by where the shelf is.
+ * How wide the cards on a shelf are: large on the shelf the remote is on, or
+ * was last on, and the ordinary size everywhere else.
  *
- * The first shelf is YouTube's TV app's large one — two and a half cards across
- * — and every shelf under it the ordinary size. A named function because the
- * shelf and its skeleton both read it, and a skeleton the wrong size is a page
- * that changes shape when it loads.
+ * YouTube's TV app does this. A Down moves the next row up to the top of the
+ * screen and grows it to two and a half cards across. This used to be "the
+ * first shelf is large", which matched YouTube's first screen and no other:
+ * reported from the television as every shelf after Continue watching being
+ * too small, and measured on the same Chromecast as 720px for YouTube's row
+ * in focus against 528px here.
+ *
+ * [current] is [NO_SHELF] until a shelf has had focus, and then the first
+ * shelf is the large one. A named function because the shelf and its skeleton
+ * both read it, and a skeleton the wrong size is a page that changes shape
+ * when it loads.
  */
-internal fun shelfCardWidth(shelfIndex: Int): Dp =
-    if (shelfIndex == 0) TV_CARD_WIDTH_LARGE else TV_CARD_WIDTH
+internal fun shelfCardWidth(shelfIndex: Int, current: Int): Dp =
+    if (shelfIndex == current.coerceAtLeast(0)) TV_CARD_WIDTH_LARGE else TV_CARD_WIDTH
+
+/** No shelf has had focus yet — see [shelfCardWidth]. */
+internal const val NO_SHELF = -1
 
 /**
  * How wide an ordinary card on a shelf is: 264dp, YouTube's TV app's own, three
@@ -178,7 +189,7 @@ internal fun shelfCardWidth(shelfIndex: Int): Dp =
  */
 val TV_CARD_WIDTH = 264.dp
 
-/** The first shelf's cards: 360dp, two and a half across, as YouTube's first shelf. */
+/** The cards on the shelf the remote is on: 360dp, two and a half across, as YouTube's row in focus. */
 val TV_CARD_WIDTH_LARGE = 360.dp
 
 /** Between two cards on a shelf. */
