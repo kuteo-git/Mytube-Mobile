@@ -97,12 +97,19 @@ class StreamMappingTest {
         assertTrue(stream("""{"cacheDisabled":true}""") is Stream.NothingPlayable)
     }
 
+    /**
+     * The refusal is an object with its reason inside. This test used to feed
+     * `{"unavailable":true,"reason":"members_only"}` — a body nobody had seen
+     * the gateway send — and passed while every private video on the phone
+     * said "Illegal input: Unexpected JSON token at offset 15". The body below
+     * is the running gateway's answer for a private video.
+     */
     @Test
     fun upcomingAndUnavailableComeBeforeEveryTier() {
         assertTrue(stream("""{"upcoming":true}""") is Stream.Upcoming)
 
-        val refused = stream("""{"unavailable":true,"reason":"members_only"}""")
+        val refused = stream("""{"unavailable":{"reason":"private"}}""")
         assertTrue(refused is Stream.Unavailable)
-        assertEquals("members_only", refused.reason)
+        assertEquals("private", refused.reason)
     }
 }

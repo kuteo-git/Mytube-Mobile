@@ -19,7 +19,16 @@ data class StreamDto(
     val liveCaptions: Boolean = false,
     val liveCaptionsLang: String = "",
     val upcoming: Boolean = false,
-    val unavailable: Boolean = false,
+    /**
+     * Upstream refused this video for good — an object with the reason inside
+     * (`{"unavailable":{"reason":"private"}}`), absent otherwise.
+     */
+    val unavailable: UnavailableDto? = null,
+)
+
+@Serializable
+data class UnavailableDto(
+    /** members_only | private | removed | unavailable */
     val reason: String? = null,
 )
 
@@ -40,7 +49,7 @@ data class SourceDto(
  */
 fun StreamDto.toDomain(baseUrl: String, maxHeight: Int): Stream = when {
     upcoming -> Stream.Upcoming
-    unavailable -> Stream.Unavailable(reason.orEmpty().ifBlank { "unavailable" })
+    unavailable != null -> Stream.Unavailable(unavailable.reason.orEmpty().ifBlank { "unavailable" })
     // Live is checked **before** hls, and the server never sends both: a
     // broadcast answers with the live tier alone, because offering hls beside it
     // would have the player climb toward a playlist built from adaptive tracks
