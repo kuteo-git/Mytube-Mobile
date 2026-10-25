@@ -352,13 +352,14 @@ Everything on the external volume; `source env.sh` before working.
   elements by label at the moment of the tap, not by remembered coordinates.
 - **When Data2 is not mounted, this project cannot be built.**
 
-## 10. Status (v0.1.11, 2026-10-03; Android TV unreleased, 2026-10-24)
+## 10. Status (v0.1.12, 2026-10-25)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
   household's iPhone, release build via AltStore).** 400 tests, seven guards.
 - **Runs on the household's Chromecast with Google TV** (release build over
   `adb`): rail, shelves, the full-screen player with D-pad seeking, search with
-  an on-screen keyboard and voice, the profile question. Not yet in a release.
+  an on-screen keyboard and voice, the profile question. Released in v0.1.12;
+  installed with `tools/tv-install.sh`.
 - Built: Home with chips (incl. Live and Missed), Search (library + YouTube),
   Channel, Watch (layer with drag-to-miniplayer, controls, subtitles, narration,
   storyboard scrub preview, pinch-to-fill, double-tap seek, comments, up next,
