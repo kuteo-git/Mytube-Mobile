@@ -25,3 +25,6 @@ replay_pid*.log
 # The release key. See keystore.properties for why it is not here.
 keystore.properties
 *.jks
+
+# The phones tools/ios-device-install.sh signs for. UDIDs are the household's.
+ios-devices

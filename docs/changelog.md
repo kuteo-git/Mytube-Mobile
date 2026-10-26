@@ -5820,3 +5820,38 @@ before anything was changed.
   wiring around it (a reset and a constant index) and in a layout's measure
   order, and the charter has no Compose UI tests. The two driven loops are
   the regression check.
+
+## The phones are signed by Xcode every night, not by AltStore (2026-10-26)
+
+AltStore stopped installing: "Apple's authentication servers returned an
+error (HTTP 503)" on AltServer 1.8.2, all day. It is not ours. Since September,
+Apple refuses any sign-in that introduces itself as Xcode without being Xcode
+(altstoreio/AltStore #1842, #1790, #1796, still open). Xcode itself is not
+refused: it had written a fresh profile for this app the day before.
+
+- **`tools/ios-device-install.sh`** builds Release with
+  `-allowProvisioningUpdates` for one phone as the destination, then installs
+  it over the network with `devicectl`. With no arguments it does this for
+  every phone in `ios-devices`.
+- **AltStore's bundle id, not the project's.** AltStore installs the app as
+  `com.xtube.com.<team>`. Built with that id, the install replaces AltStore's
+  copy and keeps its data (the server address, the profile). Measured on the
+  household's iPhone 16e: it went from 0.1.13 to 0.1.15 in place.
+- **`ios-devices` is gitignored**, because this repository is public and UDIDs
+  and team ids are the household's. The IPA script strips
+  `embedded.mobileprovision` for the same reason.
+- **Xcode reuses a profile until it has expired**, so a nightly run alone would
+  leave the app dead from the seventh afternoon until the next night. A cached
+  profile for the app with under two days left is deleted before the build,
+  and Xcode then asks for a fresh week. The date arithmetic was checked against
+  the real profile (167h left). The deletion itself first runs around 31 Oct.
+- **A phone that is away is reported and skipped.** Tried with a made-up UDID
+  in the list: that phone said "device not reachable", the real phone was still
+  installed, and the run exited 1.
+- **The nightly job lives on the Mac, outside the repository**:
+  `~/Library/LaunchAgents/com.mytube.ios-nightly.plist` at 02:00 runs
+  `~/.config/mytube/ios-nightly.sh`. That wrapper runs the script and sends the
+  result to Telegram (`~/.config/mytube/telegram.env`, mode 600), one block per
+  phone. It is outside the repository so it can report a missing Data2, and so
+  the bot's token never reaches a public repository. Run through launchd with
+  `kickstart`, it built, installed and sent.

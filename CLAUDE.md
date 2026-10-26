@@ -341,9 +341,13 @@ Everything on the external volume; `source env.sh` before working.
   nightly maintenance, and that was half of its jank.
 - **iOS**: `iosApp/iosApp.xcodeproj` is hand-written; the framework is static.
   `tools/ios-ipa.sh` archives and zips the IPA by hand (no `-exportArchive`,
-  which embeds the 7-day profile). The household uses a free Apple ID, so the
-  phone is kept signed by **AltServer/AltStore**; `tools/altstore-setup.sh`
-  guides the first install and never asks for the password.
+  which embeds the 7-day profile). The household uses a free Apple ID. Since
+  September 2026 Apple answers AltServer's sign-in with HTTP 503, so the phones
+  are kept signed by **Xcode itself**: `tools/ios-device-install.sh` builds and
+  installs over the network for every phone in the gitignored `ios-devices`
+  (`<udid> <AltStore's bundle id> # name`), run nightly by a LaunchAgent on the
+  Mac that reports to Telegram from outside the repository.
+  `tools/altstore-setup.sh` is the old route, kept while AltStore is broken.
 - **Simulator builds need `-destination 'platform=iOS Simulator,id=<udid>'`**;
   `-sdk iphonesimulator` alone also builds x86_64 and fails.
 - **Driving the simulator**: `tools/sim-touch.swift` (CGEvent tap/drag/hold —
