@@ -115,6 +115,20 @@ internal fun Modifier.entersAt(
 }
 
 /**
+ * Focus to the card [rowEntryIndex] chooses among [ids], asked for by
+ * somebody outside the row rather than by a move into it: the player's Down
+ * with the controls away, which brings up next with focus already on it.
+ * Scrolled to first if that card has left the row's composition.
+ */
+internal suspend fun RowMemory.enter(ids: List<String>) {
+    val at = rowEntryIndex(ids, lastId, lastIndex)
+    if (cards[ids.getOrNull(at)]?.requestFocus() == true) return
+    scroll.scrollToItem(at)
+    awaitPlaced()
+    cards[ids.getOrNull(at)]?.requestFocus()
+}
+
+/**
  * [items], with the card focus is on kept at [at] if the new list dropped it.
  *
  * Coming back from the player Home asks again, and Missed answers without the

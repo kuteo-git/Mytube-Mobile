@@ -570,6 +570,10 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   the pivot. [The shelf the remote is on moves to the top…]
 - **A row is entered where it was left**, by id, or at its first card —
   only a *move* is redirected; `Enter` (focus handed back) is let through.
+- **What must keep its size is measured first.** In a column that can run out
+  of room, the part that may shrink is weighted (`fill = false`), so it is
+  measured last. An unweighted column cuts short its *last* child, and on the
+  TV player that was up next. [Up next is entered where it was left…]
 - **A focused node that leaves the composition takes focus to the rail.** A
   refresh under the remote keeps the focused card (`keptInPlace`), and
   `scrollToItem` on a lazy state with no layout waits for ever

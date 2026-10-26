@@ -5781,3 +5781,42 @@ panels, the phone's watch page, comments and drag to the miniplayer.
   answers an empty list. App's `.onSuccess { profiles = it }` then replaces a
   known household with nobody, which is the opposite of what the comments
   around it intend.
+
+## Up next is entered where it was left, and keeps its titles' second line (2026-10-26)
+
+Two reports from the television's player, both reproduced on the TV emulator
+before anything was changed.
+
+- **Down after Back landed on the first suggestion, not the fifth.** Up next
+  went back to its start each time the controls went
+  (`requestScrollToItem(0)`), and Down entered it at index 0 on purpose: "the
+  one that plays next". Loop: Down, Right ×4, Back, Down, then read the title
+  under the focused node from `uiautomator dump`. Before: left on "He's 14 and
+  on the front line…", back on "The Dead's Game". After: the same title both
+  times. The row now keeps a `RowMemory` for as long as one video plays, the
+  same as a Home shelf: its scroll, the card it was left on, and `entersAt`
+  plus `rowEntryIndex` for a move in from a control. The player's own Down
+  goes through `RowMemory.enter`. A new video starts a new memory, so its
+  first card, the one that plays next, is still where Down lands.
+- **Suggestion titles drawn as one line with an ellipsis.** The controls are
+  a column: the title block, a weighted spacer, then the bottom block (seek
+  bar, buttons, up next). With a one-line title over the controls the spacer
+  had 24dp left, and a two-line title adds 28dp. The column then constrained
+  its last child, the bottom block, and inside it the row came last. Each
+  `Text` got 44dp for two 24sp lines and ellipsized down to one. A seek's
+  preview with the controls up (134dp) pushed the whole row off the screen.
+  Loop: play a video with a two-line title (search "macbook"), press Down,
+  then check every suggestion title's height in the dump. Before: 48px, RED.
+  After: 96px, GREEN.
+  - The title block is weighted (`fill = false`) and the column is
+    `SpaceBetween`. A weighted child is measured after the others, so the
+    bottom block always gets its full height and the title block gets what
+    is left. During a seek with the controls up, the preview grows upward
+    over the title and nothing below it moves.
+  - The row's 8dp of bottom padding is gone. The focused card's rise is the
+    picture's, and the title sits under the picture. That 8dp is what makes
+    room for a two-line title over the controls.
+- **No unit seam.** `rowEntryIndex` was already tested. The fault was in the
+  wiring around it (a reset and a constant index) and in a layout's measure
+  order, and the charter has no Compose UI tests. The two driven loops are
+  the regression check.

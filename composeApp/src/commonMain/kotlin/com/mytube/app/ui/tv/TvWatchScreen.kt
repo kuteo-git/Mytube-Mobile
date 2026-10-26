@@ -32,7 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.lazy.items
@@ -355,7 +355,10 @@ private fun Playing(
     val focusManager = LocalFocusManager.current
     val surfaceFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
-    val upNextFocus = remember { FocusRequester() }
+    // The card up next was left on, for as long as this video plays: Back and
+    // Down again land where the remote was, as a Home shelf does. A new video
+    // starts at its first card, the one that plays next.
+    val upNextMemory = remember(state.video.id) { RowMemory() }
     val panelFocus = remember { FocusRequester() }
     val focusMemory = LocalFocusMemory.current
     // Where focus was as a panel opened — see the effect below.
@@ -409,7 +412,7 @@ private fun Playing(
             when {
                 panel != TvPanel.None -> panelFocus.requestFocus()
                 controls && entry == ControlsEntry.UpNext && state.upNext.isNotEmpty() ->
-                    upNextFocus.requestFocus()
+                    upNextMemory.enter(state.upNext.map { it.id })
                 controls -> if (!reopened.restore()) playFocus.requestFocus()
                 else -> surfaceFocus.requestFocus()
             }
@@ -588,7 +591,6 @@ private fun Playing(
                 .focusGroup(),
         ) {
             Controls(
-                shown = controls,
                 state = state,
                 live = live,
                 draft = draft,
@@ -596,7 +598,7 @@ private fun Playing(
                 strings = strings,
                 hasPrevious = hasPrevious,
                 playFocus = playFocus,
-                upNextFocus = upNextFocus,
+                upNextMemory = upNextMemory,
                 onPlayPause = onPlayPause,
                 onSeekPress = ::seekPress,
                 onReact = onReact,
@@ -674,8 +676,6 @@ private fun handleMediaKey(
 
 @Composable
 private fun Controls(
-    /** Whether the controls are up; they stay composed while they are not. */
-    shown: Boolean,
     state: WatchState.Playing,
     live: Boolean,
     draft: SeekDraft,
@@ -683,7 +683,7 @@ private fun Controls(
     strings: Strings,
     hasPrevious: Boolean,
     playFocus: FocusRequester,
-    upNextFocus: FocusRequester,
+    upNextMemory: RowMemory,
     onPlayPause: () -> Unit,
     onSeekPress: (Int) -> Unit,
     onReact: (Reaction) -> Unit,
@@ -703,13 +703,20 @@ private fun Controls(
     // glyphs is a second row of text nobody reads.
     var focusedLabel by remember { mutableStateOf("") }
 
-    // A column, with the gap between title and controls the part that gives.
-    // The two were aligned to opposite ends of one box, and once the
-    // suggestions were up the bottom block grew into the title: the channel's
-    // name was drawn through the seek bar.
-    Column(Modifier.fillMaxSize()) {
+    // A column, with the gap between title and controls the part that gives,
+    // and the title after it. The two were aligned to opposite ends of one
+    // box, and once the suggestions were up the bottom block grew into the
+    // title: the channel's name was drawn through the seek bar.
+    //
+    // The title gives, not the bottom block: weighted, it is measured after
+    // the bottom block and gets what is left. Last in an unweighted column,
+    // the bottom block was the one cut short, and up next at the end of it —
+    // a two-line title over the controls left its titles one line each, and
+    // a seek's preview pushed the row off the screen.
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
         Column(
             Modifier
+                .weight(1f, fill = false)
                 .fillMaxWidth()
                 .background(TOP_SCRIM)
                 .padding(horizontal = TV_SAFE_HORIZONTAL, vertical = TV_SAFE_VERTICAL),
@@ -732,8 +739,6 @@ private fun Controls(
                 maxLines = 1,
             )
         }
-
-        Spacer(Modifier.weight(1f))
 
         Column(
             Modifier
@@ -856,10 +861,9 @@ private fun Controls(
             if (state.upNext.isNotEmpty()) {
                 UpNextRow(
                     upNext = state.upNext,
-                    shown = shown,
                     mediaBaseUrl = mediaBaseUrl,
                     strings = strings,
-                    firstFocus = upNextFocus,
+                    memory = upNextMemory,
                     onFocused = { focusedLabel = "" },
                     onOpenVideo = onOpenVideo,
                     onSaveVideo = onSaveVideo,
@@ -869,15 +873,16 @@ private fun Controls(
     }
 }
 
-/** The suggestions under the controls, entered at the one that plays next. */
+/**
+ * The suggestions under the controls, entered at the card they were left on —
+ * the one that plays next, until the remote has moved along them.
+ */
 @Composable
 private fun UpNextRow(
     upNext: List<Video>,
-    /** Whether the controls are up; see [Controls]. */
-    shown: Boolean,
     mediaBaseUrl: String,
     strings: Strings,
-    firstFocus: FocusRequester,
+    memory: RowMemory,
     onFocused: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onSaveVideo: (Video) -> Unit,
@@ -890,33 +895,46 @@ private fun UpNextRow(
         fontWeight = FontWeight.Medium,
         modifier = Modifier.padding(start = TV_SAFE_HORIZONTAL, top = Space.sm),
     )
-    val upNextState = rememberLazyListState()
-    // Back to its start each time the controls go, as it was when
-    // they were built afresh on every press: Down lands on the
-    // first video, and a row left scrolled would have it out of
-    // the composition. `requestScrollToItem`, because a state with
-    // no layout waits for ever on `scrollToItem`.
-    LaunchedEffect(shown) {
-        if (!shown) upNextState.requestScrollToItem(0)
-    }
+    val current by rememberUpdatedState(upNext)
+    // Its scroll is the memory's, kept while the controls are away, so the
+    // card focus comes back to is still composed. It used to go back to the
+    // start each time they went: reported as Back and Down after the fifth
+    // video landing on the first.
     LazyRow(
-        state = upNextState,
-        // Down from any control lands on the first video, not on
-        // the one under the control — it is the one that plays
-        // next, and the row is read from its start.
-        modifier = Modifier.entersAt(upNextState, index = { 0 }, requester = { firstFocus }),
-        // Room for a focused card's rise, past the safe margin.
+        state = memory.scroll,
+        // Room above for a focused card's rise. None below: the rise is the
+        // picture's, and under the picture is its title — the 8dp that were
+        // here were what a two-line title over the controls cost the titles
+        // in this row their second line.
         contentPadding = PaddingValues(
-            horizontal = TV_SAFE_HORIZONTAL,
-            vertical = FOCUS_MAX_OUTSET / 2,
+            start = TV_SAFE_HORIZONTAL,
+            end = TV_SAFE_HORIZONTAL,
+            top = FOCUS_MAX_OUTSET / 2,
+        ),
+        // Down from any control lands on the card the row was left on, not
+        // on the one under the control.
+        modifier = Modifier.entersAt(
+            state = memory.scroll,
+            index = { rowEntryIndex(current.map { it.id }, memory.lastId, memory.lastIndex) },
+            requester = { memory.cards[current.getOrNull(it)?.id] },
         ),
         horizontalArrangement = Arrangement.spacedBy(Space.lg),
     ) {
         itemsIndexed(upNext, key = { _, next -> next.id }) { index, next ->
+            val requester = remember { FocusRequester() }
+            DisposableEffect(next.id) {
+                memory.cards[next.id] = requester
+                onDispose { if (memory.cards[next.id] === requester) memory.cards.remove(next.id) }
+            }
             Box(
                 Modifier
-                    .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
-                    .onFocusChanged { if (it.hasFocus) onFocused() },
+                    .focusRequester(requester)
+                    .onFocusChanged {
+                        if (it.hasFocus) {
+                            memory.focused(index, next.id)
+                            onFocused()
+                        }
+                    },
             ) {
                 TvVideoCard(
                     video = next,
