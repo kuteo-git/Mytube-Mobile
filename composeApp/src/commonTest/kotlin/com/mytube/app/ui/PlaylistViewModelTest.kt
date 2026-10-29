@@ -127,6 +127,32 @@ class PlaylistViewModelTest {
         assertEquals(listOf("pl_music"), repo.deleted)
     }
 
+    /**
+     * Reported from the phone: a playlist of 139 showed 24, the gateway's first
+     * page, because the token for the next one was never followed. The list is
+     * also the queue Play all hands the player, so autoplay stopped at 24 too.
+     * Pages here are the gateway's as measured: 24 each, the token an offset.
+     */
+    @Test
+    fun everyPageOfALongPlaylistIsLoaded() = runTest(dispatcher) {
+        val model = PlaylistViewModel("pl_long", PagedPlaylist(size = 139))
+        advanceUntilIdle()
+
+        val ready = assertIs<PlaylistState.Ready>(model.state.value)
+        assertEquals((1..139).map { "v$it" }, ready.videos.map { it.id })
+    }
+
+    /** The first page is drawn without waiting for the last. */
+    @Test
+    fun theFirstPageIsShownBeforeTheRestArrive() = runTest(dispatcher) {
+        val repo = PagedPlaylist(size = 139)
+        repo.holdAfterFirst = true
+        val model = PlaylistViewModel("pl_long", repo)
+        advanceUntilIdle()
+
+        assertEquals(24, assertIs<PlaylistState.Ready>(model.state.value).videos.size)
+    }
+
     // A top-level factory rather than a method on the test class: `FakePlaylist`
     // below is a plain nested class, and it needs this too. It was `inner` for
     // one build so it could reach the outer's copy, and the compiler emitted a
@@ -192,5 +218,31 @@ class PlaylistViewModelTest {
             sortToken: String,
             pageToken: String,
         ) = throw NotImplementedError()
+    }
+
+    private class PagedPlaylist(private val size: Int) : StubVideoRepository() {
+        var holdAfterFirst = false
+        private val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+
+        override suspend fun playlist(playlistId: String, pageToken: String): PlaylistPage {
+            val from = pageToken.ifEmpty { "0" }.toInt()
+            if (from > 0 && holdAfterFirst) gate.await()
+            val to = minOf(from + 24, size)
+            return PlaylistPage(
+                playlist = Playlist(playlistId, "Luke Music", "", size, false, emptyList()),
+                videos = (from + 1..to).map {
+                    Video(
+                        id = "v$it",
+                        title = "v$it",
+                        channel = Channel("c", "c", "", ""),
+                        durationSeconds = 1,
+                        viewCount = 0,
+                        publishedAt = "",
+                        thumbnailPath = "",
+                    )
+                },
+                nextPageToken = if (to < size) "$to" else "",
+            )
+        }
     }
 }

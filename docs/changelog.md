@@ -5883,3 +5883,19 @@ the controls — the third tap was a toggle, not ten more seconds.
   by which time the 700ms run could have closed under a steady rhythm.
 - After the fix, runs of 2 to 7 taps all left the controls down, and a lone tap
   still brought them up.
+
+## A playlist showed its first 24 videos (2026-10-29)
+
+Reported from the phone: a playlist of more than a hundred did not load all of
+it. The gateway answered in full — "Luke Music", 139 videos, six pages of 24
+with the offset as the token, no repeats — and the app, scrolled to the end on
+the emulator, stopped at the 24th. `PlaylistViewModel` asked for the first page
+and never followed `nextPageToken`. The rows are also the queue Play all hands
+the player, so autoplay ended at 24 as well.
+
+- **Every page is followed on load**, not on scroll: a queue cannot wait for
+  somebody to scroll. The first page is drawn at once and each later page is
+  appended to the state as it is *now*, so a row removed meanwhile stays gone.
+- **A refresh keeps the drawn list until the whole answer is in**, and keeps it
+  if a later page fails, rather than dropping 139 rows to 24 and growing back.
+- After the fix the same scroll ended on the 139th video, the gateway's last.
