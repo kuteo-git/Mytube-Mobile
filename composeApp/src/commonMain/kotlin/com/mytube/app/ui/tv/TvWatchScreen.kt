@@ -112,8 +112,8 @@ import com.mytube.app.ui.watch.PlayIcon
 import com.mytube.app.ui.watch.PreviousIcon
 import com.mytube.app.ui.watch.SaveFilledIcon
 import com.mytube.app.ui.watch.SaveIcon
-import com.mytube.app.ui.watch.SpeakerFilledIcon
-import com.mytube.app.ui.watch.SpeakerIcon
+import com.mytube.app.ui.watch.NarrationFilledIcon
+import com.mytube.app.ui.watch.NarrationIcon
 import com.mytube.app.ui.watch.ScrubPreview
 import com.mytube.app.ui.watch.SubtitleOverlay
 import com.mytube.app.ui.watch.ThumbFilledIcon
@@ -803,7 +803,7 @@ private fun Controls(
                     // rule — a recorded video with captions to read.
                     if (state.canNarrate) {
                         TvControl(
-                            icon = if (state.narrating) SpeakerFilledIcon else SpeakerIcon,
+                            icon = if (state.narrating) NarrationFilledIcon else NarrationIcon,
                             label = strings.narration,
                             selected = state.narrating,
                             onFocused = { focusedLabel = it },

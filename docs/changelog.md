@@ -5855,3 +5855,31 @@ refused: it had written a fresh profile for this app the day before.
   phone. It is outside the repository so it can report a missing Data2, and so
   the bot's token never reaches a public repository. Run through launchd with
   `kickstart`, it built, installed and sent.
+
+## Narration is a speaking head, not a speaker (2026-10-29)
+
+The household said the narration button's speaker was wrong. Over a video a
+speaker reads as the video's own volume; this switch is a voice talking over
+the picture. It is now Lucide's `speech` — a head in profile with its voice
+coming out — drawn in outline when off and with the head filled when on, on the
+phone's controls and the television's row alike. On iOS 26, where the pane is
+SwiftUI's, the SF Symbols are `person.wave.2` and `person.wave.2.fill`. Seen on
+the emulator over a playing video.
+
+## A third tap in a run of jumps put the controls up (2026-10-29)
+
+Reported from the phone: tapping the picture to jump "sometimes" left the
+controls up. Measured on the emulator with bursts of taps 120ms apart on the
+right half, then reading the semantics tree 1.5s later: runs of 3, 5 and 7 taps
+showed the controls, runs of 2, 4 and 6 did not. `detectTapGestures` pairs taps
+into double taps, so an odd run ends on a single tap, and a single tap toggles
+the controls — the third tap was a toggle, not ten more seconds.
+
+- **Inside a run every tap is one step** (`tapJump`): a single tap jumps while
+  a run is open, a double tap counts as two, and a run of n taps jumps n − 1
+  steps whatever its parity. Four taps on the left took 16:51 to 16:22.
+- **Whether a run is open is read when the finger comes down** (`onPress`), not
+  when the tap is decided: a single tap is decided a double-tap window later,
+  by which time the 700ms run could have closed under a steady rhythm.
+- After the fix, runs of 2 to 7 taps all left the controls down, and a lone tap
+  still brought them up.

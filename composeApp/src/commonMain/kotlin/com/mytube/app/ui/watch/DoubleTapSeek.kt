@@ -160,6 +160,25 @@ private const val FADE_IN_MILLIS = 90
 private const val FADE_OUT_MILLIS = 260
 
 /**
+ * How far a tap on the picture jumps, in seconds; zero means it shows or hides
+ * the controls instead.
+ *
+ * [running] is whether a run of jumps was open when the finger came down. Taps
+ * arrive paired into double taps, so a run of three ends on a *single* tap —
+ * and that one toggled the controls, putting them up under a finger that was
+ * still seeking. Reported from the phone. Inside a run every tap is one more
+ * step, so a run of n taps jumps n − 1 steps whatever its parity.
+ */
+fun tapJump(running: Boolean, double: Boolean, forward: Boolean): Double {
+    val taps = when {
+        running -> if (double) 2 else 1
+        double -> 1
+        else -> 0
+    }
+    return taps * if (forward) SKIP_SECONDS else -SKIP_SECONDS
+}
+
+/**
  * How long a run of double taps stays open.
  *
  * Past this the next double tap starts counting again from ten. It is longer

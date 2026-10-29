@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -281,30 +282,33 @@ fun PlayerControls(
             // disagreeing, and it is what the reference does too.
             .pointerInput(Unit) {
                 // focus-guard: the phone's player. The television's is `TvWatchScreen`, which reads the remote itself.
-                detectTapGestures(
-                    onTap = {
+                // Read when the finger comes down, not when the tap is
+                // decided: a single tap is decided a double-tap window later,
+                // and by then the run it belonged to may have closed.
+                var running = false
+                fun jumpOrToggle(offset: Offset, double: Boolean) {
+                    val forward = offset.x >= size.width / 2f
+                    val jump = tapJump(running, double, forward)
+                    lastTouch++
+                    if (jump == 0.0) {
                         visible = !visible
-                        lastTouch++
-                    },
-                    onDoubleTap = { offset ->
-                        val forward = offset.x >= size.width / 2f
-                        val step = if (forward) SKIP_SECONDS.toInt() else -SKIP_SECONDS.toInt()
-                        onSkip(if (forward) SKIP_SECONDS else -SKIP_SECONDS)
-                        // Only added to while the run is going the same way. A
-                        // tap on the other side is a new intention, not
-                        // twenty seconds less of this one.
-                        val running = if (ripple.visible && ripple.forward == forward) {
-                            ripple.seconds
-                        } else {
-                            0
-                        }
-                        ripple = SeekRipple(running + step, forward, ripple.taps + 1)
-                        // Deliberately not touching `visible`. Double-tapping a
-                        // bare picture on the reference jumps and leaves it
-                        // bare; showing the controls here would put the transport
-                        // discs under a finger that is still tapping.
-                        lastTouch++
-                    },
+                        return
+                    }
+                    onSkip(jump)
+                    // Only added to while the run is going the same way. A
+                    // tap on the other side is a new intention, not twenty
+                    // seconds less of this one.
+                    val sofar = if (ripple.visible && ripple.forward == forward) ripple.seconds else 0
+                    ripple = SeekRipple(sofar + jump.toInt(), forward, ripple.taps + 1)
+                    // Deliberately not touching `visible`. Double-tapping a
+                    // bare picture on the reference jumps and leaves it bare;
+                    // showing the controls here would put the transport discs
+                    // under a finger that is still tapping.
+                }
+                detectTapGestures(
+                    onPress = { running = ripple.visible },
+                    onTap = { jumpOrToggle(it, double = false) },
+                    onDoubleTap = { jumpOrToggle(it, double = true) },
                 )
             },
     ) {
@@ -481,17 +485,17 @@ fun PlayerControls(
                     // Narration, where captions used to be — the household
                     // reaches for the voice far more than for captions, and it
                     // was two presses deep in the gear's sheet; captions stay in
-                    // that sheet. On and off are the speaker's two glyphs,
+                    // that sheet. On and off are a speaking head's two glyphs,
                     // filled and drawn in outline: a change of kind, the
                     // charter's rule for a state.
                     if (canNarrate) {
                         GlassItem(
                             id = "narration",
-                            symbol = if (narrating) "speaker.wave.2.fill" else "speaker.wave.2",
+                            symbol = if (narrating) "person.wave.2.fill" else "person.wave.2",
                             onPress = { onToggleNarration(); lastTouch++ },
                         ) {
                             ControlButton(
-                                icon = if (narrating) SpeakerFilledIcon else SpeakerIcon,
+                                icon = if (narrating) NarrationFilledIcon else NarrationIcon,
                                 label = strings.narration,
                                 onClick = { onToggleNarration(); lastTouch++ },
                             )

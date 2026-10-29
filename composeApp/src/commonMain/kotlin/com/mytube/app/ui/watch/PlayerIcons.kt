@@ -2,7 +2,14 @@ package com.mytube.app.ui.watch
 
 import com.mytube.app.ui.home.stroke
 import com.mytube.app.ui.home.filled
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathBuilder
+import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.unit.dp
 
 /**
  * The watch screen's glyphs, drawn rather than imported.
@@ -126,26 +133,54 @@ internal val SettingsGearIcon: ImageVector by lazy {
     }
 }
 
-/** A speaker with sound coming out of it: the Vietnamese voice. */
-internal val SpeakerIcon: ImageVector by lazy {
-    stroke("Speaker") {
-        moveTo(4f, 9f); lineTo(7f, 9f); lineTo(11.5f, 5f); lineTo(11.5f, 19f)
-        lineTo(7f, 15f); lineTo(4f, 15f); close()
-        moveTo(15f, 9.5f); curveTo(16.3f, 10.8f, 16.3f, 13.2f, 15f, 14.5f)
-        moveTo(17.8f, 6.7f); curveTo(20.7f, 9.6f, 20.7f, 14.4f, 17.8f, 17.3f)
+/**
+ * A head in profile with its voice coming out of it: narration. Lucide's
+ * `speech`. Not a speaker — a speaker over a video reads as its volume, and
+ * this switch is somebody talking over the picture, not the picture's sound.
+ */
+internal val NarrationIcon: ImageVector by lazy {
+    stroke("Narration") {
+        head()
+        voice()
     }
 }
 
-internal val SpeakerFilledIcon: ImageVector by lazy {
-    filled("SpeakerFilled") {
-        moveTo(4f, 9f); lineTo(7f, 9f); lineTo(11.5f, 5f); lineTo(11.5f, 19f)
-        lineTo(7f, 15f); lineTo(4f, 15f); close()
-        moveTo(14.2f, 8.6f); lineTo(15.8f, 10.2f)
-        curveTo(16.6f, 11.2f, 16.6f, 12.8f, 15.8f, 13.8f)
-        lineTo(14.2f, 15.4f)
-        curveTo(15.9f, 13.6f, 15.9f, 10.4f, 14.2f, 8.6f)
-        close()
-    }
+/** The same glyph worn on: the head filled, the voice still drawn in line. */
+internal val NarrationFilledIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "NarrationFilled",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            fill = SolidColor(Color.White),
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 2f,
+            strokeLineJoin = StrokeJoin.Round,
+        ) { head(); close() }
+        path(
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round,
+        ) { voice() }
+    }.build()
+}
+
+private fun PathBuilder.head() {
+    moveTo(8.8f, 20f); verticalLineTo(15.9f); lineTo(10.7f, 16.1f)
+    arcTo(2.3f, 2.3f, 0f, false, false, 12.864f, 14f)
+    verticalLineTo(8.3f)
+    arcTo(5.37f, 5.37f, 0f, false, false, 2f, 8.25f)
+    curveTo(2f, 11.05f, 2.656f, 11.304f, 3f, 12.8f)
+    arcTo(5.77f, 5.77f, 0f, false, true, 3.029f, 15.558f)
+    lineTo(2f, 20f)
+}
+
+private fun PathBuilder.voice() {
+    moveTo(19.8f, 17.8f); arcTo(7.5f, 7.5f, 0f, false, false, 19.803f, 7.197f)
+    moveTo(17f, 15f); arcTo(3.5f, 3.5f, 0f, false, false, 16.975f, 10.025f)
 }
 
 /** Three nodes joined by two lines: share. */
