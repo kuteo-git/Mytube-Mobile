@@ -1,6 +1,14 @@
 package com.mytube.app.ui.cast
 
 import androidx.compose.foundation.background
+import com.mytube.app.ui.shell.rememberSelectionTick
+import com.mytube.app.ui.shell.rememberLandingKnock
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
@@ -15,7 +23,6 @@ import com.mytube.app.ui.shell.GlassPaneShape
 import com.mytube.app.ui.shell.GlassPane
 import com.mytube.app.ui.watch.MiniBar
 import androidx.compose.ui.unit.Dp
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.Arrangement
@@ -371,6 +378,8 @@ fun LazyListScope.castQueueItems(
     session: CastSession,
     mediaBaseUrl: String,
     drag: QueueDrag,
+    /** The list this is in, scrolled while a row is held near its edge. */
+    list: LazyListState,
     onJump: (Int) -> Unit,
     onMove: (from: Int, to: Int) -> Unit,
     onRemove: (Int) -> Unit,
@@ -381,55 +390,79 @@ fun LazyListScope.castQueueItems(
             modifier = Modifier.padding(start = Space.lg, end = Space.lg, top = Space.lg, bottom = Space.sm),
         )
     }
-    val size = session.queue.size
-    // The index is in the key: the same song may be queued twice.
-    itemsIndexed(session.queue, key = { index, queued -> "cast-$index-${queued.videoId}" }) { index, queued ->
-        val held = drag.from == index
+    val shown = drag.order ?: session.queue
+    val keys = queueKeys(shown)
+    val playing = queueKeys(session.queue).getOrNull(session.currentIndex)
+    items(shown.size, key = { keys[it] }) { i ->
+        val key = keys[i]
+        val held = drag.holding && drag.heldIndex == i
+        val index by rememberUpdatedState(i)
+        val queue by rememberUpdatedState(session.queue)
+        // Lifted and set down are a knock each; every new place on the way is a
+        // tick, as a picker's notches are.
+        val knock = rememberLandingKnock()
+        val tick = rememberSelectionTick()
+        val density = LocalDensity.current
+        if (held) {
+            LaunchedEffect(Unit) {
+                val edge = with(density) { QUEUE_SCROLL_EDGE.toPx() }
+                val most = with(density) { QUEUE_SCROLL_STEP.toPx() }
+                while (true) {
+                    withFrameNanos {}
+                    val info = list.layoutInfo
+                    val row = info.visibleItemsInfo.firstOrNull { it.key == key } ?: continue
+                    val top = row.offset + drag.offsetPx
+                    val step = edgeScrollStep(
+                        top, top + row.size,
+                        viewportStart = 0f,
+                        viewportEnd = (info.viewportEndOffset - info.afterContentPadding).toFloat(),
+                        edgePx = edge, maxStepPx = most,
+                    )
+                    // The list moves under a finger that has not: the row
+                    // keeps up by the distance actually scrolled.
+                    if (step != 0f && drag.dragBy(list.scrollBy(step))) tick()
+                }
+            }
+        }
         Box(
-            Modifier
-                .zIndex(if (held) 1f else 0f)
+            // The held row is placed by the finger, not animated to its slot;
+            // the rest slide into theirs.
+            (if (held) Modifier.zIndex(1f) else Modifier.animateItem())
                 .onSizeChanged { drag.rowPx = it.height.toFloat() }
                 // Read while drawing, so the row follows the finger without
                 // recomposing the list on every move.
-                .graphicsLayer {
-                    translationY = if (held) {
-                        drag.offsetPx
-                    } else {
-                        queueRowShift(index, drag.from, drag.to(size), drag.rowPx)
-                    }
-                }
+                .graphicsLayer { translationY = if (drag.holding && drag.heldIndex == index) drag.offsetPx else 0f }
                 .padding(horizontal = Space.lg)
                 .background(if (held) Tokens.surface else Color.Transparent, RoundedCornerShape(12.dp)),
         ) {
             QueueRow(
-                item = queued, index = index, current = index == session.currentIndex,
-                single = size == 1, mediaBaseUrl = mediaBaseUrl, onJump = onJump, onRemove = onRemove,
-                handle = Modifier.pointerInput(index, size) {
+                item = shown[i], index = i, current = key == playing,
+                single = shown.size == 1, mediaBaseUrl = mediaBaseUrl, onJump = onJump, onRemove = onRemove,
+                handle = Modifier.pointerInput(key) {
                     // focus-guard: the speaker's queue is the phone's; a television never casts.
                     detectDragGestures(
                         onDragStart = {
-                            drag.from = index
-                            drag.offsetPx = 0f
+                            knock()
+                            drag.start(index, queue)
                         },
                         onDragEnd = {
-                            val to = drag.to(size)
-                            drag.from = -1
-                            drag.offsetPx = 0f
-                            if (to != index) onMove(index, to)
+                            knock()
+                            drag.end()?.let { (from, to) -> onMove(from, to) }
                         },
-                        onDragCancel = {
-                            drag.from = -1
-                            drag.offsetPx = 0f
-                        },
+                        onDragCancel = { drag.cancel() },
                     ) { change, amount ->
                         change.consume()
-                        drag.offsetPx += amount.y
+                        if (drag.dragBy(amount.y)) tick()
                     }
                 },
             )
         }
     }
 }
+
+/** How near an edge a held row starts the list scrolling, and how fast at most per frame. */
+private val QUEUE_SCROLL_EDGE = 72.dp
+private val QUEUE_SCROLL_STEP = 18.dp
 
 @Composable
 private fun QueueRow(
@@ -597,7 +630,7 @@ private fun CastStageLoadingPreview() = PreviewFrame {
 @Composable
 private fun CastBelowVietnamesePreview() = PreviewFrame(vietnamese = true) {
     LazyColumn {
-        castQueueItems(previewSession(), "", QueueDrag(), {}, { _, _ -> }, {})
+        castQueueItems(previewSession(), "", QueueDrag(), LazyListState(), {}, { _, _ -> }, {})
     }
 }
 

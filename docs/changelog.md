@@ -6036,15 +6036,36 @@ passes step aside. Let go, it is one `CastStore.move(from, to)`.
 
 - **Only the handle drags.** Anywhere else on the row the list scrolls; the
   handle's `detectDragGestures` consumes after slop, before the list's scroll.
-- **Rows are one height**, so where a row lands is the distance over that
-  height (`queueDropIndex`) and how far the others step is `queueRowShift` —
-  no list state, and both tested.
+- **Rows are one height**, so where a row belongs is the distance over that
+  height (`queueDropIndex`).
 - **The new order is shown at once.** `edit` puts the edited queue on the
   remote before the round trip, red first: without it a row let go jumped back
   for the length of the request and then jumped again. The answer, or a stale
   queue's reload, replaces it.
-- No scrolling while dragging: a row goes as far as the screen shows.
 
 Verified: 446 tests, Android and iOS compile. **The gesture itself was not
 seen working**: the only session to try it on was the household's own, which
 was replaced mid-drag.
+
+## Held at an edge, the speaker's queue scrolls (2026-11-01)
+
+Reported: *"khi drag item lên top or bottom nó ko scroll nhỉ, behavior như các
+app hiện nay chứ"* — and *"nhớ có haptic khi drag luôn nha"*.
+
+- **The held row takes its new place as it goes** (`QueueDrag`), rather than
+  floating over the list until it is let go. That is what lets the list scroll
+  under it: a row only translated would be scrolled off the screen, and a lazy
+  list disposes a row off the screen — the gesture with it.
+- **Keys stay with a song** (`queueKeys`, the n-th time a song is queued), not
+  with an index: the held row changes index on every step, and a new key is a
+  new row.
+- **Within 72dp of an edge the list scrolls**, faster the further in, up to
+  18dp a frame (`edgeScrollStep`); the row keeps up by the distance actually
+  scrolled. The other rows slide with `animateItem`.
+- **Haptics**: a knock when a row is lifted and when it is set down, a tick
+  for every new place on the way — the two kinds `Haptics.kt` already draws.
+- **Seen working without a speaker**: `QueueDragGestureTest` presses the
+  handle in an `ImageComposeScene`, drags to the bottom edge and holds; the
+  list scrolls and the row lands past what the screen first showed. Proven to
+  fail with the scroll step switched off ("the list did not scroll under the
+  held row").

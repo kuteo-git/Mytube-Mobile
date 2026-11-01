@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -107,7 +108,8 @@ class WatchCast(
     val artwork: @Composable () -> Unit,
     /** The speaker's controls over it: they fade with the drag as the player's do. */
     val stage: @Composable () -> Unit,
-    val queue: LazyListScope.() -> Unit,
+    /** Given the screen's list, which it scrolls while a row is dragged near an edge. */
+    val queue: LazyListScope.(LazyListState) -> Unit,
 )
 
 @Composable
@@ -649,7 +651,8 @@ fun WatchContent(
         // A speaker is playing and this video's page is still on its way, or
         // could not come: the speaker's controls and queue do not wait for it.
         if (cast != null && state !is WatchState.Playing) {
-            LazyColumn(Modifier.fillMaxSize()) { cast.queue(this) }
+            val castList = rememberLazyListState()
+            LazyColumn(Modifier.fillMaxSize(), state = castList) { cast.queue(this, castList) }
         } else when (state) {
             is WatchState.Loading -> WatchSkeleton()
 
@@ -794,7 +797,7 @@ fun WatchContent(
                         },
                     )
 
-                    if (cast != null) cast.queue(this) else item(key = UP_NEXT) {
+                    if (cast != null) cast.queue(this, listState) else item(key = UP_NEXT) {
                         Spacer(Modifier.height(Space.lg))
                         UpNextRail(
                             current = video,

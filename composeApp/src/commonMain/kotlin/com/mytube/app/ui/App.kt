@@ -1945,12 +1945,13 @@ fun App(
                                                 onSeek = cast::seek,
                                             )
                                         },
-                                        queue = {
+                                        queue = { list ->
                                             castQueueItems(
                                                 session = speaker,
                                                 mediaBaseUrl = baseUrl,
                                                 onJump = cast::jump,
                                                 drag = queueDrag,
+                                                list = list,
                                                 onMove = cast::move,
                                                 onRemove = cast::remove,
                                             )
