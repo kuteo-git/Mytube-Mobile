@@ -92,3 +92,9 @@ internal class RecordedPasses : NarrationRepository {
         Narration(NarrationStatus.Done, done = 0, total = 0, clips = emptyList())
 }
 
+/** Every video a broadcast on air. */
+internal object LiveStreams : StreamRepository {
+    override suspend fun stream(videoId: String, maxHeight: Int): Stream =
+        Stream.Playable(url = "http://mac:8180/live/$videoId.m3u8", height = 720, isLive = true)
+}
+

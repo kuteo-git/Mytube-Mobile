@@ -385,11 +385,11 @@ class WatchViewModel(
     private var passAskedFor = ""
 
     /**
-     * The video the switch was pressed on: the remembered preference no longer
-     * decides whether it narrates, however late its answer comes. By id, so a
-     * late answer for the video before cannot read this video's press.
+     * The switch was pressed on this video: from then on the switch as
+     * pressed decides whether it narrates (`opensNarrated`), not its language.
+     * Cleared on moving to another video.
      */
-    private var narrationPressedFor = ""
+    private var narrationPressed = false
 
     /** The poll watching the server's narration pass, cancelled when it ends. */
     private var narrationPoll: Job? = null
@@ -471,7 +471,7 @@ class WatchViewModel(
         narrationPoll?.cancel()
         narrationPoll = null
         // A video come back to (Previous) opens as the switch says again.
-        narrationPressedFor = ""
+        narrationPressed = false
         // The player outlives the video, and so would its clips: lines of the
         // last video at the last video's times, spoken over this one and ducking
         // it until its own pass is asked for — which waits on its captions.
@@ -537,8 +537,7 @@ class WatchViewModel(
         seekTo(seconds)
         player.play()
         viewModelScope.launch {
-            val pressedHere = narrationPressedFor == videoId
-            val wanted = if (pressedHere) preferences.narration() else opensNarrated()
+            val wanted = opensNarrated()
             val current = _state.value as? WatchState.Playing ?: return@launch
             when {
                 wanted && !current.narrating && current.canNarrate && !current.isLive -> startNarration(seconds)
@@ -703,7 +702,7 @@ class WatchViewModel(
 
     fun toggleNarration() {
         val current = _state.value as? WatchState.Playing ?: return
-        narrationPressedFor = current.video.id
+        narrationPressed = true
         val next = !current.narrating
         _state.value = current.copy(narrating = next)
 
@@ -727,8 +726,9 @@ class WatchViewModel(
 
     /**
      * Whether this video opens narrated: the switch on, and the video not
-     * speaking Vietnamese ([narratesOnOpen]). The server is asked which
-     * language only with the switch on; it cannot say, it narrates.
+     * speaking Vietnamese ([narratesOnOpen]) unless the switch was pressed on
+     * it. The server is asked which language only with the switch on; if it
+     * cannot say, it narrates.
      */
     private suspend fun opensNarrated(): Boolean {
         if (!preferences.narration()) return false
@@ -739,6 +739,8 @@ class WatchViewModel(
         } catch (e: Exception) {
             SpokenLanguage.Unknown
         }
+        // Read after the answer: a press while it was on its way wins.
+        if (narrationPressed) return preferences.narration()
         return narratesOnOpen(preferred = true, spoken)
     }
 
@@ -1222,11 +1224,11 @@ class WatchViewModel(
             // by being deliberate.
             // Nor one that plays on a speaker: nobody here is listening.
             // Nor one that speaks Vietnamese (`narratesOnOpen`) — asked only
-            // now, with the video playing, and never over a press made while
-            // the answer was on its way.
+            // now, with the video playing; a press made while the answer was
+            // on its way decides instead (`opensNarrated`).
             if (!playsElsewhere && (_state.value as? WatchState.Playing)?.isLive == false && opensNarrated()) {
                 val current = _state.value as? WatchState.Playing
-                if (current != null && narrationPressedFor != current.video.id) {
+                if (current != null && !current.narrating) {
                     startNarration(current.playback.positionSeconds)
                 }
             }
