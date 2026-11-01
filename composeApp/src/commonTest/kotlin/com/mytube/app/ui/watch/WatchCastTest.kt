@@ -23,6 +23,14 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.mytube.app.domain.model.Narration
+import com.mytube.app.domain.model.NarrationStatus
+import com.mytube.app.domain.model.SubtitleTrack
+import com.mytube.app.domain.repository.NarrationRepository
+import com.mytube.app.domain.repository.PreferencesRepository
+import com.mytube.app.ui.cast.Prefs
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * The watch screen while a speaker plays: it follows the speaker's song, and the
@@ -85,9 +93,52 @@ class WatchCastTest {
         assertEquals(listOf("first"), videos.recorded, "the other half: the guard is not simply 'never report'")
     }
 
+    /**
+     * "bật cho watch thì ko đồng nghĩa đã bật cho thuyết minh": the speaker's
+     * switch is the phone's preference, so a sitting the speaker hands back
+     * narrates as that switch was left — on from where the speaker was, or off.
+     */
+    @Test
+    fun `a sitting handed back narrates as the speaker's switch was left`() = runTest(dispatcher) {
+        val prefs = Prefs(narration = false)
+        val narration = Starts()
+        val model = open(RailVideos(rail = emptyList()), prefs = prefs, narration = narration)
+        model.playsElsewhere = true
+
+        prefs.narration = true // switched on at the speaker
+        model.playsElsewhere = false
+        model.resumeFromSpeaker(200.0)
+        advanceUntilIdle()
+        assertEquals(listOf(200.0), narration.from, "the speaker narrated; the phone does not")
+        assertTrue((model.state.value as WatchState.Playing).narrating)
+
+        model.playsElsewhere = true
+        prefs.narration = false // and off again there
+        model.playsElsewhere = false
+        model.resumeFromSpeaker(300.0)
+        advanceUntilIdle()
+        assertFalse((model.state.value as WatchState.Playing).narrating, "the speaker stopped narrating; the phone did not")
+    }
+
+    /** Every start asked of the server; a pass with nothing to say. */
+    private class Starts : NarrationRepository {
+        val from = mutableListOf<Double>()
+        override suspend fun start(videoId: String, fromSeconds: Double) {
+            from += fromSeconds
+        }
+        override suspend fun stop(videoId: String) {}
+        override suspend fun state(videoId: String) =
+            Narration(NarrationStatus.Done, done = 0, total = 0, clips = emptyList())
+    }
+
     private fun item(id: String, inLibrary: Boolean = true) = QueueItem(id = id, sourceUrl = "", inLibrary = inLibrary)
 
-    private fun TestScope.open(videos: RailVideos, players: Players = Players()): WatchViewModel {
+    private fun TestScope.open(
+        videos: RailVideos,
+        players: Players = Players(),
+        prefs: PreferencesRepository = InstantPreferences,
+        narration: NarrationRepository = IdleNarration,
+    ): WatchViewModel {
         val model = WatchViewModel(
             videoId = "first",
             startAtBeginning = true,
@@ -97,8 +148,8 @@ class WatchCastTest {
             videos = videos,
             streams = Streams,
             storyboards = NoStoryboards,
-            narration = IdleNarration,
-            preferences = InstantPreferences,
+            narration = narration,
+            preferences = prefs,
             openedFrom = emptyList(),
             maxHeight = PHONE_MAX_HEIGHT,
             playerFactory = players,
@@ -128,6 +179,7 @@ class WatchCastTest {
             publishedAt = "",
             thumbnailPath = "thumbnails/$id.jpg",
             inLibrary = inLibrary,
+            subtitles = listOf(SubtitleTrack("en", "English", "/media/$id/en.vtt", generated = false)),
         )
     }
 

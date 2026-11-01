@@ -242,7 +242,9 @@ player's own glass buttons and its queue where up next is; stopping is on the
 lit cast button, whose alert also holds the speaker's volume. Narration on the
 speaker is the server's mix of the song and its lines, switched from the
 stage's pill (`CastNarration`); the song plays as it is until the mix is
-ready. The miniplayer is the same capsule with the song's artwork, and its X
+ready. **One switch**: the stage's is the player's preference
+(`PreferencesRepository.narration`) — every cast starts narrated as it says,
+and a sitting handed back narrates as it was left at the speaker. The miniplayer is the same capsule with the song's artwork, and its X
 ends the speaker and the paused video under it. The phone's own volume buttons are
 the speaker's too (`FollowVolume`, decided by `VolumeFollower`). A video opened anywhere then goes to the
 speaker (`CastStore.pick`, with its up next when opened alone), never to the

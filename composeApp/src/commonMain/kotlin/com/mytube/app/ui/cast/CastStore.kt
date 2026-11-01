@@ -12,6 +12,7 @@ import com.mytube.app.domain.model.CastState
 import com.mytube.app.domain.model.indexAfterEdit
 import com.mytube.app.domain.model.moved
 import com.mytube.app.domain.repository.CastRepository
+import com.mytube.app.domain.repository.PreferencesRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -90,6 +91,8 @@ fun castPollMillis(remoteOpen: Boolean, foreground: Boolean): Long? = when {
  */
 class CastStore(
     private val repository: CastRepository,
+    /** Where the phone keeps narration on or off — the speaker's switch too. */
+    private val preferences: PreferencesRepository,
     private val scope: CoroutineScope,
     /** The ids to play after a video picked on its own, in order. */
     private val upNext: suspend (String) -> List<String>,
@@ -203,12 +206,12 @@ class CastStore(
 
     fun closePicker() = _state.update { it.copy(pickerOpen = false) }
 
-    /** [narration]: the phone was narrating, so the speaker narrates too. */
-    fun start(device: CastDevice, videoIds: List<String>, positionSeconds: Double, narration: Boolean) {
+    /** Narrated when the phone's narration is on: one switch, see [narration]. */
+    fun start(device: CastDevice, videoIds: List<String>, positionSeconds: Double) {
         _state.update { it.copy(pickerOpen = false) }
         scope.launch {
             val position = positionSeconds.roundToInt().coerceAtLeast(0)
-            when (val answer = repository.start(device.id, videoIds, position, narration)) {
+            when (val answer = repository.start(device.id, videoIds, position, narrationWanted())) {
                 is CastAnswer.Done -> {
                     _state.update { it.copy(remote = CastRemote.Showing(answer.value)) }
                     repoll()
@@ -236,8 +239,8 @@ class CastStore(
         _state.update { it.copy(pending = picked) }
         scope.launch {
             val ids = if (videoIds.size > 1) videoIds else videoIds + followers(picked)
-            // A new session, which keeps narrating if this one was.
-            when (val answer = repository.start(playing.device.id, ids.distinct(), 0, playing.narration.asked)) {
+            // A new session, narrated as the phone's switch says.
+            when (val answer = repository.start(playing.device.id, ids.distinct(), 0, narrationWanted())) {
                 is CastAnswer.Done -> {
                     _state.update {
                         it.copy(remote = CastRemote.Showing(answer.value), running = listOf(answer.value), pending = "")
@@ -311,13 +314,20 @@ class CastStore(
     /**
      * Narration on the speaker, or off. Shown at once as asked; the speaker
      * moves onto the narrated song when the server has made it.
+     *
+     * The phone's switch too: one preference, read by the player as a video
+     * opens and by every cast this phone starts. Two switches meant narration
+     * on in the player was not on at the speaker, and the other way round.
      */
     fun narration(on: Boolean) {
         val session = showing ?: return
         val asked = if (on) CastNarration.Preparing else CastNarration.Off
         _state.update { it.copy(remote = CastRemote.Showing(session.copy(narration = asked))) }
+        scope.launch { preferences.setNarration(on) }
         command { repository.narration(it, on) }
     }
+
+    private suspend fun narrationWanted(): Boolean = preferences.narration()
 
     /** A song dragged by its handle from [from] to [to]. */
     fun move(from: Int, to: Int) = edit { it.moved(from, to) }

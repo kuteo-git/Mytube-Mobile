@@ -515,10 +515,23 @@ class WatchViewModel(
         return player.state.value.positionSeconds
     }
 
-    /** Carries on here from where a speaker handed back. */
+    /**
+     * Carries on here from where a speaker handed back, narrated as the switch
+     * was left there: the speaker's narration switch is this preference too
+     * (`CastStore.narration`), so on at the speaker is on here, from where the
+     * speaker was, and off there is off here.
+     */
     fun resumeFromSpeaker(seconds: Double) {
         seekTo(seconds)
         player.play()
+        viewModelScope.launch {
+            val wanted = preferences.narration()
+            val current = _state.value as? WatchState.Playing ?: return@launch
+            when {
+                wanted && !current.narrating && current.canNarrate && !current.isLive -> startNarration(seconds)
+                !wanted && current.narrating -> narrationOff()
+            }
+        }
     }
 
     fun seekTo(seconds: Double) {
@@ -683,13 +696,19 @@ class WatchViewModel(
         viewModelScope.launch { runCatching { preferences.setNarration(next) } }
 
         if (!next) {
-            narrationPoll?.cancel()
-            narrationPoll = null
-            player.narrate(emptyList())
+            narrationOff()
             return
         }
 
-        startNarration()
+        startNarration(current.playback.positionSeconds)
+    }
+
+    /** The switch off: the pass left running, as [toggleNarration] says. */
+    private fun narrationOff() {
+        (_state.value as? WatchState.Playing)?.let { _state.value = it.copy(narrating = false) }
+        narrationPoll?.cancel()
+        narrationPoll = null
+        player.narrate(emptyList())
     }
 
     /**
@@ -700,21 +719,18 @@ class WatchViewModel(
      * remembered case would have had to flip a boolean it already knew the value
      * of just to reach this code.
      */
-    private fun startNarration() {
+    private fun startNarration(from: Double) {
         val current = _state.value as? WatchState.Playing ?: return
         _state.value = current.copy(narrating = true)
 
         narrationPoll?.cancel()
         narrationPoll = viewModelScope.launch {
-            // From where the playhead is, not from zero. A pass takes minutes,
-            // and somebody who turns narration on twenty minutes into a film is
-            // waiting for minute twenty — the server speaks from there to the
-            // end and then goes back for the beginning, so nothing is lost.
-            //
-            // Read here rather than passed in, because this is called from two
-            // places and one of them is a remembered preference firing as the
-            // video opens, where the position is whatever was resumed to.
-            val from = current.playback.positionSeconds
+            // From where the playhead is (`from`), not from zero. A pass takes
+            // minutes, and somebody who turns narration on twenty minutes into
+            // a film is waiting for minute twenty — the server speaks from
+            // there to the end and then goes back for the beginning, so
+            // nothing is lost. Passed in: the player's position lags a seek,
+            // and a speaker handing back has just seeked.
             runCatching { narration.start(current.video.id, from) }
                 .onFailure { return@launch }
             passAskedFor = current.video.id
@@ -1178,7 +1194,7 @@ class WatchViewModel(
                     it is WatchState.Playing && !it.isLive
                 }
             ) {
-                startNarration()
+                (_state.value as? WatchState.Playing)?.let { startNarration(it.playback.positionSeconds) }
             }
         }
     }

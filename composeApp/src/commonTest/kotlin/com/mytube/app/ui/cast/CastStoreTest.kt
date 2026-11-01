@@ -11,6 +11,8 @@ import com.mytube.app.domain.model.CastRefusal
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
 import com.mytube.app.domain.repository.CastRepository
+import com.mytube.app.domain.repository.PreferencesRepository
+import com.mytube.app.ui.watch.InstantPreferences
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -18,6 +20,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -85,11 +88,19 @@ private class FakeCast : CastRepository {
     }
 }
 
+/** The phone's narration preference; the rest answers as a fresh install. */
+class Prefs(var narration: Boolean = false) : PreferencesRepository by InstantPreferences {
+    override suspend fun narration() = narration
+    override suspend fun setNarration(on: Boolean) {
+        narration = on
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class CastStoreTest {
 
-    private fun TestScope.store(fake: FakeCast, upNext: List<String> = emptyList()) =
-        CastStore(fake, backgroundScope, upNext = { upNext })
+    private fun TestScope.store(fake: FakeCast, upNext: List<String> = emptyList(), prefs: Prefs = Prefs()) =
+        CastStore(fake, prefs, backgroundScope, upNext = { upNext })
 
     @Test
     fun theRemoteIsAskedEverySecondAndTheListEveryFive() {
@@ -130,7 +141,7 @@ class CastStoreTest {
     fun startingSendsWholeSecondsAndOpensTheRemote() = runTest {
         val fake = FakeCast()
         val store = store(fake)
-        store.start(r1, listOf("a", "b"), 89.6, narration = false)
+        store.start(r1, listOf("a", "b"), 89.6)
         runCurrent()
         assertEquals("start r1-living [a, b] 90", fake.sent.single())
         assertIs<CastRemote.Showing>(store.state.value.remote)
@@ -139,7 +150,7 @@ class CastStoreTest {
     @Test
     fun castingWhileNarratingAsksTheSpeakerToNarrate() = runTest {
         val fake = FakeCast()
-        store(fake).start(r1, listOf("a", "b"), 12.0, narration = true)
+        store(fake, prefs = Prefs(narration = true)).start(r1, listOf("a", "b"), 12.0)
         runCurrent()
         assertEquals("start r1-living [a, b] 12 narrated", fake.sent.single())
     }
@@ -157,17 +168,49 @@ class CastStoreTest {
         assertTrue("narration true" in fake.sent, fake.sent.toString())
     }
 
+    /** The other half: the phone's switch off wins over a speaker narrating. */
     @Test
-    fun aVideoPickedWhileTheSpeakerNarratesIsNarratedToo() = runTest {
+    fun aVideoPickedWithThePhonesNarrationOffIsNotNarrated() = runTest {
         val fake = FakeCast()
         fake.running = listOf(session(narration = CastNarration.On))
         fake.remote = CastAnswer.Done(session(narration = CastNarration.On))
-        val store = store(fake)
+        val store = store(fake, prefs = Prefs(narration = false))
         store.setForeground(true)
         runCurrent()
         assertTrue(store.pick(listOf("z", "y")))
         runCurrent()
-        assertTrue("start r1-living [z, y] 0 narrated" in fake.sent, fake.sent.toString())
+        assertTrue("start r1-living [z, y] 0" in fake.sent, fake.sent.toString())
+    }
+
+    /**
+     * "bật cho watch thì ko đồng nghĩa đã bật cho thuyết minh": one switch.
+     * The speaker's is the phone's preference, both ways.
+     */
+    @Test
+    fun theSpeakersNarrationSwitchIsThePhones() = runTest {
+        val prefs = Prefs(narration = false)
+        val store = store(FakeCast(), prefs = prefs)
+        store.openRemote("s1")
+        runCurrent()
+        store.narration(true)
+        runCurrent()
+        assertTrue(prefs.narration, "switched on at the speaker, still off for the phone")
+        store.narration(false)
+        runCurrent()
+        assertFalse(prefs.narration, "switched off at the speaker, still on for the phone")
+    }
+
+    @Test
+    fun aVideoPickedWhileTheSpeakerPlaysNarratesAsThePhoneWould() = runTest {
+        val fake = FakeCast()
+        fake.running = listOf(session(narration = CastNarration.Off))
+        fake.remote = CastAnswer.Done(session(narration = CastNarration.Off))
+        val store = store(fake, prefs = Prefs(narration = true))
+        store.setForeground(true)
+        runCurrent()
+        assertTrue(store.pick(listOf("z", "y")))
+        runCurrent()
+        assertTrue("start r1-living [z, y] 0 narrated" in fake.sent, "narration on for the phone, off for the speaker: ${fake.sent}")
     }
 
     @Test

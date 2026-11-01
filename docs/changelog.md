@@ -6121,3 +6121,23 @@ chữ nhật, yêu cầu nếu ratio vuông thì center crop sao cho fit"*.
   the frame crops it from the centre. On the six real covers it agreed with
   ffmpeg's `cropdetect` to a few pixels. Cast views only for now.
 
+## One narration switch for the phone and the speaker (2026-11-01)
+
+Reported: *"phần bật tắt thuyết minh của watch và cast ko đồng nhất, ví dụ
+bật cho watch thì ko đồng nghĩa đã bật cho thuyết minh, yêu cầu đồng bộ"*.
+
+There were two switches. The player's wrote the device's preference; the
+speaker's only told the cast service. A video opened while a speaker played
+took the *old session's* narration (`playing.narration.asked`), so a session
+started from a video without captions — not narrated, whatever the switch —
+kept every later song plain; and narration switched at the speaker was gone
+when the speaker handed back. Three red tests, one per path:
+
+- `CastStore.narration` writes the preference, both ways.
+- `start` and `pick` read the preference, not the player's state nor the
+  session before (`start` lost its `narration` parameter).
+- `resumeFromSpeaker` narrates, from where the speaker was, when the switch
+  was left on there, and stops when it was left off.
+
+Verified: 465 tests, Android and iOS compile. Not yet tried on a speaker.
+

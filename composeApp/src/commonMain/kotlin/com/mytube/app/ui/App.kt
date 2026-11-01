@@ -558,7 +558,7 @@ fun App(
             // ViewModel the way `stopWatch` does: set where it is built.
             val castScope = rememberCoroutineScope()
             val cast = remember {
-                CastStore(container.castRepository, castScope, upNext = { id ->
+                CastStore(container.castRepository, container.preferencesRepository, castScope, upNext = { id ->
                     container.videoRepository.upNext(id).filter { it.inLibrary }.map { it.id }
                 }) }
             val castState by cast.state.collectAsStateWithLifecycle()
@@ -1627,11 +1627,10 @@ fun App(
                 // household watches on, not a remote for a speaker.
                 if (!television) {
                     castFromWatch = { device ->
-                        // Narrating here, so narrating there: the speaker plays
+                        // Narrated as the phone's switch says: the speaker plays
                         // the song as it is until the server has mixed the voice
                         // in, and then moves onto it.
-                        val narrating = (watch.state.value as? WatchState.Playing)?.narrating == true
-                        cast.start(device, watch.castQueue(), watch.handOverToSpeaker(), narrating)
+                        cast.start(device, watch.castQueue(), watch.handOverToSpeaker())
                     }
                     resumeFromSpeaker = { back ->
                         if (back.videoId == watching?.videoId) {
