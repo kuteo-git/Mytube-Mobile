@@ -141,7 +141,7 @@ class CastStoreTest {
     fun startingSendsWholeSecondsAndOpensTheRemote() = runTest {
         val fake = FakeCast()
         val store = store(fake)
-        store.start(r1, listOf("a", "b"), 89.6)
+        store.start(r1, listOf("a", "b"), 89.6, narrateFirst = false)
         runCurrent()
         assertEquals("start r1-living [a, b] 90", fake.sent.single())
         assertIs<CastRemote.Showing>(store.state.value.remote)
@@ -150,9 +150,21 @@ class CastStoreTest {
     @Test
     fun castingWhileNarratingAsksTheSpeakerToNarrate() = runTest {
         val fake = FakeCast()
-        store(fake, prefs = Prefs(narration = true)).start(r1, listOf("a", "b"), 12.0)
+        store(fake, prefs = Prefs(narration = true)).start(r1, listOf("a", "b"), 12.0, narrateFirst = false)
         runCurrent()
         assertEquals("start r1-living [a, b] 12 narrated", fake.sent.single())
+    }
+
+    /**
+     * A video the switch was pressed on for, cast: the speaker narrates it,
+     * whatever language it speaks, as the phone did.
+     */
+    @Test
+    fun aVideoPressedOnForIsNarratedOnTheSpeakerToo() = runTest {
+        val fake = FakeCast()
+        store(fake, prefs = Prefs(narration = true)).start(r1, listOf("a"), 12.0, narrateFirst = true)
+        runCurrent()
+        assertEquals(listOf("start r1-living [a] 12 narrated", "narration true"), fake.sent)
     }
 
     @Test

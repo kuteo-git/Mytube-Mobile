@@ -385,11 +385,27 @@ class WatchViewModel(
     private var passAskedFor = ""
 
     /**
-     * The switch was pressed on this video: from then on the switch as
-     * pressed decides whether it narrates (`opensNarrated`), not its language.
-     * Cleared on moving to another video.
+     * How the switch was last pressed on this video, here or at the speaker
+     * playing it: from then on that decides whether it narrates
+     * (`opensNarrated`), not its language. Cleared on moving to another video.
      */
-    private var narrationPressed = false
+    private var press = Press.None
+
+    private enum class Press { None, On, Off }
+
+    /** The switch pressed on this video on, and left on: a cast of it narrates it too. */
+    val narrationPressedOn: Boolean get() = press == Press.On
+
+    /**
+     * The speaker's narration switch pressed while it plays this video: a
+     * hand-back keeps it, as a press here would be kept.
+     */
+    fun pressedAtSpeaker(on: Boolean) {
+        press = if (on) Press.On else Press.Off
+    }
+
+    /** A hand-back's narration decision, waiting on the language. */
+    private var narrationDecision: Job? = null
 
     /** The poll watching the server's narration pass, cancelled when it ends. */
     private var narrationPoll: Job? = null
@@ -470,8 +486,10 @@ class WatchViewModel(
         report(force = true)
         narrationPoll?.cancel()
         narrationPoll = null
-        // A video come back to (Previous) opens as the switch says again.
-        narrationPressed = false
+        // A video come back to (Previous) opens as the switch says again, and
+        // a hand-back's answer still on its way is for the video before.
+        press = Press.None
+        narrationDecision?.cancel()
         // The player outlives the video, and so would its clips: lines of the
         // last video at the last video's times, spoken over this one and ducking
         // it until its own pass is asked for — which waits on its captions.
@@ -536,7 +554,8 @@ class WatchViewModel(
     fun resumeFromSpeaker(seconds: Double) {
         seekTo(seconds)
         player.play()
-        viewModelScope.launch {
+        narrationDecision?.cancel()
+        narrationDecision = viewModelScope.launch {
             val wanted = opensNarrated()
             val current = _state.value as? WatchState.Playing ?: return@launch
             when {
@@ -702,8 +721,8 @@ class WatchViewModel(
 
     fun toggleNarration() {
         val current = _state.value as? WatchState.Playing ?: return
-        narrationPressed = true
         val next = !current.narrating
+        press = if (next) Press.On else Press.Off
         _state.value = current.copy(narrating = next)
 
         viewModelScope.launch { runCatching { preferences.setNarration(next) } }
@@ -731,6 +750,7 @@ class WatchViewModel(
      * cannot say, it narrates.
      */
     private suspend fun opensNarrated(): Boolean {
+        if (press != Press.None) return press == Press.On
         if (!preferences.narration()) return false
         val spoken = try {
             videos.spokenLanguage(videoId)
@@ -739,8 +759,8 @@ class WatchViewModel(
         } catch (e: Exception) {
             SpokenLanguage.Unknown
         }
-        // Read after the answer: a press while it was on its way wins.
-        if (narrationPressed) return preferences.narration()
+        // Read again after the answer: a press while it was on its way wins.
+        if (press != Press.None) return press == Press.On
         return narratesOnOpen(preferred = true, spoken)
     }
 

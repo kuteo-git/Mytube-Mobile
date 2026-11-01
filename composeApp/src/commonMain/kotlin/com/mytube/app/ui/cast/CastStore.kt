@@ -206,14 +206,23 @@ class CastStore(
 
     fun closePicker() = _state.update { it.copy(pickerOpen = false) }
 
-    /** Narrated when the phone's narration is on: one switch, see [narration]. */
-    fun start(device: CastDevice, videoIds: List<String>, positionSeconds: Double) {
+    /**
+     * Narrated when the phone's narration is on: one switch, see [narration].
+     * [narrateFirst]: the switch was pressed on for the first video on the
+     * phone, so the speaker narrates it whatever language it speaks, as the
+     * phone did.
+     */
+    fun start(device: CastDevice, videoIds: List<String>, positionSeconds: Double, narrateFirst: Boolean) {
         _state.update { it.copy(pickerOpen = false) }
         scope.launch {
             val position = positionSeconds.roundToInt().coerceAtLeast(0)
             when (val answer = repository.start(device.id, videoIds, position, narrationWanted())) {
                 is CastAnswer.Done -> {
-                    _state.update { it.copy(remote = CastRemote.Showing(answer.value)) }
+                    var session = answer.value
+                    if (narrateFirst) {
+                        (repository.narration(session.id, true) as? CastAnswer.Done)?.let { session = it.value }
+                    }
+                    _state.update { it.copy(remote = CastRemote.Showing(session)) }
                     repoll()
                 }
                 is CastAnswer.Refused -> _state.update { it.copy(notice = CastNotice.Refused(answer.why)) }

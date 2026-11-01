@@ -1630,7 +1630,10 @@ fun App(
                         // Narrated as the phone's switch says: the speaker plays
                         // the song as it is until the server has mixed the voice
                         // in, and then moves onto it.
-                        cast.start(device, watch.castQueue(), watch.handOverToSpeaker())
+                        cast.start(
+                            device, watch.castQueue(), watch.handOverToSpeaker(),
+                            narrateFirst = watch.narrationPressedOn,
+                        )
                     }
                     resumeFromSpeaker = { back ->
                         if (back.videoId == watching?.videoId) {
@@ -1955,9 +1958,13 @@ fun App(
                                                 onPrevious = { cast.jump(speaker.currentIndex - 1) },
                                                 onNext = cast::next,
                                                 onSeek = cast::seek,
-                                                onNarration = cast::narration.takeIf {
-                                                    canNarrate || speaker.narration.asked
-                                                },
+                                                // The phone's player follows the
+                                                // speaker's song, so it keeps the
+                                                // press for a hand-back.
+                                                onNarration = { on: Boolean ->
+                                                    cast.narration(on)
+                                                    watch.pressedAtSpeaker(on)
+                                                }.takeIf { canNarrate || speaker.narration.asked },
                                             )
                                         },
                                         queue = { list ->

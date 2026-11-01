@@ -3,9 +3,9 @@ package com.mytube.app.ui.watch
 import com.mytube.app.StubVideoRepository
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.SpokenLanguage
-import com.mytube.app.domain.model.narratesOnOpen
 import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.Video
+import com.mytube.app.domain.model.narratesOnOpen
 import com.mytube.app.domain.repository.StreamRepository
 import com.mytube.app.ui.cast.Prefs
 import kotlinx.coroutines.CompletableDeferred
@@ -101,7 +101,6 @@ class WatchSpokenLanguageTest {
         assertTrue(playing(model).narrating, "came back to with the switch on, and opened plain")
     }
 
-    // A1
     @Test
     fun `with the switch off the language is never asked`() = runTest(dispatcher) {
         val videos = Spoken(mapOf("first" to SpokenLanguage.Other))
@@ -112,7 +111,6 @@ class WatchSpokenLanguageTest {
         assertEquals(emptyList(), passes.started)
     }
 
-    // A3
     @Test
     fun `a failed ask narrates as the switch says`() = runTest(dispatcher) {
         val passes = RecordedPasses()
@@ -121,7 +119,6 @@ class WatchSpokenLanguageTest {
         assertEquals(listOf("first"), passes.started)
     }
 
-    // A6a
     @Test
     fun `advancing from English to Vietnamese stops narrating and asks no pass`() = runTest(dispatcher) {
         val passes = RecordedPasses()
@@ -135,7 +132,6 @@ class WatchSpokenLanguageTest {
         assertEquals(listOf("first", "second"), videos.asked)
     }
 
-    // A12
     @Test
     fun `a slow answer for the video left does not decide the next one`() = runTest(dispatcher) {
         val slow = CompletableDeferred<SpokenLanguage>()
@@ -151,22 +147,20 @@ class WatchSpokenLanguageTest {
         assertEquals(emptyList(), passes.started)
     }
 
-    // A13
     @Test
     fun `a press during a pending answer does not carry to the next video`() = runTest(dispatcher) {
         val slow = CompletableDeferred<SpokenLanguage>()
         val passes = RecordedPasses()
-        val videos = Spoken(mapOf("second" to SpokenLanguage.Other), pending = mapOf("first" to slow))
+        val videos = Spoken(mapOf("second" to SpokenLanguage.Vietnamese), pending = mapOf("first" to slow))
         val model = open(videos, passes, Prefs(narration = true))
-        model.toggleNarration() // on
-        model.toggleNarration() // off: switch now off
+        model.toggleNarration() // off
+        model.toggleNarration() // on again: the switch is left on
         advanceUntilIdle()
         model.advanceTo("second", fromTheStart = true)
         advanceUntilIdle()
-        assertFalse(playing(model).narrating, "switch was left off")
+        assertFalse(playing(model).narrating, "the press on the first video narrated the Vietnamese second")
     }
 
-    // A8a
     @Test
     fun `resuming a Vietnamese video from a speaker stays plain`() = runTest(dispatcher) {
         val passes = RecordedPasses()
@@ -179,7 +173,6 @@ class WatchSpokenLanguageTest {
         assertEquals(emptyList(), passes.started)
     }
 
-    // A8b
     @Test
     fun `resuming an English video from a speaker narrates from there`() = runTest(dispatcher) {
         val prefs = Prefs(narration = false)
@@ -194,7 +187,7 @@ class WatchSpokenLanguageTest {
         assertEquals(listOf(120.0), passes.from)
     }
 
-    // A9: the phone's press on a Vietnamese video, then a round trip via a speaker.
+    // the phone's press on a Vietnamese video, then a round trip via a speaker.
     @Test
     fun `a Vietnamese video pressed on here still narrates after a speaker hands it back`() = runTest(dispatcher) {
         val passes = RecordedPasses()
@@ -210,7 +203,6 @@ class WatchSpokenLanguageTest {
         assertTrue(playing(model).narrating, "the press on this video was undone by the hand-back")
     }
 
-    // A10
     @Test
     fun `a video opened while a speaker plays asks nothing and narrates nothing`() = runTest(dispatcher) {
         val videos = Spoken(mapOf("first" to SpokenLanguage.Other))
@@ -221,7 +213,6 @@ class WatchSpokenLanguageTest {
         assertEquals(emptyList(), videos.asked)
     }
 
-    // A11
     @Test
     fun `a broadcast asks nothing and narrates nothing`() = runTest(dispatcher) {
         val videos = Spoken(mapOf("first" to SpokenLanguage.Other))
@@ -244,6 +235,35 @@ class WatchSpokenLanguageTest {
         answer.complete(SpokenLanguage.Vietnamese)
         advanceUntilIdle()
         assertTrue(playing(model).narrating, "the hand-back's answer undid the press")
+    }
+
+    /** The last question wins: a hand-back's late answer does not decide the video moved on to. */
+    @Test
+    fun `a hand-back's late answer does not decide the next video`() = runTest(dispatcher) {
+        val slow = CompletableDeferred<SpokenLanguage>()
+        val videos = Spoken(mapOf("second" to SpokenLanguage.Other), pending = mapOf("first" to slow))
+        val model = open(videos, RecordedPasses(), Prefs(narration = true))
+        model.resumeFromSpeaker(100.0)
+        advanceUntilIdle()
+        model.advanceTo("second", fromTheStart = true)
+        advanceUntilIdle()
+        assertTrue(playing(model).narrating, "the English second should narrate")
+        slow.complete(SpokenLanguage.Vietnamese)
+        advanceUntilIdle()
+        assertTrue(playing(model).narrating, "the first video's late answer switched the second off")
+    }
+
+    /** Switched on at the speaker for a Vietnamese video, it is still on when handed back. */
+    @Test
+    fun `a press at the speaker survives the hand-back`() = runTest(dispatcher) {
+        val model = open(Spoken(mapOf("first" to SpokenLanguage.Vietnamese)), RecordedPasses(), Prefs(narration = true))
+        model.playsElsewhere = true
+        model.pressedAtSpeaker(on = true)
+        model.playsElsewhere = false
+        model.resumeFromSpeaker(80.0)
+        advanceUntilIdle()
+        assertTrue(playing(model).narrating, "the speaker narrated it; the phone went quiet")
+        assertTrue(model.narrationPressedOn)
     }
 
     private fun playing(model: WatchViewModel) = model.state.value as WatchState.Playing
