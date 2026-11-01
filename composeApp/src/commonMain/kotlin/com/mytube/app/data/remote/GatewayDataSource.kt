@@ -395,17 +395,17 @@ class GatewayDataSource(private val client: HttpClient) {
      * again is a separate request whose answer is the whole row rather than a
      * claim about one field.
      */
-    /** The language spoken in a video; see `VideoRepository.spokenLanguage`. */
-    suspend fun spokenLanguage(baseUrl: String, userId: String, videoId: String): SpokenLanguageDto =
-        client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/spoken-language") {
-            identify(userId)
-        }.orThrow().body()
-
     suspend fun refreshMetadata(baseUrl: String, userId: String, videoId: String) {
         client.post("${baseUrl.trimEnd('/')}/api/videos/$videoId/metadata") {
             identify(userId)
         }.orThrow()
     }
+
+    /** The language spoken in a video; see `VideoRepository.spokenLanguage`. */
+    suspend fun spokenLanguage(baseUrl: String, userId: String, videoId: String): SpokenLanguageDto =
+        client.get("${baseUrl.trimEnd('/')}/api/videos/$videoId/spoken-language") {
+            identify(userId)
+        }.orThrow().body()
 
     /**
      * Where the viewer has got to.

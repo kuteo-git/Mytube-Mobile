@@ -2,17 +2,10 @@ package com.mytube.app.ui.watch
 
 import com.mytube.app.StubVideoRepository
 import com.mytube.app.domain.model.Channel
-import com.mytube.app.domain.model.NarrationClip
-import com.mytube.app.domain.model.Stream
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.PlaybackState
-import com.mytube.app.domain.repository.PlayingMedia
-import com.mytube.app.domain.repository.StreamRepository
-import com.mytube.app.domain.repository.VideoPlayer
-import com.mytube.app.domain.repository.VideoPlayerFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -23,8 +16,6 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import com.mytube.app.domain.model.Narration
-import com.mytube.app.domain.model.NarrationStatus
 import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.PreferencesRepository
@@ -67,7 +58,7 @@ class WatchCastTest {
     @Test
     fun `following a speaker reports nothing for the paused video here`() = runTest(dispatcher) {
         val videos = RailVideos(rail = emptyList())
-        val players = Players()
+        val players = SilentPlayers()
         val model = open(videos, players)
         players.made.single().state.value = PlaybackState(positionSeconds = 30.0, durationSeconds = 100.0)
         advanceUntilIdle()
@@ -82,7 +73,7 @@ class WatchCastTest {
     @Test
     fun `moving on with nothing elsewhere still reports where it was`() = runTest(dispatcher) {
         val videos = RailVideos(rail = emptyList())
-        val players = Players()
+        val players = SilentPlayers()
         val model = open(videos, players)
         players.made.single().state.value = PlaybackState(positionSeconds = 30.0, durationSeconds = 100.0)
         advanceUntilIdle()
@@ -101,7 +92,7 @@ class WatchCastTest {
     @Test
     fun `a sitting handed back narrates as the speaker's switch was left`() = runTest(dispatcher) {
         val prefs = Prefs(narration = false)
-        val narration = Starts()
+        val narration = RecordedPasses()
         val model = open(RailVideos(rail = emptyList()), prefs = prefs, narration = narration)
         model.playsElsewhere = true
 
@@ -120,22 +111,11 @@ class WatchCastTest {
         assertFalse((model.state.value as WatchState.Playing).narrating, "the speaker stopped narrating; the phone did not")
     }
 
-    /** Every start asked of the server; a pass with nothing to say. */
-    private class Starts : NarrationRepository {
-        val from = mutableListOf<Double>()
-        override suspend fun start(videoId: String, fromSeconds: Double) {
-            from += fromSeconds
-        }
-        override suspend fun stop(videoId: String) {}
-        override suspend fun state(videoId: String) =
-            Narration(NarrationStatus.Done, done = 0, total = 0, clips = emptyList())
-    }
-
     private fun item(id: String, inLibrary: Boolean = true) = QueueItem(id = id, sourceUrl = "", inLibrary = inLibrary)
 
     private fun TestScope.open(
         videos: RailVideos,
-        players: Players = Players(),
+        players: SilentPlayers = SilentPlayers(),
         prefs: PreferencesRepository = InstantPreferences,
         narration: NarrationRepository = IdleNarration,
     ): WatchViewModel {
@@ -146,7 +126,7 @@ class WatchCastTest {
             onFinished = {},
             mediaBaseUrl = "http://mac:8180",
             videos = videos,
-            streams = Streams,
+            streams = PlayableStreams,
             storyboards = NoStoryboards,
             narration = narration,
             preferences = prefs,
@@ -183,27 +163,4 @@ class WatchCastTest {
         )
     }
 
-    private object Streams : StreamRepository {
-        override suspend fun stream(videoId: String, maxHeight: Int): Stream =
-            Stream.Playable(url = "http://mac:8180/hls/$videoId/master.m3u8", height = 720)
-    }
-
-    private class Players : VideoPlayerFactory {
-        val made = mutableListOf<Player>()
-        override fun create(): VideoPlayer = Player().also { made += it }
-    }
-
-    private class Player : VideoPlayer {
-        override val state = MutableStateFlow(PlaybackState())
-        override val rendersSubtitles = false
-        override fun load(media: PlayingMedia, startAtSeconds: Double) {}
-        override fun play() {}
-        override fun pause() {}
-        override fun seekTo(seconds: Double) {}
-        override fun narrate(clips: List<NarrationClip>) {}
-        override fun setNarrationLevels(voice: Float, duck: Float) {}
-        override fun showSubtitles(language: String) {}
-        override fun stop() {}
-        override fun release() {}
-    }
 }

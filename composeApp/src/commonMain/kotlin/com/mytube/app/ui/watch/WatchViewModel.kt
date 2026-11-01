@@ -385,10 +385,11 @@ class WatchViewModel(
     private var passAskedFor = ""
 
     /**
-     * The switch was pressed on this video: the remembered preference no
-     * longer decides whether it narrates, however late its answer comes.
+     * The video the switch was pressed on: the remembered preference no longer
+     * decides whether it narrates, however late its answer comes. By id, so a
+     * video moved on to is decided afresh without anything resetting it.
      */
-    private var narrationPressed = false
+    private var narrationPressedFor = ""
 
     /** The poll watching the server's narration pass, cancelled when it ends. */
     private var narrationPoll: Job? = null
@@ -469,7 +470,6 @@ class WatchViewModel(
         report(force = true)
         narrationPoll?.cancel()
         narrationPoll = null
-        narrationPressed = false
         // The player outlives the video, and so would its clips: lines of the
         // last video at the last video's times, spoken over this one and ducking
         // it until its own pass is asked for — which waits on its captions.
@@ -534,7 +534,7 @@ class WatchViewModel(
         seekTo(seconds)
         player.play()
         viewModelScope.launch {
-            val wanted = narratesOnOpen(preferences.narration(), spokenLanguage(videoId))
+            val wanted = opensNarrated()
             val current = _state.value as? WatchState.Playing ?: return@launch
             when {
                 wanted && !current.narrating && current.canNarrate && !current.isLive -> startNarration(seconds)
@@ -699,7 +699,7 @@ class WatchViewModel(
 
     fun toggleNarration() {
         val current = _state.value as? WatchState.Playing ?: return
-        narrationPressed = true
+        narrationPressedFor = current.video.id
         val next = !current.narrating
         _state.value = current.copy(narrating = next)
 
@@ -713,21 +713,29 @@ class WatchViewModel(
         startNarration(current.playback.positionSeconds)
     }
 
-    /** Unknown when the server cannot say, which narrates as the switch says. */
-    private suspend fun spokenLanguage(id: String): SpokenLanguage = try {
-        videos.spokenLanguage(id)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        SpokenLanguage.Unknown
-    }
-
-        /** The switch off: the pass left running, as [toggleNarration] says. */
+    /** The switch off: the pass left running, as [toggleNarration] says. */
     private fun narrationOff() {
         (_state.value as? WatchState.Playing)?.let { _state.value = it.copy(narrating = false) }
         narrationPoll?.cancel()
         narrationPoll = null
         player.narrate(emptyList())
+    }
+
+    /**
+     * Whether this video opens narrated: the switch on, and the video not
+     * speaking Vietnamese ([narratesOnOpen]). The server is asked which
+     * language only with the switch on; it cannot say, it narrates.
+     */
+    private suspend fun opensNarrated(): Boolean {
+        if (!preferences.narration()) return false
+        val spoken = try {
+            videos.spokenLanguage(videoId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            SpokenLanguage.Unknown
+        }
+        return narratesOnOpen(preferred = true, spoken)
     }
 
     /**
@@ -1212,10 +1220,9 @@ class WatchViewModel(
             // Nor one that speaks Vietnamese (`narratesOnOpen`) — asked only
             // now, with the video playing, and never over a press made while
             // the answer was on its way.
-            if (!playsElsewhere && preferences.narration() && (_state.value as? WatchState.Playing)?.isLive == false) {
-                val spoken = spokenLanguage(videoId)
+            if (!playsElsewhere && (_state.value as? WatchState.Playing)?.isLive == false && opensNarrated()) {
                 val current = _state.value as? WatchState.Playing
-                if (current != null && !narrationPressed && narratesOnOpen(preferred = true, spoken)) {
+                if (current != null && narrationPressedFor != current.video.id) {
                     startNarration(current.playback.positionSeconds)
                 }
             }
