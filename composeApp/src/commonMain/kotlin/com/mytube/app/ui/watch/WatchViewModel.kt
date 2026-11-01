@@ -529,14 +529,16 @@ class WatchViewModel(
     /**
      * Carries on here from where a speaker handed back, narrated as the switch
      * was left there: the speaker's narration switch is this preference too
-     * (`CastStore.narration`), so on at the speaker is on here, from where the
-     * speaker was, and off there is off here.
+     * (`CastStore.narration`), so off at the speaker is off here, and on is on
+     * here from where the speaker was — for a Vietnamese video only when the
+     * switch was pressed on it here, as for any other opening of it.
      */
     fun resumeFromSpeaker(seconds: Double) {
         seekTo(seconds)
         player.play()
         viewModelScope.launch {
-            val wanted = opensNarrated()
+            val pressedHere = narrationPressedFor == videoId
+            val wanted = if (pressedHere) preferences.narration() else opensNarrated()
             val current = _state.value as? WatchState.Playing ?: return@launch
             when {
                 wanted && !current.narrating && current.canNarrate && !current.isLive -> startNarration(seconds)
