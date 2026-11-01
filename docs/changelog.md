@@ -6026,3 +6026,25 @@ And *"ở loa R1, khi stop casting thì nó vẫn còn play"* was the R1's serve
 this app: its media stop cleared the play loop's session but not the audio
 already queued for the device, which played on while the R1 reported itself
 stopped (robot-esp32, `handle_media_stop`).
+
+## A song in the speaker's queue is moved by dragging its handle (2026-11-01)
+
+Asked for: *"sao ko làm kiểu drag item để swap nhỉ, có button [||] ở đầu item,
+bấm vào nó và drag"*. The up and down buttons are gone; each row starts with a
+three-bar handle, and a row held by it follows the finger while the rows it
+passes step aside. Let go, it is one `CastStore.move(from, to)`.
+
+- **Only the handle drags.** Anywhere else on the row the list scrolls; the
+  handle's `detectDragGestures` consumes after slop, before the list's scroll.
+- **Rows are one height**, so where a row lands is the distance over that
+  height (`queueDropIndex`) and how far the others step is `queueRowShift` —
+  no list state, and both tested.
+- **The new order is shown at once.** `edit` puts the edited queue on the
+  remote before the round trip, red first: without it a row let go jumped back
+  for the length of the request and then jumped again. The answer, or a stale
+  queue's reload, replaces it.
+- No scrolling while dragging: a row goes as far as the screen shows.
+
+Verified: 446 tests, Android and iOS compile. **The gesture itself was not
+seen working**: the only session to try it on was the household's own, which
+was replaced mid-drag.

@@ -84,6 +84,7 @@ import com.mytube.app.domain.model.CastHandback
 import com.mytube.app.domain.model.CastState
 import com.mytube.app.ui.cast.CastArtwork
 import com.mytube.app.ui.cast.FollowVolume
+import com.mytube.app.ui.cast.QueueDrag
 import com.mytube.app.ui.cast.CastMiniPlayer
 import com.mytube.app.ui.cast.CastStage
 import com.mytube.app.ui.cast.CastVolume
@@ -574,6 +575,8 @@ fun App(
             // null. While there is one the watch screen follows its song and is
             // the remote; the phone's own player sits paused underneath.
             val castSpeaker = castState.speaker.takeIf { !television && !playingHere }
+            // The queue row held by its handle, above the list so every row reads it.
+            val queueDrag = remember { QueueDrag() }
             // The song the screen should be on: the one just sent, until the
             // speaker answers, and then the speaker's own.
             val castVideo = castState.pending.ifEmpty { castSpeaker?.current?.videoId.orEmpty() }
@@ -1947,8 +1950,8 @@ fun App(
                                                 session = speaker,
                                                 mediaBaseUrl = baseUrl,
                                                 onJump = cast::jump,
-                                                onMoveUp = cast::moveUp,
-                                                onMoveDown = cast::moveDown,
+                                                drag = queueDrag,
+                                                onMove = cast::move,
                                                 onRemove = cast::remove,
                                             )
                                         },

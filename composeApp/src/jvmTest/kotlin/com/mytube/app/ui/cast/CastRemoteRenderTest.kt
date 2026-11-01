@@ -69,7 +69,7 @@ class CastRemoteRenderTest {
         val cast = WatchCast(
             artwork = { CastArtwork(session, "") },
             stage = { CastStage(session, {}, {}, {}, {}, {}, {}) },
-            queue = { castQueueItems(session, "", {}, {}, {}, {}) },
+            queue = { castQueueItems(session, "", QueueDrag(), {}, { _, _ -> }, {}) },
         )
         renders {
             WatchContent(

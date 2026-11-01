@@ -150,16 +150,19 @@ class CastStoreTest {
     }
 
     @Test
-    fun movingASongUpKeepsThePlayingOneWhereItIs() = runTest {
+    fun aSongDraggedPastThePlayingOneKeepsThePlayingOnePlaying() = runTest {
         val fake = FakeCast()
         fake.remote = CastAnswer.Done(session(index = 1))
         val store = store(fake)
         store.openRemote("s1")
         runCurrent()
-        store.moveUp(2)
+        store.move(0, 2)
+        // a, [b], c -> [b], c, a
+        val shown = (store.state.value.remote as CastRemote.Showing).session
+        assertEquals(listOf("b", "c", "a"), shown.queue.map { it.videoId }, "the new order at once, not after the round trip")
+        assertEquals(0, shown.currentIndex)
         runCurrent()
-        // a, [b], c -> a, c, [b]
-        assertTrue("queue 4 [a, c, b] 2" in fake.sent, fake.sent.toString())
+        assertTrue("queue 4 [b, c, a] 0" in fake.sent, fake.sent.toString())
     }
 
     @Test

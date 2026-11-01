@@ -296,11 +296,16 @@ class CastStore(
         val session = showing ?: return
         val edited = change(session.queue)
         if (edited.isEmpty() || edited == session.queue) return
-        command { repository.replaceQueue(it, session.version, edited.map(CastItem::videoId), session.indexAfterEdit(edited)) }
+        val index = session.indexAfterEdit(edited)
+        // Shown at once: a row let go would otherwise jump back to where it was
+        // for the round trip, and then jump again. The answer, or a refusal's
+        // reload, replaces it.
+        _state.update { it.copy(remote = CastRemote.Showing(session.copy(queue = edited, currentIndex = index))) }
+        command { repository.replaceQueue(it, session.version, edited.map(CastItem::videoId), index) }
     }
 
-    fun moveUp(index: Int) = edit { it.moved(index, index - 1) }
-    fun moveDown(index: Int) = edit { it.moved(index, index + 1) }
+    /** A song dragged by its handle from [from] to [to]. */
+    fun move(from: Int, to: Int) = edit { it.moved(from, to) }
     fun remove(index: Int) = edit { q -> q.filterIndexed { i, _ -> i != index } }
 
     /** The lit cast button, pressed: ask whether to stop or carry on. */

@@ -315,8 +315,7 @@ interface Strings {
     val castHandoff: String
     val castQueue: String
     val castNowPlaying: String
-    fun castMoveUp(title: String): String
-    fun castMoveDown(title: String): String
+    fun castReorder(title: String): String
     fun castRemove(title: String): String
     val castClose: String
     val castOpenRemote: String
@@ -534,8 +533,7 @@ object EnglishStrings : Strings {
     override val castHandoff = "Stop casting"
     override val castQueue = "Up next on the speaker"
     override val castNowPlaying = "Now playing"
-    override fun castMoveUp(title: String) = "Move $title up"
-    override fun castMoveDown(title: String) = "Move $title down"
+    override fun castReorder(title: String) = "Drag $title to another place"
     override fun castRemove(title: String) = "Remove $title"
     override val castClose = "Close"
     override val castOpenRemote = "Open the remote"
@@ -745,8 +743,7 @@ object VietnameseStrings : Strings {
     override val castHandoff = "Ngắt cast"
     override val castQueue = "Sắp phát trên loa"
     override val castNowPlaying = "Đang phát"
-    override fun castMoveUp(title: String) = "Đưa $title lên"
-    override fun castMoveDown(title: String) = "Đưa $title xuống"
+    override fun castReorder(title: String) = "Kéo $title sang chỗ khác"
     override fun castRemove(title: String) = "Xoá $title"
     override val castClose = "Đóng"
     override val castOpenRemote = "Mở điều khiển"

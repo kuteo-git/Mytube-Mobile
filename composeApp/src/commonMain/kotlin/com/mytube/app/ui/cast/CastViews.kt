@@ -1,6 +1,11 @@
 package com.mytube.app.ui.cast
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
 import com.mytube.app.ui.watch.ControlButton
 import com.mytube.app.ui.watch.DiscButton
 import com.mytube.app.ui.watch.PreviousIcon
@@ -129,9 +134,15 @@ private val StopIcon: ImageVector by lazy {
     filled("Stop") { moveTo(6f, 6f); lineTo(18f, 6f); lineTo(18f, 18f); lineTo(6f, 18f); close() }
 }
 
-private val UpIcon: ImageVector by lazy { stroke("Up") { moveTo(6f, 15f); lineTo(12f, 9f); lineTo(18f, 15f) } }
+/** Three bars: the handle a row is dragged by. */
+private val HandleIcon: ImageVector by lazy {
+    stroke("Handle") {
+        moveTo(5f, 8f); lineTo(19f, 8f)
+        moveTo(5f, 12f); lineTo(19f, 12f)
+        moveTo(5f, 16f); lineTo(19f, 16f)
+    }
+}
 
-private val DownIcon: ImageVector by lazy { stroke("Down") { moveTo(6f, 9f); lineTo(12f, 15f); lineTo(18f, 9f) } }
 
 /**
  * A queue item's artwork, as something loadable. The cast service writes a
@@ -359,9 +370,9 @@ fun CastVolume(session: CastSession, onVolume: (Int) -> Unit, modifier: Modifier
 fun LazyListScope.castQueueItems(
     session: CastSession,
     mediaBaseUrl: String,
+    drag: QueueDrag,
     onJump: (Int) -> Unit,
-    onMoveUp: (Int) -> Unit,
-    onMoveDown: (Int) -> Unit,
+    onMove: (from: Int, to: Int) -> Unit,
     onRemove: (Int) -> Unit,
 ) {
     item(key = "cast-queue") {
@@ -370,14 +381,51 @@ fun LazyListScope.castQueueItems(
             modifier = Modifier.padding(start = Space.lg, end = Space.lg, top = Space.lg, bottom = Space.sm),
         )
     }
+    val size = session.queue.size
     // The index is in the key: the same song may be queued twice.
     itemsIndexed(session.queue, key = { index, queued -> "cast-$index-${queued.videoId}" }) { index, queued ->
-        Box(Modifier.padding(horizontal = Space.lg)) {
+        val held = drag.from == index
+        Box(
+            Modifier
+                .zIndex(if (held) 1f else 0f)
+                .onSizeChanged { drag.rowPx = it.height.toFloat() }
+                // Read while drawing, so the row follows the finger without
+                // recomposing the list on every move.
+                .graphicsLayer {
+                    translationY = if (held) {
+                        drag.offsetPx
+                    } else {
+                        queueRowShift(index, drag.from, drag.to(size), drag.rowPx)
+                    }
+                }
+                .padding(horizontal = Space.lg)
+                .background(if (held) Tokens.surface else Color.Transparent, RoundedCornerShape(12.dp)),
+        ) {
             QueueRow(
                 item = queued, index = index, current = index == session.currentIndex,
-                last = index == session.queue.lastIndex, single = session.queue.size == 1,
-                mediaBaseUrl = mediaBaseUrl, onJump = onJump, onMoveUp = onMoveUp,
-                onMoveDown = onMoveDown, onRemove = onRemove,
+                single = size == 1, mediaBaseUrl = mediaBaseUrl, onJump = onJump, onRemove = onRemove,
+                handle = Modifier.pointerInput(index, size) {
+                    // focus-guard: the speaker's queue is the phone's; a television never casts.
+                    detectDragGestures(
+                        onDragStart = {
+                            drag.from = index
+                            drag.offsetPx = 0f
+                        },
+                        onDragEnd = {
+                            val to = drag.to(size)
+                            drag.from = -1
+                            drag.offsetPx = 0f
+                            if (to != index) onMove(index, to)
+                        },
+                        onDragCancel = {
+                            drag.from = -1
+                            drag.offsetPx = 0f
+                        },
+                    ) { change, amount ->
+                        change.consume()
+                        drag.offsetPx += amount.y
+                    }
+                },
             )
         }
     }
@@ -388,16 +436,19 @@ private fun QueueRow(
     item: CastItem,
     index: Int,
     current: Boolean,
-    last: Boolean,
     single: Boolean,
     mediaBaseUrl: String,
     onJump: (Int) -> Unit,
-    onMoveUp: (Int) -> Unit,
-    onMoveDown: (Int) -> Unit,
     onRemove: (Int) -> Unit,
+    /** The drag gesture, on the handle only: anywhere else on the row the list scrolls. */
+    handle: Modifier,
 ) {
     val strings = LocalStrings.current
     Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            HandleIcon, contentDescription = strings.castReorder(item.title), tint = Tokens.text2,
+            modifier = Modifier.size(width = 40.dp, height = 48.dp).then(handle).padding(horizontal = 8.dp, vertical = 12.dp),
+        )
         Row(
             Modifier
                 .weight(1f)
@@ -424,8 +475,6 @@ private fun QueueRow(
                 )
             }
         }
-        SmallControl(UpIcon, strings.castMoveUp(item.title), { onMoveUp(index) }, enabled = index > 0)
-        SmallControl(DownIcon, strings.castMoveDown(item.title), { onMoveDown(index) }, enabled = !last)
         SmallControl(CloseIcon, strings.castRemove(item.title), { onRemove(index) }, enabled = !single)
     }
 }
@@ -548,7 +597,7 @@ private fun CastStageLoadingPreview() = PreviewFrame {
 @Composable
 private fun CastBelowVietnamesePreview() = PreviewFrame(vietnamese = true) {
     LazyColumn {
-        castQueueItems(previewSession(), "", {}, {}, {}, {})
+        castQueueItems(previewSession(), "", QueueDrag(), {}, { _, _ -> }, {})
     }
 }
 
