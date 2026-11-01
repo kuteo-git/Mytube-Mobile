@@ -6007,3 +6007,22 @@ alert and Stop ending the session, Increase Volume taking the speaker from 0 to
 no system volume — its `MPVolumeView` is a "No volume available" label and a
 route button, no slider (seen with a tagged log, since removed). On a phone the
 slider is there; that half wants a phone. Android was compiled, not run.
+
+## The speaker's volume moves into the cast button's alert (2026-11-01)
+
+Asked for: *"bỏ cái volume slider khi cast đi … dời volume trong cái popup khi
+bấm vào nút cast"*. The slider under the title is gone from the screen; it is
+in the alert the lit cast button opens (`CastVolume`), beside "Stop casting",
+"Stop" and "Keep casting" — the things done to the speaker as a whole. The
+phone's own volume buttons still move it (`FollowVolume`). The `controls` slot
+of `WatchCast` is gone.
+
+Then: *"button stop với stop casting như nhau chứ nhỉ, ko cần button keep
+casting"*. The alert keeps one act, "Stop casting" (the speaker stops and this
+phone carries on from where it was); carrying on is a tap outside, as for every
+alert. `keepCasting`, `castKeep` and `castStop` are gone.
+
+And *"ở loa R1, khi stop casting thì nó vẫn còn play"* was the R1's server, not
+this app: its media stop cleared the play loop's session but not the audio
+already queued for the device, which played on while the R1 reported itself
+stopped (robot-esp32, `handle_media_stop`).

@@ -219,7 +219,7 @@ class CastStoreTest {
     }
 
     @Test
-    fun pressingCastWhileCastingAsksAndCanCarryOn() = runTest {
+    fun pressingCastWhileCastingAsksAndATapOutsideCarriesOn() = runTest {
         val fake = FakeCast()
         val store = store(fake)
         runCurrent()
@@ -227,10 +227,11 @@ class CastStoreTest {
         advanceTimeBy(5_100)
         store.askAboutCasting()
         assertTrue(store.state.value.asking)
-        store.keepCasting()
+        store.dismissAsking()
         runCurrent()
         assertEquals(false, store.state.value.asking)
-        assertIs<CastRemote.Showing>(store.state.value.remote)
+        assertTrue(fake.sent.isEmpty(), "carrying on sends the speaker nothing: ${fake.sent}")
+        assertTrue(store.state.value.casting)
     }
 
     @Test

@@ -306,12 +306,6 @@ class CastStore(
     /** The lit cast button, pressed: ask whether to stop or carry on. */
     fun askAboutCasting() = _state.update { it.copy(asking = true) }
 
-    /** Carry on casting, on the remote. */
-    fun keepCasting() {
-        _state.update { it.copy(asking = false) }
-        showSpeaker()
-    }
-
     /** The remote, on whatever the speaker is playing: the miniplayer pressed. */
     fun showSpeaker() {
         val session = _state.value.running.firstOrNull()

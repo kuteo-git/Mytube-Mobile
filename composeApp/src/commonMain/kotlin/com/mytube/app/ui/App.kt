@@ -83,10 +83,10 @@ import com.mytube.app.domain.model.CastDevice
 import com.mytube.app.domain.model.CastHandback
 import com.mytube.app.domain.model.CastState
 import com.mytube.app.ui.cast.CastArtwork
-import com.mytube.app.ui.cast.CastControls
 import com.mytube.app.ui.cast.FollowVolume
 import com.mytube.app.ui.cast.CastMiniPlayer
 import com.mytube.app.ui.cast.CastStage
+import com.mytube.app.ui.cast.CastVolume
 import com.mytube.app.ui.cast.castQueueItems
 import com.mytube.app.ui.cast.CastPickerSheet
 import com.mytube.app.ui.cast.CastRemote
@@ -1942,9 +1942,6 @@ fun App(
                                                 onSeek = cast::seek,
                                             )
                                         },
-                                        controls = {
-                                            CastControls(session = speaker, onVolume = cast::volume)
-                                        },
                                         queue = {
                                             castQueueItems(
                                                 session = speaker,
@@ -2042,30 +2039,18 @@ fun App(
                     title = castingOn?.let { LocalStrings.current.castPlayingOn(it.device.name) }.orEmpty(),
                     backdrop = backdrop,
                     onDismiss = cast::dismissAsking,
+                    // The speaker's volume lives here, with the other things
+                    // done to the speaker as a whole, not on its screen.
+                    content = { castingOn?.let { CastVolume(it, cast::volume) } },
                     buttons = {
-                        // Stacked, one to a line: three across do not fit a
-                        // phone, and "Keep casting" was cut to "Keep casti".
-                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
-                            GlassButton(
-                                LocalStrings.current.castHandoff,
-                                { cast.stopCasting(resumeFromSpeaker) },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            GlassButton(
-                                LocalStrings.current.castStop,
-                                {
-                                    cast.dismissAsking()
-                                    cast.stop()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            GlassButton(
-                                LocalStrings.current.castKeep,
-                                cast::keepCasting,
-                                modifier = Modifier.fillMaxWidth(),
-                                primary = true,
-                            )
-                        }
+                        // One act. "Stop" and "Stop casting" read as the same thing,
+                        // and carrying on is a tap outside, as for every alert.
+                        GlassButton(
+                            LocalStrings.current.castHandoff,
+                            { cast.stopCasting(resumeFromSpeaker) },
+                            modifier = Modifier.fillMaxWidth(),
+                            primary = true,
+                        )
                     },
                 )
                 val castNotice = castNoticeText(castState.notice, LocalStrings.current)

@@ -238,10 +238,10 @@ the gateway's `/api/cast/*` and shows: a cast item in the player's pill (absent
 for a broadcast or when no speaker answers) and a picker sheet. **While a
 speaker plays, the watch screen is the remote**: it follows the speaker's song,
 draws the speaker's controls where the picture is (`WatchCast`) with the
-player's own glass buttons, its volume under the title and its queue where up
-next is; stopping is on the lit cast button. The miniplayer is the same capsule
-with the song's artwork, and the phone's volume buttons are the speaker's
-(`FollowVolume`, decided by `VolumeFollower`). A video opened anywhere then goes to the
+player's own glass buttons and its queue where up next is; stopping is on the
+lit cast button, whose alert also holds the speaker's volume. The miniplayer
+is the same capsule with the song's artwork. The phone's own volume buttons are
+the speaker's too (`FollowVolume`, decided by `VolumeFollower`). A video opened anywhere then goes to the
 speaker (`CastStore.pick`, with its up next when opened alone), never to the
 phone; the phone's paused player reports no progress and starts no narration
 (`playsElsewhere`). `CastStore` polls 1s

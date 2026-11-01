@@ -341,13 +341,14 @@ fun CastStage(
 private const val STAGE_SCRIM = 0.45f
 
 /**
- * Under the title while a speaker plays: its volume, which the phone's own
- * buttons move as well (see [FollowVolume]). Stopping is on the cast button.
+ * The speaker's volume, in the alert the lit cast button opens — beside the
+ * other things done to the speaker as a whole. The phone's own buttons move it
+ * too (see [FollowVolume]).
  */
 @Composable
-fun CastControls(session: CastSession, onVolume: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun CastVolume(session: CastSession, onVolume: (Int) -> Unit, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
-    Row(modifier.fillMaxWidth().padding(horizontal = Space.lg), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(strings.castVolume, color = Tokens.text2, fontSize = 14.sp, lineHeight = 18.sp)
         Spacer(Modifier.width(Space.md))
         SettlingSlider(session.volume, 100, onVolume, Modifier.weight(1f))
@@ -547,7 +548,6 @@ private fun CastStageLoadingPreview() = PreviewFrame {
 @Composable
 private fun CastBelowVietnamesePreview() = PreviewFrame(vietnamese = true) {
     LazyColumn {
-        item { CastControls(previewSession(CastState.Paused), {}) }
         castQueueItems(previewSession(), "", {}, {}, {}, {})
     }
 }

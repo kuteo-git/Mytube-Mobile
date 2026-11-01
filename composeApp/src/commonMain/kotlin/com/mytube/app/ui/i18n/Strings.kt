@@ -311,7 +311,6 @@ interface Strings {
     val castPlay: String
     val castPause: String
     val castNext: String
-    val castStop: String
     val castVolume: String
     val castHandoff: String
     val castQueue: String
@@ -330,7 +329,6 @@ interface Strings {
     val castDeviceOffline: String
     val castQueueFailed: String
     val castReplaced: String
-    val castKeep: String
 }
 
 /** The units a relative time is expressed in, largest first. */
@@ -532,7 +530,6 @@ object EnglishStrings : Strings {
     override val castPlay = "Play"
     override val castPause = "Pause"
     override val castNext = "Next"
-    override val castStop = "Stop"
     override val castVolume = "Volume"
     override val castHandoff = "Stop casting"
     override val castQueue = "Up next on the speaker"
@@ -551,7 +548,6 @@ object EnglishStrings : Strings {
     override val castDeviceOffline = "The speaker stopped answering."
     override val castQueueFailed = "The speaker could not play this queue."
     override val castReplaced = "Someone else started playing on this speaker."
-    override val castKeep = "Keep casting"
 }
 
 object VietnameseStrings : Strings {
@@ -745,7 +741,6 @@ object VietnameseStrings : Strings {
     override val castPlay = "Phát"
     override val castPause = "Tạm dừng"
     override val castNext = "Bài tiếp"
-    override val castStop = "Dừng"
     override val castVolume = "Âm lượng"
     override val castHandoff = "Ngắt cast"
     override val castQueue = "Sắp phát trên loa"
@@ -764,7 +759,6 @@ object VietnameseStrings : Strings {
     override val castDeviceOffline = "Loa không còn trả lời."
     override val castQueueFailed = "Loa không phát được hàng đợi này."
     override val castReplaced = "Có người khác vừa phát lên loa này."
-    override val castKeep = "Tiếp tục cast"
 }
 
 enum class Language(val code: String) {

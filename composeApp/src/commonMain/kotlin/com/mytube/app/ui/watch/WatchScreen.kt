@@ -99,15 +99,14 @@ private const val OVERLAY_FADE_RATE = 6f
 
 /**
  * The watch screen while a speaker plays the song: the speaker's controls where
- * the player is, its volume and stop under the title, its queue where up next
- * is. The rest — the description, the comments — is the song's page as ever.
+ * the player is, its queue where up next is. Its volume is the phone's own
+ * buttons (`FollowVolume`), as a Cast app's is. The rest — the description, the comments — is the song's page as ever.
  */
 class WatchCast(
     /** The song's picture, where the video is: it shrinks with the drag as the video does. */
     val artwork: @Composable () -> Unit,
     /** The speaker's controls over it: they fade with the drag as the player's do. */
     val stage: @Composable () -> Unit,
-    val controls: @Composable () -> Unit,
     val queue: LazyListScope.() -> Unit,
 )
 
@@ -650,13 +649,7 @@ fun WatchContent(
         // A speaker is playing and this video's page is still on its way, or
         // could not come: the speaker's controls and queue do not wait for it.
         if (cast != null && state !is WatchState.Playing) {
-            LazyColumn(Modifier.fillMaxSize()) {
-                item(key = "cast") {
-                    Spacer(Modifier.height(Space.md))
-                    cast.controls()
-                }
-                cast.queue(this)
-            }
+            LazyColumn(Modifier.fillMaxSize()) { cast.queue(this) }
         } else when (state) {
             is WatchState.Loading -> WatchSkeleton()
 
@@ -752,13 +745,6 @@ fun WatchContent(
                             onToggleSaved = onToggleSaved,
                             onShare = share,
                         )
-                    }
-
-                    if (cast != null) {
-                        item(key = "cast") {
-                            Spacer(Modifier.height(Space.md))
-                            cast.controls()
-                        }
                     }
 
                     item(key = "description") {

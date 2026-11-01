@@ -50,6 +50,7 @@ class CastRemoteRenderTest {
         val r1 = CastDevice("r1-living", "Loa R1", CastDeviceKind.R1)
         renders { CastPickerSheet(listOf(r1), loading = false, visible = true, backdrop = null, onPick = {}, onDismiss = {}) }
         renders { CastPickerSheet(emptyList(), loading = true, visible = true, backdrop = null, onPick = {}, onDismiss = {}) }
+        renders { CastVolume(session, onVolume = {}) }
         renders {
             CastMiniPlayer(
                 session, mediaBaseUrl = "", onExpand = {}, onPlayPause = {}, onClose = {},
@@ -68,7 +69,6 @@ class CastRemoteRenderTest {
         val cast = WatchCast(
             artwork = { CastArtwork(session, "") },
             stage = { CastStage(session, {}, {}, {}, {}, {}, {}) },
-            controls = { CastControls(session, {}) },
             queue = { castQueueItems(session, "", {}, {}, {}, {}) },
         )
         renders {
