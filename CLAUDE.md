@@ -230,6 +230,16 @@ over the picture); search with an on-screen keyboard and voice; Home's button
 pauses; a held OK opens a card's menu; the rail's current tab picked again goes
 to its top (and Home asks again, as it does whenever the player closes).
 
+**Casting to the household's speakers** (the R1 and the Google Nest speakers),
+phone only, never the TV. *Was* "deliberately absent — there is no receiver";
+reopened on 2026-10-31 because the speakers are the receivers and the server
+drives them, so this app never talks to a speaker or carries a Cast SDK. It asks
+the gateway's `/api/cast/*` and shows: a cast item in the player's pill (absent
+for a broadcast or when no speaker answers), a picker sheet, a remote sheet, and
+a bar where the miniplayer rests when nothing plays here. `CastStore` polls 1s
+with the remote open, 5s otherwise, never in the background (`castPollMillis`).
+See changelog, "The library plays on the household's speakers".
+
 Deliberately absent, with reasons:
 
 - **Storage, Activity, ranking constants, the proxy** — screens for *fixing the
@@ -240,7 +250,6 @@ Deliberately absent, with reasons:
   audio play over each other.
 - **Adding comments** — the gateway writes them into the household's catalogue,
   never to YouTube; under real YouTube comments it reads as a reply nobody will see.
-- **Cast** — there is no receiver.
 
 ## 7. Language
 
@@ -302,7 +311,8 @@ press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden
   `scrubPreviewScale`, `shouldRecoverStall`, `channelToken`, `progressDue`,
   `focusScale`, `focusRimShape`, `tvSeekStep`, `shelvesFrom`,
   `shelfCardWidth`, `asksWhoIsWatching`, `withTone`, `typed`, `caughtUp`,
-  `rowEntryIndex`, `keptInPlace`, `isWaitingForBytes`, `tapJump`.
+  `rowEntryIndex`, `keptInPlace`, `isWaitingForBytes`, `tapJump`,
+  `castPollMillis`.
 - **Regression tests go red on the reported symptom first.** Test bodies for wire
   mapping are copied from the running gateway, not invented.
 - **A `jvm` target exists only to run tests.** It does not contradict "no desktop".

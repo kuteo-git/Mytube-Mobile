@@ -128,11 +128,18 @@ fun WatchScreen(
      * because six screens open the same one.
      */
     onSaveToPlaylist: (saved: Boolean) -> Unit,
+    /**
+     * Plays this video on a speaker in the house, or null when no speaker is
+     * answering: a null draws no button. Left out for a broadcast below, which
+     * has no end for a speaker to play to.
+     */
+    onCast: (() -> Unit)?,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     WatchContent(
         state = state,
+        onCast = onCast,
         player = viewModel.player,
         mediaBaseUrl = mediaBaseUrl,
         onBack = onBack,
@@ -195,6 +202,8 @@ fun WatchContent(
     onLoadComments: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
+    /** Plays on a speaker; null draws no button. */
+    onCast: (() -> Unit)?,
 ) {
     val strings = LocalStrings.current
     // Today, so the rail's "New" badge can be decided without a clock inside a
@@ -553,6 +562,7 @@ fun WatchContent(
                         hasPrevious = hasPrevious,
                         canNarrate = state.canNarrate,
                         narrating = state.narrating,
+                        onCast = if (state.isLive) null else onCast,
                     )
                     }
                     }
@@ -1023,6 +1033,7 @@ private fun preview(state: WatchState) {
     MytubeTheme {
         WatchContent(
             state = state,
+            onCast = null,
             player = null,
             mediaBaseUrl = "",
             onBack = {},

@@ -1,5 +1,8 @@
 package com.mytube.app.data.remote
 
+import com.mytube.app.data.remote.dto.CastDeviceDto
+import com.mytube.app.data.remote.dto.CastHandbackDto
+import com.mytube.app.data.remote.dto.CastSessionDto
 import com.mytube.app.data.remote.dto.ChannelDetailDto
 import com.mytube.app.data.remote.dto.ChannelVideosDto
 import com.mytube.app.data.remote.dto.ChannelsDto
@@ -29,6 +32,7 @@ import io.ktor.client.request.patch
 import io.ktor.client.statement.bodyAsText
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -554,6 +558,50 @@ class GatewayDataSource(private val client: HttpClient) {
         }.status.isSuccess()
     }.getOrElse { false }
 
+    // --- the household's speakers (gateway cast.go) ---------------------------
+
+    suspend fun castDevices(baseUrl: String, userId: String): List<CastDeviceDto> =
+        client.get("${baseUrl.trimEnd('/')}/api/cast/devices") { identify(userId) }.orThrow().body()
+
+    suspend fun castSessions(baseUrl: String, userId: String): List<CastSessionDto> =
+        client.get("${baseUrl.trimEnd('/')}/api/cast/sessions") { identify(userId) }.orThrow().body()
+
+    suspend fun castSession(baseUrl: String, userId: String, id: String): CastSessionDto =
+        client.get("${baseUrl.trimEnd('/')}/api/cast/sessions/$id") { identify(userId) }.orThrow().body()
+
+    suspend fun startCast(baseUrl: String, userId: String, body: StartCastBody): CastSessionDto =
+        client.post("${baseUrl.trimEnd('/')}/api/cast/sessions") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }.orThrow().body()
+
+    /** pause, resume, next, stop, seek, volume, jump: each answers with the session. */
+    suspend fun castCommand(
+        baseUrl: String,
+        userId: String,
+        id: String,
+        action: String,
+        body: CastCommandBody? = null,
+    ): CastSessionDto =
+        client.post("${baseUrl.trimEnd('/')}/api/cast/sessions/$id/$action") {
+            identify(userId)
+            if (body != null) {
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+        }.orThrow().body()
+
+    suspend fun replaceCastQueue(baseUrl: String, userId: String, id: String, body: CastQueueBody): CastSessionDto =
+        client.put("${baseUrl.trimEnd('/')}/api/cast/sessions/$id/queue") {
+            identify(userId)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }.orThrow().body()
+
+    suspend fun castHandoff(baseUrl: String, userId: String, id: String): CastHandbackDto =
+        client.post("${baseUrl.trimEnd('/')}/api/cast/sessions/$id/handoff") { identify(userId) }.orThrow().body()
+
     private fun io.ktor.client.request.HttpRequestBuilder.identify(userId: String) {
         // Omitted, never sent empty. Absence is what triggers the gateway's
         // fallback to a default profile, and that fallback is what keeps a fresh
@@ -616,3 +664,29 @@ private data class SubscribedBody(val subscribed: Boolean)
 
 class GatewayException(val status: Int, val url: String) :
     Exception("gateway answered $status for $url")
+
+@kotlinx.serialization.Serializable
+data class CastIdBody(@kotlinx.serialization.SerialName("video_id") val videoId: String)
+
+@kotlinx.serialization.Serializable
+data class StartCastBody(
+    @kotlinx.serialization.SerialName("device_id") val deviceId: String,
+    val items: List<CastIdBody>,
+    @kotlinx.serialization.SerialName("start_index") val startIndex: Int,
+    @kotlinx.serialization.SerialName("start_position_s") val startPositionSeconds: Int,
+)
+
+/** One body for every command that takes one; the gateway reads the field it needs. */
+@kotlinx.serialization.Serializable
+data class CastCommandBody(
+    @kotlinx.serialization.SerialName("position_s") val positionSeconds: Int? = null,
+    val percent: Int? = null,
+    val index: Int? = null,
+)
+
+@kotlinx.serialization.Serializable
+data class CastQueueBody(
+    val version: Int,
+    val items: List<CastIdBody>,
+    @kotlinx.serialization.SerialName("current_index") val currentIndex: Int,
+)

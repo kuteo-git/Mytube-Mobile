@@ -5899,3 +5899,35 @@ the player, so autoplay ended at 24 as well.
 - **A refresh keeps the drawn list until the whole answer is in**, and keeps it
   if a later page fails, rather than dropping 139 rows to 24 and growing back.
 - After the fix the same scroll ended on the 139th video, the gateway's last.
+
+## The library plays on the household's speakers (2026-10-31)
+
+The server grew a `cast` service that keeps a session per speaker — the R1 and
+the Google Nest speakers — and drives it; this app is one of its remotes, beside
+the web app. Nothing here talks to a speaker, and there is no Cast SDK: the
+charter's "Cast — there is no receiver" was true of a television receiver and
+reopened for speakers, which the server reaches itself.
+
+- **`CastStore` is held beside the container, not by a screen.** The bar is on
+  every page and the remote outlives the page it was opened from, so a screen's
+  ViewModel would be the wrong lifetime. It is told about the background through
+  `ON_STOP`/`ON_START` and stops asking there (`castPollMillis` returns null).
+- **The cast item is a null callback when it cannot act.** No speaker answering,
+  or a broadcast, passes `onCast = null` and the pill draws nothing — the
+  charter's rule for a dead button, not a disabled one.
+- **Pressing it pauses here and sends where this was** (`handOverToSpeaker`) with
+  this video and the rest of its list (`castQueue`), leaving out rows the library
+  does not hold. "Stop casting" resumes in place when this phone still holds the
+  video, and otherwise opens it, from the position the server wrote at handoff.
+- **The picker, the remote and the end notice are drawn from `App.kt`**, last,
+  outside every recording, composed always and told whether they show. The
+  remote keeps the session it last showed so it slides away rather than vanish.
+- **The bar uses the miniplayer's own modifier**, hoisted out of the watch
+  session's block, so the two rest in exactly one place and cannot drift; it is
+  drawn only when no miniplayer is.
+- **A slider on the remote sends when it settles** (400ms still): `GlassSlider`
+  reports every step, and a seek per step reloads the song on the R1.
+
+Verified: 417 tests and the seven guards green, Android and iOS compile. **Not
+yet driven on a phone or the simulator** — the remote has been seen only in
+previews.

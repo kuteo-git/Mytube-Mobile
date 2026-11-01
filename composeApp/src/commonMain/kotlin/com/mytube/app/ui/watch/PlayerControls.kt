@@ -70,6 +70,7 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.cast.CastIcon
 import com.mytube.app.ui.shell.GlassItem
 import com.mytube.app.ui.shell.GlassPane
 import com.mytube.app.ui.shell.GlassPaneShape
@@ -204,6 +205,8 @@ fun PlayerControls(
      * last, which is what puts it above them already.
      */
     settingsOpen: Boolean,
+    /** Plays on a speaker in the house; null draws no button (no speaker answers, or a broadcast). */
+    onCast: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -482,6 +485,19 @@ fun PlayerControls(
                     // behind it.
                     GlassPane("player-top-right", GlassPaneShape.Capsule) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onCast != null) {
+                        GlassItem(
+                            id = "cast",
+                            symbol = "hifispeaker",
+                            onPress = { onCast(); lastTouch++ },
+                        ) {
+                            ControlButton(
+                                icon = CastIcon,
+                                label = strings.castButton,
+                                onClick = { onCast(); lastTouch++ },
+                            )
+                        }
+                    }
                     // Narration, where captions used to be — the household
                     // reaches for the voice far more than for captions, and it
                     // was two presses deep in the gear's sheet; captions stay in

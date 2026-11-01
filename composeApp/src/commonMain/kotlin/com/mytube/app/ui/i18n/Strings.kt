@@ -298,6 +298,38 @@ interface Strings {
     val thousandSuffix: String
     val millionSuffix: String
     val billionSuffix: String
+
+    // --- casting to the household's speakers ---------------------------------
+    val castButton: String
+    val castPickerTitle: String
+    val castPickerEmpty: String
+    val castKindR1: String
+    val castKindGoogle: String
+    fun castPlayingOn(device: String): String
+    fun castLoadingOn(device: String): String
+    fun castPausedOn(device: String): String
+    val castPlay: String
+    val castPause: String
+    val castNext: String
+    val castStop: String
+    val castVolume: String
+    val castHandoff: String
+    val castQueue: String
+    val castNowPlaying: String
+    fun castMoveUp(title: String): String
+    fun castMoveDown(title: String): String
+    fun castRemove(title: String): String
+    val castClose: String
+    val castOpenRemote: String
+    val castQueueReloaded: String
+    val castOffline: String
+    val castLive: String
+    val castFailed: String
+    val castTakenOver: String
+    val castStoppedOnDevice: String
+    val castDeviceOffline: String
+    val castQueueFailed: String
+    val castReplaced: String
 }
 
 /** The units a relative time is expressed in, largest first. */
@@ -487,6 +519,37 @@ object EnglishStrings : Strings {
     override val thousandSuffix = "K"
     override val millionSuffix = "M"
     override val billionSuffix = "B"
+
+    override val castButton = "Cast to a speaker"
+    override val castPickerTitle = "Play on a speaker"
+    override val castPickerEmpty = "No speaker is answering right now."
+    override val castKindR1 = "R1 speaker"
+    override val castKindGoogle = "Google speaker"
+    override fun castPlayingOn(device: String) = "Playing on $device"
+    override fun castLoadingOn(device: String) = "Starting on $device…"
+    override fun castPausedOn(device: String) = "Paused on $device"
+    override val castPlay = "Play"
+    override val castPause = "Pause"
+    override val castNext = "Next"
+    override val castStop = "Stop"
+    override val castVolume = "Volume"
+    override val castHandoff = "Stop casting"
+    override val castQueue = "Up next on the speaker"
+    override val castNowPlaying = "Now playing"
+    override fun castMoveUp(title: String) = "Move $title up"
+    override fun castMoveDown(title: String) = "Move $title down"
+    override fun castRemove(title: String) = "Remove $title"
+    override val castClose = "Close"
+    override val castOpenRemote = "Open the remote"
+    override val castQueueReloaded = "Someone else changed the queue. It has been reloaded."
+    override val castOffline = "The speaker is not answering."
+    override val castLive = "A broadcast cannot be cast."
+    override val castFailed = "The speaker did not respond."
+    override val castTakenOver = "The speaker switched to another source."
+    override val castStoppedOnDevice = "Playback was stopped on the speaker."
+    override val castDeviceOffline = "The speaker stopped answering."
+    override val castQueueFailed = "The speaker could not play this queue."
+    override val castReplaced = "Someone else started playing on this speaker."
 }
 
 object VietnameseStrings : Strings {
@@ -668,6 +731,37 @@ object VietnameseStrings : Strings {
     override val thousandSuffix = "N"
     override val millionSuffix = "Tr"
     override val billionSuffix = "T"
+
+    override val castButton = "Phát trên loa"
+    override val castPickerTitle = "Phát trên loa"
+    override val castPickerEmpty = "Chưa có loa nào trả lời."
+    override val castKindR1 = "Loa R1"
+    override val castKindGoogle = "Loa Google"
+    override fun castPlayingOn(device: String) = "Đang phát trên $device"
+    override fun castLoadingOn(device: String) = "Đang mở trên $device…"
+    override fun castPausedOn(device: String) = "Đang tạm dừng trên $device"
+    override val castPlay = "Phát"
+    override val castPause = "Tạm dừng"
+    override val castNext = "Bài tiếp"
+    override val castStop = "Dừng"
+    override val castVolume = "Âm lượng"
+    override val castHandoff = "Ngắt cast"
+    override val castQueue = "Sắp phát trên loa"
+    override val castNowPlaying = "Đang phát"
+    override fun castMoveUp(title: String) = "Đưa $title lên"
+    override fun castMoveDown(title: String) = "Đưa $title xuống"
+    override fun castRemove(title: String) = "Xoá $title"
+    override val castClose = "Đóng"
+    override val castOpenRemote = "Mở điều khiển"
+    override val castQueueReloaded = "Hàng đợi vừa bị người khác sửa, đã tải lại."
+    override val castOffline = "Loa không trả lời."
+    override val castLive = "Không phát livestream lên loa được."
+    override val castFailed = "Loa không phản hồi."
+    override val castTakenOver = "Loa đã chuyển sang nguồn khác."
+    override val castStoppedOnDevice = "Nhạc đã bị dừng ngay trên loa."
+    override val castDeviceOffline = "Loa không còn trả lời."
+    override val castQueueFailed = "Loa không phát được hàng đợi này."
+    override val castReplaced = "Có người khác vừa phát lên loa này."
 }
 
 enum class Language(val code: String) {

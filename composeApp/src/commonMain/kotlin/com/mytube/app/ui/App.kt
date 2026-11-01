@@ -77,6 +77,17 @@ import com.mytube.app.ui.home.HomeScreen
 import com.mytube.app.ui.home.HomeState
 import com.mytube.app.ui.home.HomeViewModel
 import com.mytube.app.ui.home.Size
+import com.mytube.app.domain.model.CastDevice
+import com.mytube.app.domain.model.CastHandback
+import com.mytube.app.domain.model.CastState
+import com.mytube.app.ui.cast.CastBar
+import com.mytube.app.ui.cast.CastPickerSheet
+import com.mytube.app.ui.cast.CastRemote
+import com.mytube.app.ui.cast.CastRemoteSheet
+import com.mytube.app.ui.cast.CastStore
+import com.mytube.app.ui.cast.castNoticeText
+import com.mytube.app.ui.shell.GlassAlert
+import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.LocalStrings
@@ -527,6 +538,20 @@ fun App(
             // rather than in the handler because the ViewModel is built further
             // down and this has to reach it: see `stopWatch`, set where it is.
             var stopWatch: () -> Unit by remember { mutableStateOf({}) }
+            // The household's speakers. The store outlives every screen — the
+            // bar is on every page and the remote outlives the page it opened
+            // from — and stops asking while the app is in the background. The
+            // two acts below reach the watch ViewModel the way `stopWatch` does:
+            // set where it is built.
+            val castScope = rememberCoroutineScope()
+            val cast = remember { CastStore(container.castRepository, castScope) }
+            val castState by cast.state.collectAsStateWithLifecycle()
+            var castFromWatch: (CastDevice) -> Unit by remember { mutableStateOf({}) }
+            var resumeFromSpeaker: (CastHandback) -> Unit by remember {
+                mutableStateOf({ back: CastHandback -> watching = WatchSession(back.videoId) })
+            }
+            LifecycleEventEffect(Lifecycle.Event.ON_STOP) { cast.setForeground(false) }
+            LifecycleEventEffect(Lifecycle.Event.ON_START) { cast.setForeground(true) }
             // The television player's half of back: takes away what is over the
             // picture and says whether there was anything. See `TvWatchContent`.
             var tvWatchBackStep: () -> Boolean by remember { mutableStateOf({ false }) }
@@ -1423,6 +1448,84 @@ fun App(
             // on iOS `release()` pauses — and coming back reloaded the video from
             // its last report. Not drawing the bar over that form is right; ending
             // the video somebody is listening to is not.
+            // Where the miniplayer rests, and the cast bar when there is no miniplayer:
+            // one place in the layout, so built once for both.
+            val miniPlayerModifier = Modifier
+                .align(Alignment.BottomCenter)
+                // Follows the tab bar down as it leaves. The padding
+                // below reserves the bar's height; when the bar is
+                // gone that reservation is a gap, and the player was
+                // left hanging in the middle of the feed.
+                //
+                // `offset`, not `graphicsLayer { translationY }`.
+                //
+                // Haze samples from the node's **layout** position and knows
+                // nothing about a draw-time transform, so a translated
+                // surface drew its glass at the place it would have been —
+                // which on a moving miniplayer meant no background at all,
+                // and the tab bar showing straight through it. `offset`
+                // moves the node at placement, so the position Haze reads is
+                // the position it is drawn at.
+                .offset {
+                    IntOffset(
+                        x = 0,
+                        // The tab bar's *whole* height, inset
+                        // included — that is what slides away, and
+                        // matching only the 56dp row left the player
+                        // hanging 34dp short of the screen edge.
+                        y = if (route is Route.Home) {
+                            (
+                                barsHidden * (tabBarPx + navigationInsetPx) +
+                                    // The player's own gap above the bar,
+                                    // given back as it lands *in* the row.
+                                    // It is inside `MiniPlayer`, where an
+                                    // outer padding cannot reach it, so the
+                                    // last few pixels are travelled here.
+                                    miniGapPx * collapse
+                                ).roundToInt()
+                        } else {
+                            0
+                        },
+                    )
+                }
+                // It sits *on* the tab bar, not over it — the bar is
+                // how somebody leaves for another tab while this
+                // keeps playing. Search and the channel page have no
+                // tab bar, so there is nothing to clear there.
+                //
+                // The navigation inset **and** the tab bar's row.
+                //
+                // Both, because the tab bar's own row sits *above*
+                // the inset: it runs from 34dp to 90dp off the
+                // bottom of a phone with a home indicator. Resting
+                // the player at 56dp put it straight over that row's
+                // icons, which is why they vanished and the bar
+                // looked covered. It rests on top of the whole
+                // thing, and slides down by the whole thing.
+                // Narrowing from the sides as the bar makes room: the
+                // player walks into the berth `BottomBar` opens for it,
+                // rather than appearing there.
+                .padding(start = miniSideInset, end = miniSideInset)
+                // One term, and the drag's landing point reads the same
+                // one — see [miniPlayerBottomInset] for what it cost when
+                // only this half knew about the search screen.
+                .padding(bottom = miniBottomInset)
+
+            // A speaker playing, from any phone in the house, where the
+            // miniplayer would rest. Not while one is: that is this phone's own
+            // video, and the bar would cover it.
+            val castBar = castState.running.firstOrNull()
+            if (!television && browsing && session == null && castBar != null &&
+                castState.remote == CastRemote.Closed
+            ) {
+                CastBar(
+                    session = castBar,
+                    mediaBaseUrl = baseUrl,
+                    onOpen = { cast.openRemote(castBar.id) },
+                    modifier = miniPlayerModifier,
+                )
+            }
+
             if (session != null) {
                 // `remember` and a DisposableEffect, not `viewModel()`. That
                 // helper stores a ViewModel in the *activity's* store, where it
@@ -1466,6 +1569,21 @@ fun App(
                 // Set as state in composition, so the handler always stops the
                 // ViewModel that is actually playing.
                 stopWatch = { watch.stop() }
+                // Casting is the phone's: the television is the screen the
+                // household watches on, not a remote for a speaker.
+                if (!television) {
+                    castFromWatch = { device -> cast.start(device, watch.castQueue(), watch.handOverToSpeaker()) }
+                    resumeFromSpeaker = { back ->
+                        if (back.videoId == watching?.videoId) {
+                            watch.resumeFromSpeaker(back.positionSeconds.toDouble())
+                        } else {
+                            // Opens from the position the cast service has just
+                            // written to history.
+                            watching = WatchSession(back.videoId)
+                        }
+                    }
+                    LaunchedEffect(watch) { cast.loadDevices() }
+                }
 
                 // The television's Home button pauses. There is no screen to
                 // turn off on a TV, so the sound carrying on behind the
@@ -1579,66 +1697,6 @@ fun App(
                 // pixel: `landingFromBottomPx` below is built from these same
                 // three terms, so a placement that differed between them would
                 // put the picture down somewhere the bar is not.
-                val miniPlayerModifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    // Follows the tab bar down as it leaves. The padding
-                    // below reserves the bar's height; when the bar is
-                    // gone that reservation is a gap, and the player was
-                    // left hanging in the middle of the feed.
-                    //
-                    // `offset`, not `graphicsLayer { translationY }`.
-                    //
-                    // Haze samples from the node's **layout** position and knows
-                    // nothing about a draw-time transform, so a translated
-                    // surface drew its glass at the place it would have been —
-                    // which on a moving miniplayer meant no background at all,
-                    // and the tab bar showing straight through it. `offset`
-                    // moves the node at placement, so the position Haze reads is
-                    // the position it is drawn at.
-                    .offset {
-                        IntOffset(
-                            x = 0,
-                            // The tab bar's *whole* height, inset
-                            // included — that is what slides away, and
-                            // matching only the 56dp row left the player
-                            // hanging 34dp short of the screen edge.
-                            y = if (route is Route.Home) {
-                                (
-                                    barsHidden * (tabBarPx + navigationInsetPx) +
-                                        // The player's own gap above the bar,
-                                        // given back as it lands *in* the row.
-                                        // It is inside `MiniPlayer`, where an
-                                        // outer padding cannot reach it, so the
-                                        // last few pixels are travelled here.
-                                        miniGapPx * collapse
-                                    ).roundToInt()
-                            } else {
-                                0
-                            },
-                        )
-                    }
-                    // It sits *on* the tab bar, not over it — the bar is
-                    // how somebody leaves for another tab while this
-                    // keeps playing. Search and the channel page have no
-                    // tab bar, so there is nothing to clear there.
-                    //
-                    // The navigation inset **and** the tab bar's row.
-                    //
-                    // Both, because the tab bar's own row sits *above*
-                    // the inset: it runs from 34dp to 90dp off the
-                    // bottom of a phone with a home indicator. Resting
-                    // the player at 56dp put it straight over that row's
-                    // icons, which is why they vanished and the bar
-                    // looked covered. It rests on top of the whole
-                    // thing, and slides down by the whole thing.
-                    // Narrowing from the sides as the bar makes room: the
-                    // player walks into the berth `BottomBar` opens for it,
-                    // rather than appearing there.
-                    .padding(start = miniSideInset, end = miniSideInset)
-                    // One term, and the drag's landing point reads the same
-                    // one — see [miniPlayerBottomInset] for what it cost when
-                    // only this half knew about the search screen.
-                    .padding(bottom = miniBottomInset)
 
                 // One bar, two call sites — the bar left behind by a drag and the
                 // bar drawn under it — and built once, so they can differ only
@@ -1779,6 +1837,7 @@ fun App(
                                 // one fact is how they come to disagree.
                                 savedSink = watch::markSaved
                             },
+                            onCast = if (castState.devices.isNotEmpty()) cast::openPicker else null,
                         )
                     }
                     }
@@ -1843,6 +1902,51 @@ fun App(
                         playlistEdits++
                         sheetOpen = false
                     },
+                )
+            }
+
+            // The speakers, drawn last with the other sheets: outside every
+            // recording, never a popup. Composed always and told whether to show.
+            if (!television) {
+                CastPickerSheet(
+                    devices = castState.devices,
+                    loading = castState.devicesLoading,
+                    visible = castState.pickerOpen,
+                    backdrop = backdrop,
+                    onPick = castFromWatch,
+                    onDismiss = cast::closePicker,
+                )
+                val remoteNow = (castState.remote as? CastRemote.Showing)?.session
+                // Kept after it closes, so the sheet can slide away showing what
+                // it showed rather than vanish.
+                var remoteShown by remember { mutableStateOf(remoteNow) }
+                if (remoteNow != null) remoteShown = remoteNow
+                remoteShown?.let { shown ->
+                    CastRemoteSheet(
+                        session = shown,
+                        visible = remoteNow != null,
+                        backdrop = backdrop,
+                        mediaBaseUrl = baseUrl,
+                        onDismiss = cast::closeRemote,
+                        onPlayPause = { if (shown.state == CastState.Paused) cast.resume() else cast.pause() },
+                        onNext = cast::next,
+                        onStop = cast::stop,
+                        onSeek = cast::seek,
+                        onVolume = cast::volume,
+                        onHandoff = { cast.handoff(resumeFromSpeaker) },
+                        onJump = cast::jump,
+                        onMoveUp = cast::moveUp,
+                        onMoveDown = cast::moveDown,
+                        onRemove = cast::remove,
+                    )
+                }
+                val castNotice = castNoticeText(castState.notice, LocalStrings.current)
+                GlassAlert(
+                    visible = castNotice.isNotEmpty(),
+                    title = castNotice,
+                    backdrop = backdrop,
+                    onDismiss = cast::noticeShown,
+                    buttons = { GlassButton(LocalStrings.current.castClose, cast::noticeShown) },
                 )
             }
             }

@@ -488,6 +488,29 @@ class WatchViewModel(
      */
     fun pause() = player.pause()
 
+    /**
+     * What a speaker should play: this video, then the rest of the list it was
+     * opened from. Rows the library does not hold yet are left out — the cast
+     * service could not describe them, and would drop them anyway.
+     */
+    fun castQueue(): List<String> {
+        val here = queue.indexOfFirst { it.id == videoId }
+        val rest = if (here >= 0) queue.drop(here + 1).filter { it.inLibrary }.map { it.id } else emptyList()
+        return listOf(videoId) + rest
+    }
+
+    /** Stops here for a speaker to take over, and says where it was. */
+    fun handOverToSpeaker(): Double {
+        player.pause()
+        return player.state.value.positionSeconds
+    }
+
+    /** Carries on here from where a speaker handed back. */
+    fun resumeFromSpeaker(seconds: Double) {
+        seekTo(seconds)
+        player.play()
+    }
+
     fun seekTo(seconds: Double) {
         player.seekTo(seconds)
         retargetNarration(seconds)

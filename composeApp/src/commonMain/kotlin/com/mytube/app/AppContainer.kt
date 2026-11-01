@@ -2,12 +2,14 @@ package com.mytube.app
 
 import com.mytube.app.data.local.SettingsDataSource
 import com.mytube.app.data.remote.GatewayDataSource
+import com.mytube.app.data.repository.CastRepositoryImpl
 import com.mytube.app.data.repository.NarrationRepositoryImpl
 import com.mytube.app.data.repository.PreferencesRepositoryImpl
 import com.mytube.app.data.repository.ServerRepositoryImpl
 import com.mytube.app.data.repository.StoryboardRepositoryImpl
 import com.mytube.app.data.repository.StreamRepositoryImpl
 import com.mytube.app.data.repository.VideoRepositoryImpl
+import com.mytube.app.domain.repository.CastRepository
 import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.PreferencesRepository
 import com.mytube.app.domain.repository.ServerRepository
@@ -94,6 +96,9 @@ class AppContainer(
 
     val storyboardRepository: StoryboardRepository =
         StoryboardRepositoryImpl(gateway, serverRepository)
+
+    /** The household's speakers, through the gateway's cast routes. */
+    val castRepository: CastRepository = CastRepositoryImpl(gateway, serverRepository)
 
     val preferencesRepository: PreferencesRepository = PreferencesRepositoryImpl(settings)
 
