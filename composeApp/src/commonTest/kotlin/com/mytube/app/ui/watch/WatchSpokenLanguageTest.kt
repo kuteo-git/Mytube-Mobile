@@ -85,6 +85,21 @@ class WatchSpokenLanguageTest {
         assertFalse(playing(model).narrating, "the answer turned narration back on over the press")
     }
 
+    /** A press counts for that sitting of the video, not for the next time it opens. */
+    @Test
+    fun `a video come back to opens as the switch says`() = runTest(dispatcher) {
+        val prefs = Prefs(narration = true)
+        val model = open(SpokenAs(SpokenLanguage.Other), RecordedPasses(), prefs)
+        model.toggleNarration() // off
+        model.toggleNarration() // on again: the switch is on
+        advanceUntilIdle()
+        model.advanceTo("second", fromTheStart = true)
+        advanceUntilIdle()
+        model.advanceTo("first", fromTheStart = true)
+        advanceUntilIdle()
+        assertTrue(playing(model).narrating, "came back to with the switch on, and opened plain")
+    }
+
     private fun playing(model: WatchViewModel) = model.state.value as WatchState.Playing
 
     private fun TestScope.open(videos: SpokenAs, passes: RecordedPasses, prefs: Prefs): WatchViewModel {

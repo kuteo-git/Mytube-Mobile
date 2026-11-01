@@ -19,6 +19,6 @@ class SpokenLanguageMappingTest {
         assertEquals(SpokenLanguage.Vietnamese, read("""{"language":"vi"}"""))
         assertEquals(SpokenLanguage.Other, read("""{"language":"en"}"""))
         assertEquals(SpokenLanguage.Unknown, read("""{"language":""}"""))
-        assertEquals(SpokenLanguage.Unknown, read("""{}"""), "a gateway from before the route: not known")
+        assertEquals(SpokenLanguage.Unknown, read("""{}"""), "no language sent: not known")
     }
 }

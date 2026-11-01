@@ -214,6 +214,12 @@ DELETE /api/videos/{id}/narration            cancel (204 whether or not running)
   as they arrive (~30s behind), keyed by `startsAtEpochMillis`; the toggle is
   absent when the stream has no captions (`liveCaptions`), and a remembered
   preference never starts one.
+- **A video that speaks Vietnamese opens with narration off**, the switch on or
+  not (`narratesOnOpen`): its narration would read its Vietnamese captions over
+  its own voice. The language comes from the gateway
+  (`GET /api/videos/{id}/spoken-language`), asked once the video plays and only
+  with the switch on; not known is narrated. Pressing the switch narrates any
+  video and writes the preference; a press while the answer is on its way wins.
 - **This is what makes background playback possible.** A manifest plus a few
   audio files is just playing music; a thousand TTS requests from a locked phone
   is something the OS kills.
@@ -327,7 +333,8 @@ press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden
   `focusScale`, `focusRimShape`, `tvSeekStep`, `shelvesFrom`,
   `shelfCardWidth`, `asksWhoIsWatching`, `withTone`, `typed`, `caughtUp`,
   `rowEntryIndex`, `keptInPlace`, `isWaitingForBytes`, `tapJump`,
-  `castPollMillis`, `castQueueOf`, `VolumeFollower`, `contentBounds`.
+  `castPollMillis`, `castQueueOf`, `VolumeFollower`, `contentBounds`,
+  `narratesOnOpen`.
 - **Regression tests go red on the reported symptom first.** Test bodies for wire
   mapping are copied from the running gateway, not invented.
 - **A `jvm` target exists only to run tests.** It does not contradict "no desktop".

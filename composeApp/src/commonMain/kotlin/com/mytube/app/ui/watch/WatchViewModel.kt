@@ -387,7 +387,7 @@ class WatchViewModel(
     /**
      * The video the switch was pressed on: the remembered preference no longer
      * decides whether it narrates, however late its answer comes. By id, so a
-     * video moved on to is decided afresh without anything resetting it.
+     * late answer for the video before cannot read this video's press.
      */
     private var narrationPressedFor = ""
 
@@ -470,6 +470,8 @@ class WatchViewModel(
         report(force = true)
         narrationPoll?.cancel()
         narrationPoll = null
+        // A video come back to (Previous) opens as the switch says again.
+        narrationPressedFor = ""
         // The player outlives the video, and so would its clips: lines of the
         // last video at the last video's times, spoken over this one and ducking
         // it until its own pass is asked for — which waits on its captions.

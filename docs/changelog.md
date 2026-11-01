@@ -6141,3 +6141,33 @@ when the speaker handed back. Three red tests, one per path:
 
 Verified: 465 tests, Android and iOS compile. Not yet tried on a speaker.
 
+## A Vietnamese video opens with narration off (2026-11-01)
+
+Asked for: *"có cách nào auto detect language trên video, từ đó auto tắt
+thuyết minh trên tiếng việt và bật nó trên tiếng anh"*. Settled with the
+household before any code:
+
+- **The language spoken is the language of YouTube's automatic captions**,
+  which it makes from the sound. The catalogue's `language` could not be used:
+  measured, 13,736 of 68,064 videos labelled "en" have Vietnamese titles. The
+  server records it from the listing every caption fetch makes anyway (no
+  request of its own) and asks once at play for a video never listed; the
+  title's Vietnamese letters are the last resort. Server CHANGELOG, "A video
+  that speaks Vietnamese is not narrated when it opens".
+- **One rule, `narratesOnOpen(preferred, spoken)`**: the switch on and the
+  video not Vietnamese. Not known is narrated. Asked only once the video plays
+  and only with the switch on, so a video never waits for it.
+- **Pressing the switch always writes the preference**, on any video — on a
+  Vietnamese one too, which it then narrates. A press while the answer is on
+  its way wins over the answer (`narrationPressedFor`, cleared on moving to
+  another video, so one come back to opens as the switch says).
+- **On a speaker, the same**, decided by the server per song.
+
+Verified: 472 tests (each rule red first; the press reset proven red by
+removing it), Android and iOS compile.
+
+Found in review, fixed: **nine of `domain/model`'s ten files had never been
+committed** — a `model` line in a global gitignore. A fresh clone did not
+compile, v0.1.18's tag included. The project's `.gitignore` now names them as
+source; a clean clone compiles.
+
