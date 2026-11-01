@@ -5931,3 +5931,44 @@ reopened for speakers, which the server reaches itself.
 Verified: 417 tests and the seven guards green, Android and iOS compile. **Not
 yet driven on a phone or the simulator** — the remote has been seen only in
 previews.
+
+## While a speaker plays, the watch screen is the remote (2026-11-01)
+
+Asked for as: *"khi đang cast thì reuse mini player … nếu đang cast mà bấm vào
+video khác, thì show cast screen … cái popup của cast nên là một screen luôn, vì
+nó sẽ thay thế watch nếu đang cast, nó cũng show info như cái màn watch"*. The
+remote sheet and the cast bar are gone; the watch screen and the miniplayer do
+both jobs.
+
+- **The watch screen follows the speaker.** Whenever a speaker plays (and this
+  phone is not playing itself), the watch session is moved to the speaker's
+  song as it changes, and the screen draws `WatchCast` — the speaker's stage
+  where the picture is, volume and stop under the title, the queue where up
+  next is. The description and comments are the song's own page.
+- **Open is open.** The watch screen expanded *is* the remote open (1s poll);
+  collapsed, 5s. One effect each way in `App.kt`; nothing else keeps them in
+  step. The store opening the remote (a cast started, a song picked, the app
+  reopened mid-cast) expands the screen.
+- **A picked video goes to the speaker, never to the phone** — every
+  `onOpenVideo` goes through `openVideo`, which asks `CastStore.pick`. The song
+  already playing only opens the screen. A video picked on its own takes its up
+  next with it (`upNext` filtered to the library), and so does casting from the
+  watch screen (`castQueue` falls back to the rail): a one-song queue was a
+  speaker falling silent after one song.
+- **`pending` holds the screen on the song just sent.** Until the speaker
+  answers it still reports the song before, and the follow effect would have
+  pulled the screen back to it.
+- **The phone's paused player says nothing for the speaker.** `report()` and
+  narration's remembered switch are skipped while `playsElsewhere`. Red first:
+  following the speaker onto its next song wrote the phone's handover position
+  ("30 seconds in") over the song the speaker had finished.
+- **The miniplayer is one capsule** (`MiniBar`) with a video or a speaker's
+  artwork in its window. Its play/pause and X reach the speaker with the
+  remote closed — red first: commands went only to the remote's session, and
+  with it closed they were sent nowhere.
+
+Verified: 433 tests and the seven guards green, Android and iOS compile; on the
+simulator against the Kitchen speaker at volume 0 — reopened mid-cast onto the
+cast screen, collapsed to the speaker's miniplayer, a feed video sent with a
+21-song queue and the screen opened on it, the miniplayer reopening the same
+session, Stop returning to the phone's paused player.

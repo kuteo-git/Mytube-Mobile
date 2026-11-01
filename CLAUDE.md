@@ -235,8 +235,14 @@ phone only, never the TV. *Was* "deliberately absent — there is no receiver";
 reopened on 2026-10-31 because the speakers are the receivers and the server
 drives them, so this app never talks to a speaker or carries a Cast SDK. It asks
 the gateway's `/api/cast/*` and shows: a cast item in the player's pill (absent
-for a broadcast or when no speaker answers), a picker sheet, a remote sheet, and
-a bar where the miniplayer rests when nothing plays here. `CastStore` polls 1s
+for a broadcast or when no speaker answers) and a picker sheet. **While a
+speaker plays, the watch screen is the remote**: it follows the speaker's song,
+draws the speaker's controls where the picture is (`WatchCast`), its volume and
+stop under the title and its queue where up next is, and the miniplayer is the
+same capsule with the song's artwork. A video opened anywhere then goes to the
+speaker (`CastStore.pick`, with its up next when opened alone), never to the
+phone; the phone's paused player reports no progress and starts no narration
+(`playsElsewhere`). `CastStore` polls 1s
 with the remote open, 5s otherwise, never in the background (`castPollMillis`).
 See changelog, "The library plays on the household's speakers".
 

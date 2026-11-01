@@ -35,3 +35,15 @@ data class QueueItem(
 )
 
 fun Video.asQueueItem() = QueueItem(id = id, sourceUrl = sourceUrl, inLibrary = inLibrary)
+
+/**
+ * What a speaker should play for [videoId] opened from [queue]: the video, then
+ * the rest of the list after it. Rows the library does not hold yet are left
+ * out — the cast service plays what the catalogue has. A video not in the list
+ * goes alone, and whoever sends it decides what follows.
+ */
+fun castQueueOf(videoId: String, queue: List<QueueItem>): List<String> {
+    val here = queue.indexOfFirst { it.id == videoId }
+    val rest = if (here >= 0) queue.drop(here + 1).filter { it.inLibrary }.map { it.id } else emptyList()
+    return listOf(videoId) + rest
+}

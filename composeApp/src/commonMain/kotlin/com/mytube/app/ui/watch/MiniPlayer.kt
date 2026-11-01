@@ -186,6 +186,50 @@ fun MiniPlayer(
     showSurface: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    MiniBar(
+        window = {
+            if (showSurface) {
+                VideoSurface(
+                    player,
+                    Modifier.fillMaxWidth().fillMaxHeight(),
+                    fill = true,
+                )
+            }
+        },
+        title = title,
+        channel = channel,
+        progress = progress,
+        isPlaying = isPlaying,
+        onExpand = onExpand,
+        onPlayPause = onPlayPause,
+        onClose = onClose,
+        collapse = collapse,
+        bottomInset = bottomInset,
+        modifier = modifier,
+    )
+}
+
+/**
+ * The miniplayer's capsule, around whatever fills its round window: the video
+ * here, or a speaker's artwork — so a song playing on a speaker rests in the
+ * same bar, not in a second kind of one.
+ */
+@Composable
+fun MiniBar(
+    window: @Composable () -> Unit,
+    title: String,
+    channel: String,
+    progress: Float,
+    isPlaying: Boolean,
+    onExpand: () -> Unit,
+    onPlayPause: () -> Unit,
+    onClose: () -> Unit,
+    /** @see MiniPlayer */
+    collapse: Float,
+    /** @see MiniPlayer */
+    bottomInset: Dp,
+    modifier: Modifier = Modifier,
+) {
     val strings = LocalStrings.current
 
     // A capsule that floats, not a strip that spans the screen.
@@ -271,13 +315,7 @@ fun MiniPlayer(
                     .clip(CircleShape)
                     .background(Color.Black),
             ) {
-                if (showSurface) {
-                    VideoSurface(
-                        player,
-                        Modifier.fillMaxWidth().fillMaxHeight(),
-                        fill = true,
-                    )
-                }
+                window()
             }
 
             Column(

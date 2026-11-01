@@ -79,7 +79,8 @@ private class FakeCast : CastRepository {
 @OptIn(ExperimentalCoroutinesApi::class)
 class CastStoreTest {
 
-    private fun TestScope.store(fake: FakeCast) = CastStore(fake, backgroundScope)
+    private fun TestScope.store(fake: FakeCast, upNext: List<String> = emptyList()) =
+        CastStore(fake, backgroundScope, upNext = { upNext })
 
     @Test
     fun theRemoteIsAskedEverySecondAndTheListEveryFive() {
@@ -249,25 +250,66 @@ class CastStoreTest {
     }
 
     @Test
-    fun anotherSongPickedWhileCastingGoesToTheSameSpeaker() = runTest {
+    fun aVideoPickedWhileCastingGoesToTheSameSpeakerAndShowsTheRemote() = runTest {
         val fake = FakeCast()
         val store = store(fake)
         runCurrent()
         fake.running = listOf(session())
         advanceTimeBy(5_100)
-        store.recast(listOf("x", "y"))
+        assertTrue(store.pick(listOf("x", "y")), "the speaker took it, so the phone opens nothing")
+        assertEquals("x", store.state.value.pending, "the speaker still reports the old song until it answers")
         runCurrent()
+        assertEquals("", store.state.value.pending)
         assertTrue("start r1-living [x, y] 0" in fake.sent, fake.sent.toString())
-        assertEquals(CastRemote.Closed, store.state.value.remote, "picking a song does not throw the remote over the page")
+        assertIs<CastRemote.Showing>(store.state.value.remote, "the remote, not the watch screen")
     }
 
     @Test
-    fun recastWithNothingPlayingSendsNothing() = runTest {
+    fun aVideoPickedAloneWhileCastingTakesItsUpNextWithIt() = runTest {
+        val fake = FakeCast()
+        val store = store(fake, upNext = listOf("y", "x", "z"))
+        runCurrent()
+        fake.running = listOf(session())
+        advanceTimeBy(5_100)
+        store.pick(listOf("x"))
+        runCurrent()
+        assertTrue("start r1-living [x, y, z] 0" in fake.sent, fake.sent.toString())
+    }
+
+    @Test
+    fun theSongAlreadyPlayingPickedAgainOnlyShowsTheRemote() = runTest {
         val fake = FakeCast()
         val store = store(fake)
         runCurrent()
-        store.recast(listOf("x"))
+        fake.running = listOf(session())
+        advanceTimeBy(5_100)
+        assertTrue(store.pick(listOf("a", "b")))
         runCurrent()
         assertTrue(fake.sent.none { it.startsWith("start") }, fake.sent.toString())
+        assertIs<CastRemote.Showing>(store.state.value.remote)
+    }
+
+    @Test
+    fun aVideoPickedWithNothingPlayingIsThePhones() = runTest {
+        val fake = FakeCast()
+        val store = store(fake)
+        runCurrent()
+        assertEquals(false, store.pick(listOf("x")))
+        runCurrent()
+        assertTrue(fake.sent.none { it.startsWith("start") }, fake.sent.toString())
+        assertEquals(CastRemote.Closed, store.state.value.remote)
+    }
+
+    @Test
+    fun theBarsPlayPauseReachesTheSpeakerWithTheRemoteClosed() = runTest {
+        val fake = FakeCast()
+        val store = store(fake)
+        runCurrent()
+        fake.running = listOf(session())
+        advanceTimeBy(5_100)
+        store.pause()
+        store.stop()
+        runCurrent()
+        assertEquals(listOf("pause", "stop"), fake.sent)
     }
 }

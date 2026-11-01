@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -96,6 +97,17 @@ private const val CONTENT_FADE_RATE = 2.2f
  */
 private const val OVERLAY_FADE_RATE = 6f
 
+/**
+ * The watch screen while a speaker plays the song: the speaker's controls where
+ * the player is, its volume and stop under the title, its queue where up next
+ * is. The rest — the description, the comments — is the song's page as ever.
+ */
+class WatchCast(
+    val stage: @Composable () -> Unit,
+    val controls: @Composable () -> Unit,
+    val queue: LazyListScope.() -> Unit,
+)
+
 @Composable
 fun WatchScreen(
     viewModel: WatchViewModel,
@@ -136,6 +148,8 @@ fun WatchScreen(
     onCast: (() -> Unit)?,
     /** A speaker is playing; the cast item is drawn lit. */
     casting: Boolean,
+    /** What a speaker playing this sitting puts in place of the player, or null. */
+    cast: WatchCast?,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -143,6 +157,7 @@ fun WatchScreen(
         state = state,
         onCast = onCast,
         casting = casting,
+        cast = cast,
         player = viewModel.player,
         mediaBaseUrl = mediaBaseUrl,
         onBack = onBack,
@@ -208,6 +223,7 @@ fun WatchContent(
     /** Plays on a speaker; null draws no button. */
     onCast: (() -> Unit)?,
     casting: Boolean,
+    cast: WatchCast? = null,
 ) {
     val strings = LocalStrings.current
     // Today, so the rail's "New" badge can be decided without a clock inside a
@@ -456,7 +472,7 @@ fun WatchContent(
             },
             contentAlignment = Alignment.Center,
         ) {
-            when (state) {
+            if (cast != null) cast.stage() else when (state) {
                 is WatchState.Playing -> if (player != null) {
                     // Two different questions, and reading one number for both
                     // is what shipped a fault.
@@ -614,7 +630,17 @@ fun WatchContent(
                 alpha = (1f - drag * CONTENT_FADE_RATE).coerceAtLeast(0f)
             },
         ) {
-        when (state) {
+        // A speaker is playing and this video's page is still on its way, or
+        // could not come: the speaker's controls and queue do not wait for it.
+        if (cast != null && state !is WatchState.Playing) {
+            LazyColumn(Modifier.fillMaxSize()) {
+                item(key = "cast") {
+                    Spacer(Modifier.height(Space.md))
+                    cast.controls()
+                }
+                cast.queue(this)
+            }
+        } else when (state) {
             is WatchState.Loading -> WatchSkeleton()
 
             is WatchState.Failed -> Message(
@@ -711,6 +737,13 @@ fun WatchContent(
                         )
                     }
 
+                    if (cast != null) {
+                        item(key = "cast") {
+                            Spacer(Modifier.height(Space.md))
+                            cast.controls()
+                        }
+                    }
+
                     item(key = "description") {
                         Spacer(Modifier.height(Space.md))
                         DescriptionBox(
@@ -758,7 +791,7 @@ fun WatchContent(
                         },
                     )
 
-                    item(key = UP_NEXT) {
+                    if (cast != null) cast.queue(this) else item(key = UP_NEXT) {
                         Spacer(Modifier.height(Space.lg))
                         UpNextRail(
                             current = video,

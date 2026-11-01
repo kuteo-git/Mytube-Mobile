@@ -501,9 +501,12 @@ class WatchViewModel(
      * service could not describe them, and would drop them anyway.
      */
     fun castQueue(): List<String> {
-        val here = queue.indexOfFirst { it.id == videoId }
-        val rest = if (here >= 0) queue.drop(here + 1).filter { it.inLibrary }.map { it.id } else emptyList()
-        return listOf(videoId) + rest
+        val listed = castQueueOf(videoId, queue)
+        if (listed.size > 1) return listed
+        // Opened on its own: the rail is what autoplay would have played next,
+        // and without it the speaker falls silent at the end of one song.
+        val rail = (_state.value as? WatchState.Playing)?.upNext.orEmpty()
+        return (listed + rail.filter { it.inLibrary }.map { it.id }).distinct()
     }
 
     /** Stops here for a speaker to take over, and says where it was. */
@@ -888,6 +891,10 @@ class WatchViewModel(
     }
 
     private fun report(force: Boolean) {
+        // A speaker is playing and the cast service records its position. The
+        // player here sits paused where it handed over, and reporting that as
+        // this screen follows the speaker wrote "30 seconds in" over "finished".
+        if (playsElsewhere) return
         val current = _state.value as? WatchState.Playing ?: return
         // Nothing to report about a broadcast. Its "fraction watched" is a
         // position inside a sliding window, which means something different
@@ -1166,7 +1173,8 @@ class WatchViewModel(
             // who has not asked for it *here* — so a broadcast is narrated only
             // by pressing the switch, which is one press and says what it costs
             // by being deliberate.
-            if (preferences.narration() && _state.value.let {
+            // Nor one that plays on a speaker: nobody here is listening.
+            if (!playsElsewhere && preferences.narration() && _state.value.let {
                     it is WatchState.Playing && !it.isLive
                 }
             ) {

@@ -82,10 +82,12 @@ import com.mytube.app.ui.cast.CastNotice
 import com.mytube.app.domain.model.CastDevice
 import com.mytube.app.domain.model.CastHandback
 import com.mytube.app.domain.model.CastState
-import com.mytube.app.ui.cast.CastBar
+import com.mytube.app.ui.cast.CastControls
+import com.mytube.app.ui.cast.CastMiniPlayer
+import com.mytube.app.ui.cast.CastStage
+import com.mytube.app.ui.cast.castQueueItems
 import com.mytube.app.ui.cast.CastPickerSheet
 import com.mytube.app.ui.cast.CastRemote
-import com.mytube.app.ui.cast.CastRemoteSheet
 import com.mytube.app.ui.cast.CastStore
 import com.mytube.app.ui.cast.castNoticeText
 import com.mytube.app.ui.shell.GlassAlert
@@ -151,11 +153,15 @@ import com.mytube.app.ui.watch.MiniPlayer
 import com.mytube.app.ui.watch.PHONE_MAX_HEIGHT
 import com.mytube.app.ui.watch.QueueItem
 import com.mytube.app.ui.watch.TV_MAX_HEIGHT
+import com.mytube.app.ui.watch.WatchCast
 import com.mytube.app.ui.watch.WatchLayer
+import com.mytube.app.ui.watch.castQueueOf
 import com.mytube.app.ui.watch.WatchScreen
 import com.mytube.app.ui.watch.WatchState
 import com.mytube.app.ui.watch.WatchViewModel
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -540,23 +546,67 @@ fun App(
             // rather than in the handler because the ViewModel is built further
             // down and this has to reach it: see `stopWatch`, set where it is.
             var stopWatch: () -> Unit by remember { mutableStateOf({}) }
-            // The household's speakers. The store outlives every screen — the
-            // bar is on every page and the remote outlives the page it opened
-            // from — and stops asking while the app is in the background. The
-            // two acts below reach the watch ViewModel the way `stopWatch` does:
-            // set where it is built.
+            // The household's speakers. The store outlives every screen — a
+            // speaker plays on whatever page is open — and stops asking while
+            // the app is in the background. The two acts below reach the watch
+            // ViewModel the way `stopWatch` does: set where it is built.
             val castScope = rememberCoroutineScope()
-            val cast = remember { CastStore(container.castRepository, castScope) }
+            val cast = remember {
+                CastStore(container.castRepository, castScope, upNext = { id ->
+                    container.videoRepository.upNext(id).filter { it.inLibrary }.map { it.id }
+                }) }
             val castState by cast.state.collectAsStateWithLifecycle()
             var castFromWatch: (CastDevice) -> Unit by remember { mutableStateOf({}) }
-            // The video put back when the app opens. While a speaker plays it
-            // must not be sent there: reopening the app is not picking a song.
-            var castRestoredVideo by remember { mutableStateOf("") }
             // Anything of the cast's over the page. The player's own controls
             // are drawn by the platform above every Compose pixel on iOS 26, so
             // they are switched off while one is up, or they float over it.
-            val castCovering = castState.pickerOpen || castState.asking ||
-                castState.remote != CastRemote.Closed || castState.notice != CastNotice.None
+            val castCovering = castState.pickerOpen || castState.asking || castState.notice != CastNotice.None
+            // Whether this phone is playing a video itself. A speaker started
+            // from another phone is then that phone's business: this one keeps
+            // its own player and only lights the cast button.
+            var playingHere by remember { mutableStateOf(false) }
+            // The speaker this phone's watch screen and miniplayer stand for, or
+            // null. While there is one the watch screen follows its song and is
+            // the remote; the phone's own player sits paused underneath.
+            val castSpeaker = castState.speaker.takeIf { !television && !playingHere }
+            // The song the screen should be on: the one just sent, until the
+            // speaker answers, and then the speaker's own.
+            val castVideo = castState.pending.ifEmpty { castSpeaker?.current?.videoId.orEmpty() }
+            val castRemoteOpen = castState.remote != CastRemote.Closed
+            // The watch screen follows the speaker onto each song, and opens
+            // when the store does — a cast just started, a song just picked, or
+            // the app reopened mid-cast — so it is never the page of a song the
+            // speaker left.
+            LaunchedEffect(castVideo, castRemoteOpen) {
+                if (castVideo.isEmpty()) return@LaunchedEffect
+                val open = watching
+                watching = when {
+                    open == null -> WatchSession(castVideo, minimised = !castRemoteOpen, autoPlay = false)
+                    open.videoId != castVideo || (castRemoteOpen && open.minimised) -> open.copy(
+                        videoId = castVideo,
+                        startAtBeginning = false,
+                        minimised = open.minimised && !castRemoteOpen,
+                    )
+                    else -> open
+                }
+            }
+            // And the other way: the watch screen open is the remote open, which
+            // is asked about every second; collapsed, every five.
+            LaunchedEffect(castSpeaker != null, watching?.minimised) {
+                if (castSpeaker == null) return@LaunchedEffect
+                if (watching?.minimised == false) cast.showSpeaker() else cast.closeRemote()
+            }
+            // Every "open this video" in the app. While a speaker plays, the
+            // video goes to the speaker and the watch screen opens on it — the
+            // remote; otherwise it plays here.
+            fun openVideo(id: String, queue: List<QueueItem> = emptyList()) {
+                if (!television && !playingHere && cast.pick(castQueueOf(id, queue))) {
+                    watching = watching?.copy(videoId = id, queue = queue, startAtBeginning = false, minimised = false)
+                        ?: WatchSession(id, queue = queue, autoPlay = false)
+                    return
+                }
+                watching = WatchSession(id, queue = queue)
+            }
             var resumeFromSpeaker: (CastHandback) -> Unit by remember {
                 mutableStateOf({ back: CastHandback -> watching = WatchSession(back.videoId) })
             }
@@ -702,8 +752,8 @@ fun App(
                 // sound-starting-on-its-own nobody wants, with a picture.
                 if (television) return@LaunchedEffect
                 val last = container.preferencesRepository.lastVideoId()
-                if (last.isNotEmpty()) {
-                    castRestoredVideo = last
+                // Not over a speaker's song, if one was found first.
+                if (last.isNotEmpty() && watching == null) {
                     watching = WatchSession(last, minimised = true, autoPlay = false)
                 }
             }
@@ -961,7 +1011,7 @@ fun App(
                                 Tab.Home -> TvHomeScreen(
                                     viewModel = tvHome,
                                     mediaBaseUrl = baseUrl,
-                                    onOpenVideo = { watching = WatchSession(it.id) },
+                                    onOpenVideo = { openVideo(it.id) },
                                     onOpenSettings = { route = Route.Setup },
                                     onSaveToPlaylist = {
                                         openSaveSheet(saveTargetOf(it))
@@ -1046,7 +1096,7 @@ fun App(
                                     viewModel = home,
                                     mediaBaseUrl = baseUrl,
                                     onOpenSettings = { tab = Tab.Settings },
-                                    onOpenVideo = { watching = WatchSession(it) },
+                                    onOpenVideo = { openVideo(it) },
                                     onOpenChannel = openChannel,
                                     onSaveToPlaylist = {
                                         openSaveSheet(saveTargetOf(it))
@@ -1243,7 +1293,7 @@ fun App(
                         mediaBaseUrl = baseUrl,
                         onBack = { route = Route.Home },
                         onOpenSettings = { route = Route.Setup },
-                        onOpenVideo = { watching = WatchSession(it) },
+                        onOpenVideo = { openVideo(it) },
                         onOpenChannel = openChannel,
                         onSaveToPlaylist = {
                             openSaveSheet(saveTargetOf(it))
@@ -1310,7 +1360,7 @@ fun App(
                         // stay inside the playlist. `WatchSession.queue` already
                         // carries this for the channel page; nothing in the
                         // player had to change.
-                        onOpenVideo = { id, queue -> watching = WatchSession(id, queue = queue) },
+                        onOpenVideo = { id, queue -> openVideo(id, queue) },
                         onOpenChannel = openChannel,
                         edits = playlistEdits,
                         onDeleted = { deleted ->
@@ -1333,7 +1383,7 @@ fun App(
                     // page here follows: back goes to whatever listed you.
                     onBack = { route = Route.Home; tab = Tab.Playlists },
                     onOpenSettings = { route = Route.Setup },
-                    onOpenVideo = { watching = WatchSession(it) },
+                    onOpenVideo = { openVideo(it) },
                     onOpenChannel = openChannel,
                 )
 
@@ -1347,7 +1397,7 @@ fun App(
                         viewModel = search,
                         mediaBaseUrl = baseUrl,
                         languageCode = chosen.code,
-                        onOpenVideo = { watching = WatchSession(it) },
+                        onOpenVideo = { openVideo(it) },
                         onOpenChannel = openChannel,
                         onSaveToPlaylist = openSaveSheet,
                     )
@@ -1355,7 +1405,7 @@ fun App(
                         viewModel = search,
                         mediaBaseUrl = baseUrl,
                         onBack = { route = Route.Home },
-                        onOpenVideo = { watching = WatchSession(it) },
+                        onOpenVideo = { openVideo(it) },
                         onOpenChannel = openChannel,
                         onSaveToPlaylist = openSaveSheet,
                     )
@@ -1370,9 +1420,7 @@ fun App(
                         onOpenSettings = { route = Route.Setup },
                         // The channel's own order comes with the video, so next
                         // stays inside the list that was being read.
-                        onOpenVideo = { id, queue ->
-                            watching = WatchSession(id, queue = queue)
-                        },
+                        onOpenVideo = { id, queue -> openVideo(id, queue) },
                         onSaveToPlaylist = {
                             openSaveSheet(saveTargetOf(it))
                         },
@@ -1459,8 +1507,7 @@ fun App(
             // on iOS `release()` pauses — and coming back reloaded the video from
             // its last report. Not drawing the bar over that form is right; ending
             // the video somebody is listening to is not.
-            // Where the miniplayer rests, and the cast bar when there is no miniplayer:
-            // one place in the layout, so built once for both.
+            // Where the miniplayer rests, built once for its two call sites.
             val miniPlayerModifier = Modifier
                 .align(Alignment.BottomCenter)
                 // Follows the tab bar down as it leaves. The padding
@@ -1522,21 +1569,6 @@ fun App(
                 // only this half knew about the search screen.
                 .padding(bottom = miniBottomInset)
 
-            // A speaker playing, from any phone in the house, where the
-            // miniplayer would rest. Not while one is: that is this phone's own
-            // video, and the bar would cover it.
-            val castBar = castState.running.firstOrNull()
-            if (!television && browsing && session == null && castBar != null &&
-                castState.remote == CastRemote.Closed
-            ) {
-                CastBar(
-                    session = castBar,
-                    mediaBaseUrl = baseUrl,
-                    onOpen = { cast.openRemote(castBar.id) },
-                    modifier = miniPlayerModifier,
-                )
-            }
-
             if (session != null) {
                 // `remember` and a DisposableEffect, not `viewModel()`. That
                 // helper stores a ViewModel in the *activity's* store, where it
@@ -1596,18 +1628,13 @@ fun App(
                     }
                     LaunchedEffect(watch) { cast.loadDevices() }
                     watch.playsElsewhere = castState.casting
-                    // A song picked while a speaker plays goes to the speaker.
-                    // Keyed on the video alone: another phone starting a cast is
-                    // not this one asking for what it is watching to be sent.
-                    LaunchedEffect(session.videoId) {
-                        val restored = session.videoId == castRestoredVideo
-                        castRestoredVideo = ""
-                        val playing = (castState.remote as? CastRemote.Showing)?.session ?: castState.running.firstOrNull()
-                        if (!restored && playing != null && playing.current?.videoId != session.videoId) {
-                            watch.pause()
-                            cast.recast(watch.castQueue())
-                        }
+                    // Only a change of playing or not, never the playhead: read
+                    // here, every tick would recompose the app.
+                    LaunchedEffect(watch) {
+                        watch.player.state.map { it.isPlaying }.distinctUntilChanged().collect { playingHere = it }
                     }
+                    DisposableEffect(watch) { onDispose { playingHere = false } }
+
                 }
 
                 // The television's Home button pauses. There is no screen to
@@ -1655,8 +1682,12 @@ fun App(
                 // copy each, and `startAtBeginning` is the flag the charter says
                 // a call site forgets.
                 val openFromRail: (String) -> Unit = {
-                    trail.add(session.videoId)
-                    watching = session.copy(videoId = it, startAtBeginning = false)
+                    if (castSpeaker != null) {
+                        openVideo(it, session.queue)
+                    } else {
+                        trail.add(session.videoId)
+                        watching = session.copy(videoId = it, startAtBeginning = false)
+                    }
                 }
                 val advanceTo: (String) -> Unit = {
                     trail.add(session.videoId)
@@ -1727,7 +1758,24 @@ fun App(
                 // bar drawn under it — and built once, so they can differ only
                 // in the three things that do.
                 val miniPlayer: @Composable (Boolean, Float, Modifier) -> Unit =
-                    { showSurface, collapse, modifier ->
+                    miniPlayer@{ showSurface, collapse, modifier ->
+                        // While a speaker plays, the same bar shows its song:
+                        // pressed, it opens the watch screen, which is the remote.
+                        if (castSpeaker != null) {
+                            CastMiniPlayer(
+                                session = castSpeaker,
+                                mediaBaseUrl = baseUrl,
+                                onExpand = { watching = session.copy(minimised = false) },
+                                onPlayPause = { if (castSpeaker.state == CastState.Paused) cast.resume() else cast.pause() },
+                                // Ends what the bar shows: the speaker. The video
+                                // here is still open, paused, and is the bar then.
+                                onClose = cast::stop,
+                                collapse = collapse,
+                                bottomInset = navigationInset * barsHidden,
+                                modifier = modifier,
+                            )
+                            return@miniPlayer
+                        }
                         // Collected inside the bar, not above it. The playhead
                         // moves four times a second, and read in this scope it
                         // recomposed the whole app with it, for as long as
@@ -1871,6 +1919,41 @@ fun App(
                                     else -> null
                                 },
                                 casting = castState.casting,
+                                cast = castSpeaker?.let { speaker ->
+                                    WatchCast(
+                                        stage = {
+                                            CastStage(
+                                                session = speaker,
+                                                mediaBaseUrl = baseUrl,
+                                                onBack = { collapseWatch() },
+                                                onCast = cast::askAboutCasting,
+                                                onPlayPause = {
+                                                    if (speaker.state == CastState.Paused) cast.resume() else cast.pause()
+                                                },
+                                                onNext = cast::next,
+                                                onSeek = cast::seek,
+                                            )
+                                        },
+                                        controls = {
+                                            CastControls(
+                                                session = speaker,
+                                                onVolume = cast::volume,
+                                                onHandoff = { cast.stopCasting(resumeFromSpeaker) },
+                                                onStop = cast::stop,
+                                            )
+                                        },
+                                        queue = {
+                                            castQueueItems(
+                                                session = speaker,
+                                                mediaBaseUrl = baseUrl,
+                                                onJump = cast::jump,
+                                                onMoveUp = cast::moveUp,
+                                                onMoveDown = cast::moveDown,
+                                                onRemove = cast::remove,
+                                            )
+                                        },
+                                    )
+                                },
                             )
                         }
                     }
@@ -1950,31 +2033,7 @@ fun App(
                     onPick = castFromWatch,
                     onDismiss = cast::closePicker,
                 )
-                val remoteNow = (castState.remote as? CastRemote.Showing)?.session
-                // Kept after it closes, so the sheet can slide away showing what
-                // it showed rather than vanish.
-                var remoteShown by remember { mutableStateOf(remoteNow) }
-                if (remoteNow != null) remoteShown = remoteNow
-                remoteShown?.let { shown ->
-                    CastRemoteSheet(
-                        session = shown,
-                        visible = remoteNow != null,
-                        backdrop = backdrop,
-                        mediaBaseUrl = baseUrl,
-                        onDismiss = cast::closeRemote,
-                        onPlayPause = { if (shown.state == CastState.Paused) cast.resume() else cast.pause() },
-                        onNext = cast::next,
-                        onStop = cast::stop,
-                        onSeek = cast::seek,
-                        onVolume = cast::volume,
-                        onHandoff = { cast.handoff(resumeFromSpeaker) },
-                        onJump = cast::jump,
-                        onMoveUp = cast::moveUp,
-                        onMoveDown = cast::moveDown,
-                        onRemove = cast::remove,
-                    )
-                }
-                val castingOn = (castState.remote as? CastRemote.Showing)?.session ?: castState.running.firstOrNull()
+                val castingOn = castState.speaker
                 GlassAlert(
                     visible = castState.asking,
                     title = castingOn?.let { LocalStrings.current.castPlayingOn(it.device.name) }.orEmpty(),

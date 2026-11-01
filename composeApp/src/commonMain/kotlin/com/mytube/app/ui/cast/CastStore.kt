@@ -11,6 +11,7 @@ import com.mytube.app.domain.model.CastState
 import com.mytube.app.domain.model.indexAfterEdit
 import com.mytube.app.domain.model.moved
 import com.mytube.app.domain.repository.CastRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -22,7 +23,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** What the remote is showing. */
+/**
+ * What the remote is showing. The remote is the watch screen while a speaker
+ * plays: open, it is asked about every second.
+ */
 sealed interface CastRemote {
     data object Closed : CastRemote
     /** Asked for, not yet answered. */
@@ -49,9 +53,18 @@ data class CastUiState(
     val notice: CastNotice = CastNotice.None,
     /** Asking whether to stop casting or carry on, after the lit cast button was pressed again. */
     val asking: Boolean = false,
+    /**
+     * A video picked while a speaker plays, sent and not yet answered, or
+     * empty. Until the answer the speaker still reports the song before it, and
+     * the screen must not be pulled back to that one.
+     */
+    val pending: String = "",
 ) {
     /** Something is playing on a speaker: the cast button is drawn lit. */
     val casting: Boolean get() = running.isNotEmpty() || remote !is CastRemote.Closed
+
+    /** The session the miniplayer shows and a picked video goes to, or null. */
+    val speaker: CastSession? get() = (remote as? CastRemote.Showing)?.session ?: running.firstOrNull()
 }
 
 /**
@@ -70,13 +83,15 @@ fun castPollMillis(remoteOpen: Boolean, foreground: Boolean): Long? = when {
 /**
  * The household's speakers, held for the life of the app.
  *
- * Not a screen's ViewModel: the bar is on every page and the remote outlives the
- * page it was opened from, so this lives beside the container and is told when
- * the app goes to the background.
+ * Not a screen's ViewModel: a speaker plays on whatever page is open, and the
+ * miniplayer shows it on every one, so this lives beside the container and is
+ * told when the app goes to the background.
  */
 class CastStore(
     private val repository: CastRepository,
     private val scope: CoroutineScope,
+    /** The ids to play after a video picked on its own, in order. */
+    private val upNext: suspend (String) -> List<String>,
 ) {
     private val _state = MutableStateFlow(CastUiState())
     val state: StateFlow<CastUiState> = _state.asStateFlow()
@@ -102,6 +117,11 @@ class CastStore(
 
     private val showing: CastSession?
         get() = (_state.value.remote as? CastRemote.Showing)?.session
+
+    // What a command goes to: the remote's session, or with the remote closed
+    // the one the miniplayer is showing.
+    private val commandId: String
+        get() = remoteId.ifEmpty { _state.value.running.firstOrNull()?.id.orEmpty() }
 
     fun setForeground(value: Boolean) {
         if (foreground == value) return
@@ -154,7 +174,11 @@ class CastStore(
             close(if (session.end.needsSaying) CastNotice.Ended(session.end) else CastNotice.None)
             return
         }
-        if (remoteId == session.id) _state.update { it.copy(remote = CastRemote.Showing(session)) }
+        if (remoteId == session.id) {
+            _state.update { it.copy(remote = CastRemote.Showing(session)) }
+        } else {
+            _state.update { s -> s.copy(running = s.running.map { if (it.id == session.id) session else it }) }
+        }
     }
 
     private fun close(notice: CastNotice) {
@@ -192,24 +216,43 @@ class CastStore(
     }
 
     /**
-     * Another song picked in the app while a speaker plays: it goes to the same
-     * speaker, from the start, and the remote stays as it was.
+     * A video picked in the app, with what follows it, while a speaker plays.
+     *
+     * It goes to that speaker and the remote opens on it; the one already
+     * playing only opens the remote. False when no speaker plays, and the phone
+     * opens the video itself. A video picked on its own takes its up next with
+     * it, or the speaker would fall silent at the end of one song.
      */
-    fun recast(videoIds: List<String>) {
-        val playing = showing ?: _state.value.running.firstOrNull() ?: return
-        if (videoIds.isEmpty()) return
+    fun pick(videoIds: List<String>): Boolean {
+        val playing = _state.value.speaker ?: return false
+        val picked = videoIds.firstOrNull() ?: return false
+        if (playing.current?.videoId == picked) {
+            showSpeaker()
+            return true
+        }
+        _state.update { it.copy(pending = picked) }
         scope.launch {
-            when (val answer = repository.start(playing.device.id, videoIds, 0)) {
+            val ids = if (videoIds.size > 1) videoIds else videoIds + followers(picked)
+            when (val answer = repository.start(playing.device.id, ids.distinct(), 0)) {
                 is CastAnswer.Done -> {
                     _state.update {
-                        if (it.remote == CastRemote.Closed) it.copy(running = listOf(answer.value))
-                        else it.copy(remote = CastRemote.Showing(answer.value))
+                        it.copy(remote = CastRemote.Showing(answer.value), running = listOf(answer.value), pending = "")
                     }
                     repoll()
                 }
-                is CastAnswer.Refused -> _state.update { it.copy(notice = CastNotice.Refused(answer.why)) }
+                is CastAnswer.Refused -> _state.update { it.copy(notice = CastNotice.Refused(answer.why), pending = "") }
             }
         }
+        return true
+    }
+
+    private suspend fun followers(videoId: String): List<String> = try {
+        upNext(videoId)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // One song is still the song that was picked.
+        emptyList()
     }
 
     fun openRemote(sessionId: String) {
@@ -225,7 +268,7 @@ class CastStore(
     fun noticeShown() = _state.update { it.copy(notice = CastNotice.None) }
 
     private fun command(call: suspend (String) -> CastAnswer<CastSession>) {
-        val id = remoteId.ifEmpty { return }
+        val id = commandId.ifEmpty { return }
         scope.launch {
             when (val answer = call(id)) {
                 is CastAnswer.Done -> show(answer.value)
@@ -265,8 +308,13 @@ class CastStore(
 
     /** Carry on casting, on the remote. */
     fun keepCasting() {
-        val session = _state.value.running.firstOrNull()
         _state.update { it.copy(asking = false) }
+        showSpeaker()
+    }
+
+    /** The remote, on whatever the speaker is playing: the miniplayer pressed. */
+    fun showSpeaker() {
+        val session = _state.value.running.firstOrNull()
         if (session != null && remoteId.isEmpty()) {
             _state.update { it.copy(remote = CastRemote.Showing(session)) }
             repoll()

@@ -12,10 +12,14 @@ import com.mytube.app.domain.model.CastItem
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
 import com.mytube.app.ui.theme.MytubeTheme
+import com.mytube.app.ui.watch.WatchCast
+import com.mytube.app.ui.watch.WatchContent
+import com.mytube.app.ui.watch.WatchState
+import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 
 /**
- * The remote, actually measured and drawn, inside the sheet it lives in.
+ * The cast's views, actually measured and drawn where they live.
  *
  * Previews never ran it: the iPhone crashed the moment the remote opened, on
  * `checkScrollableContainerConstraints` — a vertical scroll inside the
@@ -42,33 +46,38 @@ class CastRemoteRenderTest {
     }
 
     @Test
-    fun thePickerAndTheBarMeasureAndDraw() {
+    fun thePickerAndTheMiniplayerMeasureAndDraw() {
         val r1 = CastDevice("r1-living", "Loa R1", CastDeviceKind.R1)
         renders { CastPickerSheet(listOf(r1), loading = false, visible = true, backdrop = null, onPick = {}, onDismiss = {}) }
         renders { CastPickerSheet(emptyList(), loading = true, visible = true, backdrop = null, onPick = {}, onDismiss = {}) }
-        renders { CastBar(session, mediaBaseUrl = "", onOpen = {}) }
+        renders {
+            CastMiniPlayer(
+                session, mediaBaseUrl = "", onExpand = {}, onPlayPause = {}, onClose = {},
+                collapse = 0f, bottomInset = 0.dp,
+            )
+        }
     }
 
+    /**
+     * The remote is the watch screen now: the speaker's stage where the player
+     * is, and its controls and queue inside the screen's own list — not a list
+     * of their own inside it, which is the crash above in another form.
+     */
     @Test
-    fun theRemoteMeasuresAndDrawsInItsSheet() {
-        val scene = ImageComposeScene(width = 390 * 3, height = 844 * 3, density = Density(3f)) {
-            MytubeTheme {
-                Box(Modifier.fillMaxSize()) {
-                    CastRemoteSheet(
-                        session = session, visible = true, backdrop = null, mediaBaseUrl = "",
-                        onDismiss = {}, onPlayPause = {}, onNext = {}, onStop = {}, onSeek = {},
-                        onVolume = {}, onHandoff = {}, onJump = {}, onMoveUp = {}, onMoveDown = {},
-                        onRemove = {},
-                    )
-                }
-            }
-        }
-        try {
-            // Several frames: the sheet rises over a few, and its content is
-            // measured once it is shown.
-            for (frame in 0..60) scene.render(frame * 16_000_000L)
-        } finally {
-            scene.close()
+    fun theWatchScreenMeasuresAndDrawsAsTheRemote() {
+        val cast = WatchCast(
+            stage = { CastStage(session, "", {}, {}, {}, {}, {}) },
+            controls = { CastControls(session, {}, {}, {}) },
+            queue = { castQueueItems(session, "", {}, {}, {}, {}) },
+        )
+        renders {
+            WatchContent(
+                state = WatchState.Loading, player = null, mediaBaseUrl = "", onBack = {}, onPlayPause = {},
+                onSeek = {}, onSkip = {}, onRetry = {}, onReact = {}, onToggleSaved = {}, onToggleSubscribed = {},
+                onToggleNarration = {}, onToggleAutoplay = {}, onSelectSubtitles = {}, onPlayNext = {},
+                onPlayPrevious = {}, hasPrevious = false, onToggleRail = {}, onFilterRail = {}, onLoadComments = {},
+                onOpenVideo = {}, onOpenChannel = {}, onCast = {}, casting = true, cast = cast,
+            )
         }
     }
 }

@@ -1,6 +1,12 @@
 package com.mytube.app.ui.cast
 
 import androidx.compose.foundation.background
+import com.mytube.app.ui.watch.MiniBar
+import com.mytube.app.ui.watch.BackIcon
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -60,15 +66,12 @@ import com.mytube.app.ui.home.filled
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.Strings
 import com.mytube.app.ui.i18n.VietnameseStrings
-import com.mytube.app.ui.shell.GLASS_MARGIN
-import com.mytube.app.ui.shell.GLASS_SHAPE
 import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.shell.GlassRadius
 import com.mytube.app.ui.shell.GlassSheet
 import com.mytube.app.ui.shell.GlassSlider
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.shell.pressableGlassControl
-import com.mytube.app.ui.shell.pressableGlassSurface
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
 import com.mytube.app.ui.watch.CloseIcon
@@ -238,102 +241,120 @@ private fun SettlingSlider(value: Int, max: Int, onSettled: (Int) -> Unit, modif
 
 private const val SETTLE_MILLIS = 400L
 
-/** The remote: what the speaker is playing and everything that can be done to it. */
+/**
+ * Where the picture is on the watch screen while a speaker plays the song: its
+ * artwork, and over it what a player draws over a video. The watch screen *is*
+ * the remote — the description, the comments and the queue are below, as they
+ * are for a video playing here.
+ */
 @Composable
-fun BoxScope.CastRemoteSheet(
+fun CastStage(
     session: CastSession,
-    visible: Boolean,
-    backdrop: LayerBackdrop?,
     mediaBaseUrl: String,
-    onDismiss: () -> Unit,
+    onBack: () -> Unit,
+    onCast: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
-    onStop: () -> Unit,
     onSeek: (Int) -> Unit,
-    onVolume: (Int) -> Unit,
-    onHandoff: () -> Unit,
-    onJump: (Int) -> Unit,
-    onMoveUp: (Int) -> Unit,
-    onMoveDown: (Int) -> Unit,
-    onRemove: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
-    val item = session.current
-    GlassSheet(
-        visible = visible, backdrop = backdrop, scrim = Color.Transparent, onDismiss = onDismiss,
-        maxHeightFraction = REMOTE_FRACTION,
-    ) {
-        Column(
-            Modifier
-                // No scroll of its own: [GlassSheet] scrolls what it holds, and a
-                // second one inside it is measured with an infinite height —
-                // which crashed the iPhone the moment the remote opened.
-                .fillMaxWidth()
-                .padding(start = Space.lg, end = Space.lg, bottom = Space.lg),
-            verticalArrangement = Arrangement.spacedBy(Space.md),
+    Box(modifier.fillMaxSize().background(Color.Black)) {
+        val cover = castImage(mediaBaseUrl, session.current?.thumbnailUrl.orEmpty())
+        if (cover.isNotEmpty()) {
+            AsyncImage(cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        }
+        // The controls are white over a picture of any brightness.
+        Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = STAGE_SCRIM)))
+        Row(
+            Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Space.sm),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    castStatus(session, strings), color = Tokens.text2, fontSize = 14.sp, lineHeight = 18.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-                )
-                RoundControl(CloseIcon, strings.castClose, onDismiss)
+            RoundControl(BackIcon, strings.back, onBack)
+            Text(
+                castStatus(session, strings), color = Color.White, fontSize = 14.sp, lineHeight = 18.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(horizontal = Space.md),
+            )
+            RoundControl(CastActiveIcon, strings.castButton, onCast)
+        }
+        Row(
+            Modifier.align(Alignment.Center),
+            horizontalArrangement = Arrangement.spacedBy(Space.lg),
+        ) {
+            if (session.state == CastState.Paused) {
+                RoundControl(PlayIcon, strings.castPlay, onPlayPause)
+            } else {
+                RoundControl(PauseIcon, strings.castPause, onPlayPause, enabled = session.state != CastState.Loading)
             }
-            Box(
-                Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)).background(Tokens.surface),
-            ) {
-                val cover = castImage(mediaBaseUrl, item?.thumbnailUrl.orEmpty())
-                if (cover.isNotEmpty()) {
-                    AsyncImage(cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                }
-            }
-            Column {
-                Text(
-                    item?.title.orEmpty(), color = Tokens.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-                Text(item?.channel.orEmpty(), color = Tokens.text2, fontSize = 13.sp, maxLines = 1)
-            }
-            Column {
-                SettlingSlider(session.positionSeconds, session.durationSeconds, onSeek)
-                Row {
-                    Text(formatDuration(session.positionSeconds), color = Tokens.text2, fontSize = 12.sp, lineHeight = 16.sp)
-                    Spacer(Modifier.weight(1f))
-                    Text(formatDuration(session.durationSeconds), color = Tokens.text2, fontSize = 12.sp, lineHeight = 16.sp)
-                }
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Space.lg, Alignment.CenterHorizontally),
-            ) {
-                if (session.state == CastState.Paused) {
-                    RoundControl(PlayIcon, strings.castPlay, onPlayPause)
-                } else {
-                    RoundControl(PauseIcon, strings.castPause, onPlayPause, enabled = session.state != CastState.Loading)
-                }
-                RoundControl(NextIcon, strings.castNext, onNext, enabled = session.hasNext)
-                RoundControl(StopIcon, strings.castStop, onStop)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(strings.castVolume, color = Tokens.text2, fontSize = 14.sp, lineHeight = 18.sp)
-                Spacer(Modifier.width(Space.md))
-                SettlingSlider(session.volume, 100, onVolume, Modifier.weight(1f))
-            }
-            GlassButton(strings.castHandoff, onHandoff, modifier = Modifier.fillMaxWidth())
-            Text(strings.castQueue, color = Tokens.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            session.queue.forEachIndexed { index, queued ->
-                QueueRow(
-                    item = queued, index = index, current = index == session.currentIndex,
-                    last = index == session.queue.lastIndex, single = session.queue.size == 1,
-                    mediaBaseUrl = mediaBaseUrl, onJump = onJump, onMoveUp = onMoveUp,
-                    onMoveDown = onMoveDown, onRemove = onRemove,
-                )
+            RoundControl(NextIcon, strings.castNext, onNext, enabled = session.hasNext)
+        }
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = Space.md)) {
+            SettlingSlider(session.positionSeconds, session.durationSeconds, onSeek)
+            Row(Modifier.padding(bottom = Space.sm)) {
+                Text(formatDuration(session.positionSeconds), color = Color.White, fontSize = 12.sp, lineHeight = 16.sp)
+                Spacer(Modifier.weight(1f))
+                Text(formatDuration(session.durationSeconds), color = Color.White, fontSize = 12.sp, lineHeight = 16.sp)
             }
         }
     }
 }
 
-private const val REMOTE_FRACTION = 0.92f
+private const val STAGE_SCRIM = 0.45f
+
+/** Under the title while a speaker plays: its volume, and the two ways to end it. */
+@Composable
+fun CastControls(
+    session: CastSession,
+    onVolume: (Int) -> Unit,
+    onHandoff: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val strings = LocalStrings.current
+    Column(
+        modifier.fillMaxWidth().padding(horizontal = Space.lg),
+        verticalArrangement = Arrangement.spacedBy(Space.md),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(strings.castVolume, color = Tokens.text2, fontSize = 14.sp, lineHeight = 18.sp)
+            Spacer(Modifier.width(Space.md))
+            SettlingSlider(session.volume, 100, onVolume, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+            GlassButton(strings.castHandoff, onHandoff, modifier = Modifier.weight(1f))
+            GlassButton(strings.castStop, onStop, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+/** The speaker's queue, where up next is for a video playing here. */
+fun LazyListScope.castQueueItems(
+    session: CastSession,
+    mediaBaseUrl: String,
+    onJump: (Int) -> Unit,
+    onMoveUp: (Int) -> Unit,
+    onMoveDown: (Int) -> Unit,
+    onRemove: (Int) -> Unit,
+) {
+    item(key = "cast-queue") {
+        Text(
+            LocalStrings.current.castQueue, color = Tokens.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = Space.lg, end = Space.lg, top = Space.lg, bottom = Space.sm),
+        )
+    }
+    // The index is in the key: the same song may be queued twice.
+    itemsIndexed(session.queue, key = { index, queued -> "cast-$index-${queued.videoId}" }) { index, queued ->
+        Box(Modifier.padding(horizontal = Space.lg)) {
+            QueueRow(
+                item = queued, index = index, current = index == session.currentIndex,
+                last = index == session.queue.lastIndex, single = session.queue.size == 1,
+                mediaBaseUrl = mediaBaseUrl, onJump = onJump, onMoveUp = onMoveUp,
+                onMoveDown = onMoveDown, onRemove = onRemove,
+            )
+        }
+    }
+}
 
 @Composable
 private fun QueueRow(
@@ -407,39 +428,46 @@ private fun SmallControl(icon: ImageVector, label: String, onClick: () -> Unit, 
 }
 
 /**
- * "Something is playing on a speaker", for whoever is in the house: a session
- * started on another phone is just as much this one's to pause. The miniplayer's
- * capsule, so the two read as one family when both are up.
+ * A song playing on a speaker, resting where the miniplayer rests and in the
+ * same capsule, with the artwork in its round window. Pressed, it opens the
+ * watch screen, which is the remote while a speaker plays.
  */
 @Composable
-fun CastBar(session: CastSession, mediaBaseUrl: String, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val strings = LocalStrings.current
+fun CastMiniPlayer(
+    session: CastSession,
+    mediaBaseUrl: String,
+    onExpand: () -> Unit,
+    onPlayPause: () -> Unit,
+    onClose: () -> Unit,
+    collapse: Float,
+    bottomInset: Dp,
+    modifier: Modifier = Modifier,
+) {
     val item = session.current
-    Row(
-        modifier
-            .padding(horizontal = GLASS_MARGIN)
-            .fillMaxWidth()
-            .height(Size.topBar)
-            .pressableGlassSurface(GLASS_SHAPE, onClick = onOpen)
-            .padding(horizontal = Space.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(CastIcon, contentDescription = strings.castOpenRemote, tint = Tokens.text, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(Space.md))
-        val art = castImage(mediaBaseUrl, item?.thumbnailUrl.orEmpty())
-        if (art.isNotEmpty()) {
-            AsyncImage(
-                art, contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.width(56.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(6.dp)),
-            )
-            Spacer(Modifier.width(Space.md))
-        }
-        Column(Modifier.weight(1f)) {
-            Text(item?.title.orEmpty(), color = Tokens.text, fontSize = 14.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(castStatus(session, strings), color = Tokens.text2, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1)
-        }
-    }
+    MiniBar(
+        window = {
+            val art = castImage(mediaBaseUrl, item?.thumbnailUrl.orEmpty())
+            if (art.isNotEmpty()) {
+                AsyncImage(art, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+        },
+        title = item?.title.orEmpty(),
+        channel = castStatus(session, LocalStrings.current),
+        progress = castProgress(session),
+        isPlaying = session.state != CastState.Paused,
+        onExpand = onExpand,
+        onPlayPause = onPlayPause,
+        onClose = onClose,
+        collapse = collapse,
+        bottomInset = bottomInset,
+        modifier = modifier,
+    )
 }
+
+/** How far through the song the speaker is, for the miniplayer's line. */
+internal fun castProgress(session: CastSession): Float =
+    if (session.durationSeconds <= 0) 0f
+    else (session.positionSeconds.toFloat() / session.durationSeconds).coerceIn(0f, 1f)
 
 // --- previews ----------------------------------------------------------------
 
@@ -485,29 +513,30 @@ private fun CastPickerEmptyPreview() = PreviewFrame {
 
 @Preview
 @Composable
-private fun CastRemotePreview() = PreviewFrame { RemotePreviewContent(previewSession()) }
-
-@Preview
-@Composable
-private fun CastRemoteLoadingPreview() = PreviewFrame { RemotePreviewContent(previewSession(CastState.Loading)) }
-
-@Preview
-@Composable
-private fun CastRemoteVietnamesePreview() = PreviewFrame(vietnamese = true) {
-    RemotePreviewContent(previewSession(CastState.Paused))
+private fun CastStagePreview() = PreviewFrame {
+    CastStage(previewSession(), "", {}, {}, {}, {}, {}, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
 }
 
 @Preview
 @Composable
-private fun CastBarPreview() = PreviewFrame(vietnamese = true) {
-    CastBar(previewSession(), mediaBaseUrl = "", onOpen = {}, modifier = Modifier.align(Alignment.BottomCenter))
+private fun CastStageLoadingPreview() = PreviewFrame {
+    CastStage(previewSession(CastState.Loading), "", {}, {}, {}, {}, {}, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
 }
 
+@Preview
 @Composable
-private fun BoxScope.RemotePreviewContent(session: CastSession) {
-    CastRemoteSheet(
-        session = session, visible = true, backdrop = null, mediaBaseUrl = "", onDismiss = {}, onPlayPause = {},
-        onNext = {}, onStop = {}, onSeek = {}, onVolume = {}, onHandoff = {}, onJump = {}, onMoveUp = {},
-        onMoveDown = {}, onRemove = {},
+private fun CastBelowVietnamesePreview() = PreviewFrame(vietnamese = true) {
+    LazyColumn {
+        item { CastControls(previewSession(CastState.Paused), {}, {}, {}) }
+        castQueueItems(previewSession(), "", {}, {}, {}, {})
+    }
+}
+
+@Preview
+@Composable
+private fun CastMiniPlayerPreview() = PreviewFrame(vietnamese = true) {
+    CastMiniPlayer(
+        previewSession(), mediaBaseUrl = "", onExpand = {}, onPlayPause = {}, onClose = {},
+        collapse = 0f, bottomInset = 0.dp, modifier = Modifier.align(Alignment.BottomCenter),
     )
 }
