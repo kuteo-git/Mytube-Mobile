@@ -70,6 +70,18 @@ The same APK, on Android TV and Google TV, laid out for a remote.
   seeking over a storyboard preview, up next under the controls, a held OK for a
   card's menu, search with an on-screen keyboard and voice, and *Who's watching*
   asked once and changed in Settings.
+- **Casting to the house's speakers**: the **R1**, which runs
+  [xiaozhi-android](https://github.com/kuteo-git/xiaozhi-android) and plays
+  through [xiaozhi-server](https://github.com/kuteo-git/robot-esp32), and
+  **Google Cast speakers** (Chromecast built-in): Nest Audio, Nest Mini and the
+  speaker groups made in Google Home. The
+  [Local Mytube](https://github.com/kuteo-git/Mytube) server drives them, so this
+  app carries no Cast SDK and never talks to a speaker itself. While a speaker
+  plays, the watch screen is its remote: play, pause, seek, skip, volume (on the
+  phone's own buttons too), a queue reordered by dragging, and the Vietnamese
+  narration mixed into the song by the server. A Nest gets the voice within
+  seconds; the R1 gets it once the whole video has been narrated. Sound only:
+  a Chromecast on a television is not offered.
 
 ## What it needs
 
@@ -152,6 +164,10 @@ measurement that produced it, including the ones that turned out wrong.
 Runs on Android and on iOS. Background audio, the lock screen and the narration
 ducking have been heard on real hardware with the screen off; nothing here is
 called done because it compiled.
+
+Casting (v0.1.18) has been used on the house's R1 and Nest speakers. Narration
+on a speaker is the newest part, and has been measured on the server rather
+than yet heard in the room.
 
 The glass is the app's own material rather than the platform's. Panes sample what
 is behind them and refract at the rim, and the controls over the video are drawn

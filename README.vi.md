@@ -68,6 +68,17 @@ Cùng một APK, chạy trên Android TV và Google TV, bố cục cho remote.
   trước, Tiếp theo nằm dưới điều khiển, giữ OK để mở menu của thẻ, tìm kiếm với
   bàn phím trên màn hình và giọng nói, và câu hỏi *Ai đang xem* chỉ hỏi một lần,
   đổi trong Cài đặt.
+- **Cast sang loa trong nhà**: loa **R1**, chạy
+  [xiaozhi-android](https://github.com/kuteo-git/xiaozhi-android) và phát qua
+  [xiaozhi-server](https://github.com/kuteo-git/robot-esp32), cùng các **loa
+  Google Cast** (Chromecast built-in): Nest Audio, Nest Mini và các nhóm loa tạo
+  trong Google Home. Máy chủ [Local Mytube](https://github.com/kuteo-git/Mytube)
+  điều khiển loa, nên app không mang Cast SDK và không bao giờ tự nói chuyện với
+  loa. Khi loa đang phát, màn xem video là remote của loa: phát, dừng, tua, chuyển
+  bài, âm lượng (cả bằng nút âm lượng của điện thoại), hàng chờ sắp lại bằng cách
+  kéo, và thuyết minh tiếng Việt do máy chủ trộn vào bài. Loa Nest có giọng sau
+  vài giây; loa R1 có giọng khi cả video đã được thuyết minh xong. Chỉ có tiếng:
+  Chromecast cắm TV không nằm trong danh sách.
 
 ## Nó cần gì
 
@@ -150,6 +161,9 @@ Vài quyết định giải thích được phần lớn code:
 Chạy trên cả Android và iOS. Phát nền, màn hình khoá và việc hạ tiếng khi thuyết
 minh đều đã được nghe trên máy thật với màn hình tắt; ở đây không có gì được gọi
 là xong chỉ vì nó biên dịch được.
+
+Cast (v0.1.18) đã dùng trên loa R1 và loa Nest trong nhà. Thuyết minh trên loa là
+phần mới nhất, mới được đo trên máy chủ, chưa được nghe thử trong phòng.
 
 Lớp kính là chất liệu của riêng app chứ không phải của hệ điều hành. Các tấm kính
 lấy mẫu thứ nằm sau chúng và bẻ sáng ở viền, còn các nút đè lên video thì do
