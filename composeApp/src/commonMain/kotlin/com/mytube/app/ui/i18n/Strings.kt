@@ -330,6 +330,7 @@ interface Strings {
     val castDeviceOffline: String
     val castQueueFailed: String
     val castReplaced: String
+    val castKeep: String
 }
 
 /** The units a relative time is expressed in, largest first. */
@@ -550,6 +551,7 @@ object EnglishStrings : Strings {
     override val castDeviceOffline = "The speaker stopped answering."
     override val castQueueFailed = "The speaker could not play this queue."
     override val castReplaced = "Someone else started playing on this speaker."
+    override val castKeep = "Keep casting"
 }
 
 object VietnameseStrings : Strings {
@@ -762,6 +764,7 @@ object VietnameseStrings : Strings {
     override val castDeviceOffline = "Loa không còn trả lời."
     override val castQueueFailed = "Loa không phát được hàng đợi này."
     override val castReplaced = "Có người khác vừa phát lên loa này."
+    override val castKeep = "Tiếp tục cast"
 }
 
 enum class Language(val code: String) {

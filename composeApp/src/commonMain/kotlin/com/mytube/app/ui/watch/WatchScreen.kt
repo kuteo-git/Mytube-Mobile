@@ -134,12 +134,15 @@ fun WatchScreen(
      * has no end for a speaker to play to.
      */
     onCast: (() -> Unit)?,
+    /** A speaker is playing; the cast item is drawn lit. */
+    casting: Boolean,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     WatchContent(
         state = state,
         onCast = onCast,
+        casting = casting,
         player = viewModel.player,
         mediaBaseUrl = mediaBaseUrl,
         onBack = onBack,
@@ -204,6 +207,7 @@ fun WatchContent(
     onOpenChannel: (String) -> Unit,
     /** Plays on a speaker; null draws no button. */
     onCast: (() -> Unit)?,
+    casting: Boolean,
 ) {
     val strings = LocalStrings.current
     // Today, so the rail's "New" badge can be decided without a clock inside a
@@ -563,6 +567,7 @@ fun WatchContent(
                         canNarrate = state.canNarrate,
                         narrating = state.narrating,
                         onCast = if (state.isLive) null else onCast,
+                        casting = casting,
                     )
                     }
                     }
@@ -1034,6 +1039,7 @@ private fun preview(state: WatchState) {
         WatchContent(
             state = state,
             onCast = null,
+            casting = false,
             player = null,
             mediaBaseUrl = "",
             onBack = {},

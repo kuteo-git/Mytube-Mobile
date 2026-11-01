@@ -70,6 +70,7 @@ import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.home.formatDuration
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.i18n.LocalStrings
+import com.mytube.app.ui.cast.CastActiveIcon
 import com.mytube.app.ui.cast.CastIcon
 import com.mytube.app.ui.shell.GlassItem
 import com.mytube.app.ui.shell.GlassPane
@@ -207,6 +208,8 @@ fun PlayerControls(
     settingsOpen: Boolean,
     /** Plays on a speaker in the house; null draws no button (no speaker answers, or a broadcast). */
     onCast: (() -> Unit)?,
+    /** A speaker is playing: the cast item is drawn lit, and pressing it asks. */
+    casting: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -488,11 +491,11 @@ fun PlayerControls(
                     if (onCast != null) {
                         GlassItem(
                             id = "cast",
-                            symbol = "hifispeaker",
+                            symbol = if (casting) "hifispeaker.fill" else "hifispeaker",
                             onPress = { onCast(); lastTouch++ },
                         ) {
                             ControlButton(
-                                icon = CastIcon,
+                                icon = if (casting) CastActiveIcon else CastIcon,
                                 label = strings.castButton,
                                 onClick = { onCast(); lastTouch++ },
                             )

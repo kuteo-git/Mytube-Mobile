@@ -47,7 +47,12 @@ data class CastUiState(
     val running: List<CastSession> = emptyList(),
     val remote: CastRemote = CastRemote.Closed,
     val notice: CastNotice = CastNotice.None,
-)
+    /** Asking whether to stop casting or carry on, after the lit cast button was pressed again. */
+    val asking: Boolean = false,
+) {
+    /** Something is playing on a speaker: the cast button is drawn lit. */
+    val casting: Boolean get() = running.isNotEmpty() || remote !is CastRemote.Closed
+}
 
 /**
  * How often to ask about sessions, or null for not at all.
@@ -78,6 +83,11 @@ class CastStore(
 
     private var foreground = true
     private var poller: Job? = null
+    // Whether the first answer since the app started has been read. A session
+    // already playing then is the app being reopened mid-cast, and it comes
+    // back as it was left — on the remote. Later ones are another phone's
+    // doing and only light the button.
+    private var startChecked = false
 
     init {
         repoll()
@@ -117,7 +127,17 @@ class CastStore(
             return
         }
         when (val answer = repository.sessions()) {
-            is CastAnswer.Done -> _state.update { it.copy(running = answer.value) }
+            is CastAnswer.Done -> {
+                _state.update { it.copy(running = answer.value) }
+                if (!startChecked) {
+                    startChecked = true
+                    val playing = answer.value.firstOrNull()
+                    if (playing != null && _state.value.remote == CastRemote.Closed) {
+                        _state.update { it.copy(remote = CastRemote.Showing(playing)) }
+                        repoll()
+                    }
+                }
+            }
             is CastAnswer.Refused -> Unit
         }
     }
@@ -164,6 +184,27 @@ class CastStore(
             when (val answer = repository.start(device.id, videoIds, positionSeconds.roundToInt().coerceAtLeast(0))) {
                 is CastAnswer.Done -> {
                     _state.update { it.copy(remote = CastRemote.Showing(answer.value)) }
+                    repoll()
+                }
+                is CastAnswer.Refused -> _state.update { it.copy(notice = CastNotice.Refused(answer.why)) }
+            }
+        }
+    }
+
+    /**
+     * Another song picked in the app while a speaker plays: it goes to the same
+     * speaker, from the start, and the remote stays as it was.
+     */
+    fun recast(videoIds: List<String>) {
+        val playing = showing ?: _state.value.running.firstOrNull() ?: return
+        if (videoIds.isEmpty()) return
+        scope.launch {
+            when (val answer = repository.start(playing.device.id, videoIds, 0)) {
+                is CastAnswer.Done -> {
+                    _state.update {
+                        if (it.remote == CastRemote.Closed) it.copy(running = listOf(answer.value))
+                        else it.copy(remote = CastRemote.Showing(answer.value))
+                    }
                     repoll()
                 }
                 is CastAnswer.Refused -> _state.update { it.copy(notice = CastNotice.Refused(answer.why)) }
@@ -219,9 +260,33 @@ class CastStore(
     fun moveDown(index: Int) = edit { it.moved(index, index + 1) }
     fun remove(index: Int) = edit { q -> q.filterIndexed { i, _ -> i != index } }
 
+    /** The lit cast button, pressed: ask whether to stop or carry on. */
+    fun askAboutCasting() = _state.update { it.copy(asking = true) }
+
+    /** Carry on casting, on the remote. */
+    fun keepCasting() {
+        val session = _state.value.running.firstOrNull()
+        _state.update { it.copy(asking = false) }
+        if (session != null && remoteId.isEmpty()) {
+            _state.update { it.copy(remote = CastRemote.Showing(session)) }
+            repoll()
+        }
+    }
+
+    /** Stop casting and carry on here. */
+    fun stopCasting(onHandback: (CastHandback) -> Unit) {
+        val id = remoteId.ifEmpty { _state.value.running.firstOrNull()?.id.orEmpty() }
+        _state.update { it.copy(asking = false) }
+        if (id.isNotEmpty()) handoff(id, onHandback)
+    }
+
+    fun dismissAsking() = _state.update { it.copy(asking = false) }
+
     /** Stops the speaker and hands its position to [onHandback], which carries on here. */
-    fun handoff(onHandback: (CastHandback) -> Unit) {
-        val id = remoteId.ifEmpty { return }
+    fun handoff(onHandback: (CastHandback) -> Unit) = handoff(remoteId, onHandback)
+
+    private fun handoff(id: String, onHandback: (CastHandback) -> Unit) {
+        if (id.isEmpty()) return
         scope.launch {
             when (val answer = repository.handoff(id)) {
                 is CastAnswer.Done -> {

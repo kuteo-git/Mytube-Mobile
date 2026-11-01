@@ -77,6 +77,8 @@ import com.mytube.app.ui.home.HomeScreen
 import com.mytube.app.ui.home.HomeState
 import com.mytube.app.ui.home.HomeViewModel
 import com.mytube.app.ui.home.Size
+import com.mytube.app.ui.shell.LocalGlassVisible
+import com.mytube.app.ui.cast.CastNotice
 import com.mytube.app.domain.model.CastDevice
 import com.mytube.app.domain.model.CastHandback
 import com.mytube.app.domain.model.CastState
@@ -547,6 +549,14 @@ fun App(
             val cast = remember { CastStore(container.castRepository, castScope) }
             val castState by cast.state.collectAsStateWithLifecycle()
             var castFromWatch: (CastDevice) -> Unit by remember { mutableStateOf({}) }
+            // The video put back when the app opens. While a speaker plays it
+            // must not be sent there: reopening the app is not picking a song.
+            var castRestoredVideo by remember { mutableStateOf("") }
+            // Anything of the cast's over the page. The player's own controls
+            // are drawn by the platform above every Compose pixel on iOS 26, so
+            // they are switched off while one is up, or they float over it.
+            val castCovering = castState.pickerOpen || castState.asking ||
+                castState.remote != CastRemote.Closed || castState.notice != CastNotice.None
             var resumeFromSpeaker: (CastHandback) -> Unit by remember {
                 mutableStateOf({ back: CastHandback -> watching = WatchSession(back.videoId) })
             }
@@ -693,6 +703,7 @@ fun App(
                 if (television) return@LaunchedEffect
                 val last = container.preferencesRepository.lastVideoId()
                 if (last.isNotEmpty()) {
+                    castRestoredVideo = last
                     watching = WatchSession(last, minimised = true, autoPlay = false)
                 }
             }
@@ -1539,7 +1550,8 @@ fun App(
                     WatchViewModel(
                         videoId = session.videoId,
                         startAtBeginning = session.startAtBeginning,
-                        autoPlay = session.autoPlay,
+                        // Not while a speaker plays: the song goes there instead.
+                        autoPlay = session.autoPlay && !castState.casting,
                         mediaBaseUrl = baseUrl,
                         videos = container.videoRepository,
                         streams = container.streamRepository,
@@ -1583,6 +1595,19 @@ fun App(
                         }
                     }
                     LaunchedEffect(watch) { cast.loadDevices() }
+                    watch.playsElsewhere = castState.casting
+                    // A song picked while a speaker plays goes to the speaker.
+                    // Keyed on the video alone: another phone starting a cast is
+                    // not this one asking for what it is watching to be sent.
+                    LaunchedEffect(session.videoId) {
+                        val restored = session.videoId == castRestoredVideo
+                        castRestoredVideo = ""
+                        val playing = (castState.remote as? CastRemote.Showing)?.session ?: castState.running.firstOrNull()
+                        if (!restored && playing != null && playing.current?.videoId != session.videoId) {
+                            watch.pause()
+                            cast.recast(watch.castQueue())
+                        }
+                    }
                 }
 
                 // The television's Home button pauses. There is no screen to
@@ -1814,31 +1839,40 @@ fun App(
                         topInsetPx = statusInsetPx,
                         onDragProgress = { dragProgress = it },
                     ) {
-                        WatchScreen(
-                            viewModel = watch,
-                            mediaBaseUrl = baseUrl,
-                            onBack = { collapseWatch() },
-                            onOpenVideo = openFromRail,
-                            onAdvanceTo = advanceTo,
-                            onPlayPrevious = playPrevious,
-                            hasPrevious = trail.isNotEmpty(),
-                            onOpenChannel = {
-                                // The video keeps playing, collapsed, so opening
-                                // a channel from the watch screen does not end
-                                // what somebody was listening to.
-                                collapseWatch()
-                                openChannel(it)
-                            },
-                            onSaveToPlaylist = { saved ->
-                                openSaveSheet(SaveTarget(session.videoId, saved = saved))
-                                // The pill redraws from what the sheet applied.
-                                // `markSaved` sends nothing: the request has
-                                // already happened by then, and two writers of
-                                // one fact is how they come to disagree.
-                                savedSink = watch::markSaved
-                            },
-                            onCast = if (castState.devices.isNotEmpty()) cast::openPicker else null,
-                        )
+                        CompositionLocalProvider(
+                            LocalGlassVisible provides (LocalGlassVisible.current && !castCovering),
+                        ) {
+                            WatchScreen(
+                                viewModel = watch,
+                                mediaBaseUrl = baseUrl,
+                                onBack = { collapseWatch() },
+                                onOpenVideo = openFromRail,
+                                onAdvanceTo = advanceTo,
+                                onPlayPrevious = playPrevious,
+                                hasPrevious = trail.isNotEmpty(),
+                                onOpenChannel = {
+                                    // The video keeps playing, collapsed, so opening
+                                    // a channel from the watch screen does not end
+                                    // what somebody was listening to.
+                                    collapseWatch()
+                                    openChannel(it)
+                                },
+                                onSaveToPlaylist = { saved ->
+                                    openSaveSheet(SaveTarget(session.videoId, saved = saved))
+                                    // The pill redraws from what the sheet applied.
+                                    // `markSaved` sends nothing: the request has
+                                    // already happened by then, and two writers of
+                                    // one fact is how they come to disagree.
+                                    savedSink = watch::markSaved
+                                },
+                                onCast = when {
+                                    castState.casting -> cast::askAboutCasting
+                                    castState.devices.isNotEmpty() -> cast::openPicker
+                                    else -> null
+                                },
+                                casting = castState.casting,
+                            )
+                        }
                     }
                     }
                 }
@@ -1940,6 +1974,17 @@ fun App(
                         onRemove = cast::remove,
                     )
                 }
+                val castingOn = (castState.remote as? CastRemote.Showing)?.session ?: castState.running.firstOrNull()
+                GlassAlert(
+                    visible = castState.asking,
+                    title = castingOn?.let { LocalStrings.current.castPlayingOn(it.device.name) }.orEmpty(),
+                    backdrop = backdrop,
+                    onDismiss = cast::dismissAsking,
+                    buttons = {
+                        GlassButton(LocalStrings.current.castHandoff, { cast.stopCasting(resumeFromSpeaker) })
+                        GlassButton(LocalStrings.current.castKeep, cast::keepCasting, primary = true)
+                    },
+                )
                 val castNotice = castNoticeText(castState.notice, LocalStrings.current)
                 GlassAlert(
                     visible = castNotice.isNotEmpty(),

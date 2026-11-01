@@ -355,6 +355,13 @@ class WatchViewModel(
     private var startAtBeginning: Boolean = startAtBeginning
     private var autoPlay: Boolean = autoPlay
 
+    /**
+     * A speaker in the house has this sitting's sound. A video opened then is
+     * loaded here but not started: the app sends it to the speaker instead, and
+     * two copies of one song from two places is the one thing nobody wants.
+     */
+    var playsElsewhere: Boolean = false
+
     /** What the app's own session should be showing. */
     val currentVideoId: String get() = videoId
 
@@ -1050,7 +1057,7 @@ class WatchViewModel(
                             // resuming would run out immediately.
                             startAt,
                         )
-                        if (autoPlay) player.play()
+                        if (autoPlay && !playsElsewhere) player.play()
 
                         // The device's own answers, read once the video is
                         // known. Applied here rather than at construction

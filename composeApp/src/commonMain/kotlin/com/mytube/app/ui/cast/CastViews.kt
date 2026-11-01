@@ -33,6 +33,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,6 +85,27 @@ internal val CastIcon: ImageVector by lazy {
         moveTo(3f, 15f); quadTo(7f, 15f, 7f, 19f)
         moveTo(3f, 19f); lineTo(3.01f, 19f)
     }
+}
+
+/** [CastIcon] lit: something is playing on a speaker. Filled against outlined, the charter's change of kind. */
+internal val CastActiveIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "CastActive", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f,
+    ).apply {
+        path(
+            stroke = SolidColor(Color.White), strokeLineWidth = 2f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(3f, 8f); lineTo(3f, 5f); lineTo(21f, 5f); lineTo(21f, 19f); lineTo(14f, 19f)
+            moveTo(3f, 11.5f); quadTo(10.5f, 11.5f, 10.5f, 19f)
+            moveTo(3f, 15f); quadTo(7f, 15f, 7f, 19f)
+            moveTo(3f, 19f); lineTo(3.01f, 19f)
+        }
+        path(fill = SolidColor(Color.White)) {
+            moveTo(6f, 8f); lineTo(18f, 8f); lineTo(18f, 16f); lineTo(13.4f, 16f)
+            quadTo(12.6f, 10.2f, 6f, 9.6f); close()
+        }
+    }.build()
 }
 
 private val SpeakerIcon: ImageVector by lazy {

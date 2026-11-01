@@ -41,9 +41,10 @@ private class FakeCast : CastRepository {
     val sent = mutableListOf<String>()
 
     override suspend fun devices() = listOf(r1)
+    var running: List<CastSession> = emptyList()
     override suspend fun sessions(): CastAnswer<List<CastSession>> {
         sessionsCalls++
-        return CastAnswer.Done(emptyList())
+        return CastAnswer.Done(running)
     }
     override suspend fun session(id: String): CastAnswer<CastSession> {
         sessionCalls++
@@ -70,6 +71,7 @@ private class FakeCast : CastRepository {
     }
     override suspend fun handoff(id: String): CastAnswer<CastHandback> {
         sent += "handoff"
+        running = emptyList()
         return CastAnswer.Done(CastHandback("a", 130))
     }
 }
@@ -184,5 +186,88 @@ class CastStoreTest {
         runCurrent()
         assertEquals(CastHandback("a", 130), got)
         assertEquals(CastRemote.Closed, store.state.value.remote)
+    }
+
+    @Test
+    fun aSessionAlreadyPlayingWhenTheAppStartsOpensTheRemote() = runTest {
+        val fake = FakeCast()
+        fake.running = listOf(session())
+        val store = store(fake)
+        runCurrent()
+        assertIs<CastRemote.Showing>(store.state.value.remote, "reopened as it was left: casting")
+        assertTrue(store.state.value.casting)
+    }
+
+    @Test
+    fun nothingPlayingWhenTheAppStartsLeavesTheRemoteClosed() = runTest {
+        val store = store(FakeCast())
+        runCurrent()
+        assertEquals(CastRemote.Closed, store.state.value.remote)
+        assertEquals(false, store.state.value.casting)
+    }
+
+    @Test
+    fun aSessionSeenLaterDoesNotPopTheRemoteOpen() = runTest {
+        val fake = FakeCast()
+        val store = store(fake)
+        runCurrent()
+        fake.running = listOf(session())
+        advanceTimeBy(5_100)
+        assertEquals(CastRemote.Closed, store.state.value.remote, "only at start, not whenever another phone casts")
+        assertTrue(store.state.value.casting)
+    }
+
+    @Test
+    fun pressingCastWhileCastingAsksAndCanCarryOn() = runTest {
+        val fake = FakeCast()
+        val store = store(fake)
+        runCurrent()
+        fake.running = listOf(session())
+        advanceTimeBy(5_100)
+        store.askAboutCasting()
+        assertTrue(store.state.value.asking)
+        store.keepCasting()
+        runCurrent()
+        assertEquals(false, store.state.value.asking)
+        assertIs<CastRemote.Showing>(store.state.value.remote)
+    }
+
+    @Test
+    fun pressingCastWhileCastingAsksAndCanStopHere() = runTest {
+        val fake = FakeCast()
+        val store = store(fake)
+        runCurrent()
+        fake.running = listOf(session())
+        advanceTimeBy(5_100)
+        store.askAboutCasting()
+        var back: CastHandback? = null
+        store.stopCasting { back = it }
+        runCurrent()
+        assertEquals(CastHandback("a", 130), back)
+        assertEquals(false, store.state.value.asking)
+        assertEquals(false, store.state.value.casting)
+    }
+
+    @Test
+    fun anotherSongPickedWhileCastingGoesToTheSameSpeaker() = runTest {
+        val fake = FakeCast()
+        val store = store(fake)
+        runCurrent()
+        fake.running = listOf(session())
+        advanceTimeBy(5_100)
+        store.recast(listOf("x", "y"))
+        runCurrent()
+        assertTrue("start r1-living [x, y] 0" in fake.sent, fake.sent.toString())
+        assertEquals(CastRemote.Closed, store.state.value.remote, "picking a song does not throw the remote over the page")
+    }
+
+    @Test
+    fun recastWithNothingPlayingSendsNothing() = runTest {
+        val fake = FakeCast()
+        val store = store(fake)
+        runCurrent()
+        store.recast(listOf("x"))
+        runCurrent()
+        assertTrue(fake.sent.none { it.startsWith("start") }, fake.sent.toString())
     }
 }
