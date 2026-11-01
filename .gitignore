@@ -28,3 +28,9 @@ keystore.properties
 
 # The phones tools/ios-device-install.sh signs for. UDIDs are the household's.
 ios-devices
+
+# Source, whatever a global ignore says. A `model` line in a developer's
+# ~/.gitignore_global kept nine of domain/model's ten files out of every
+# commit, and a fresh clone did not compile (found 2026-11-01).
+!composeApp/src/commonMain/kotlin/com/mytube/app/domain/model/
+!composeApp/src/commonMain/kotlin/com/mytube/app/domain/model/**
