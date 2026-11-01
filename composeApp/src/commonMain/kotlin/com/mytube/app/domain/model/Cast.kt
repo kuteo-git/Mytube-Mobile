@@ -63,9 +63,30 @@ data class CastSession(
     val volume: Int,
     /** Changes with the queue, never with the position. A queue edit names it. */
     val version: Int,
+    /** Narration on the speaker, as the cast service last reported it. */
+    val narration: CastNarration,
 ) {
     val current: CastItem? get() = queue.getOrNull(currentIndex)
     val hasNext: Boolean get() = currentIndex < queue.size - 1
+}
+
+/**
+ * Narration on the speaker.
+ *
+ * A speaker plays one sound it is handed, so the server mixes the narration
+ * into the song once the narration pass is done; until then the song plays as
+ * it is, and that is [Preparing].
+ */
+enum class CastNarration {
+    Off,
+    Preparing,
+    On,
+    /** Asked for, and this song has nothing to narrate or its pass failed. */
+    Unavailable,
+    ;
+
+    /** Asked for, whether or not the speaker is playing it yet. */
+    val asked: Boolean get() = this != Off
 }
 
 /** Why the gateway refused a cast request, as something a screen can word. */

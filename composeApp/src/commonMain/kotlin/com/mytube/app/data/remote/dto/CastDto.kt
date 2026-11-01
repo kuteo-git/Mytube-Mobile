@@ -5,6 +5,7 @@ import com.mytube.app.domain.model.CastDeviceKind
 import com.mytube.app.domain.model.CastEnd
 import com.mytube.app.domain.model.CastHandback
 import com.mytube.app.domain.model.CastItem
+import com.mytube.app.domain.model.CastNarration
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
 import kotlinx.serialization.SerialName
@@ -39,6 +40,7 @@ data class CastSessionDto(
     @SerialName("duration_s") val durationSeconds: Int? = null,
     val volume: Int? = null,
     val version: Int? = null,
+    @SerialName("narration_status") val narrationStatus: String? = null,
 )
 
 @Serializable
@@ -68,6 +70,12 @@ private val states = mapOf(
     "ended" to CastState.Ended,
 )
 
+private val narrations = mapOf(
+    "preparing" to CastNarration.Preparing,
+    "on" to CastNarration.On,
+    "unavailable" to CastNarration.Unavailable,
+)
+
 private val ends = mapOf(
     "queue_finished" to CastEnd.QueueFinished,
     "stopped" to CastEnd.Stopped,
@@ -95,6 +103,8 @@ fun CastSessionDto.toDomain(): CastSession {
         durationSeconds = durationSeconds ?: 0,
         volume = volume ?: 0,
         version = version ?: 0,
+        // A gateway from before narration on speakers sends nothing: off.
+        narration = narrations[narrationStatus] ?: CastNarration.Off,
     )
 }
 

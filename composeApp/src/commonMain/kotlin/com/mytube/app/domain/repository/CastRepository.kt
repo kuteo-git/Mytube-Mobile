@@ -16,7 +16,12 @@ interface CastRepository {
     /** One session, ended ones included, so a remote can say why. */
     suspend fun session(id: String): CastAnswer<CastSession>
 
-    suspend fun start(deviceId: String, videoIds: List<String>, startPositionSeconds: Int): CastAnswer<CastSession>
+    suspend fun start(
+        deviceId: String,
+        videoIds: List<String>,
+        startPositionSeconds: Int,
+        narration: Boolean,
+    ): CastAnswer<CastSession>
     suspend fun pause(id: String): CastAnswer<CastSession>
     suspend fun resume(id: String): CastAnswer<CastSession>
     suspend fun next(id: String): CastAnswer<CastSession>
@@ -24,6 +29,7 @@ interface CastRepository {
     suspend fun seek(id: String, positionSeconds: Int): CastAnswer<CastSession>
     suspend fun volume(id: String, percent: Int): CastAnswer<CastSession>
     suspend fun jump(id: String, index: Int): CastAnswer<CastSession>
+    suspend fun narration(id: String, on: Boolean): CastAnswer<CastSession>
     suspend fun replaceQueue(id: String, version: Int, videoIds: List<String>, currentIndex: Int): CastAnswer<CastSession>
     suspend fun handoff(id: String): CastAnswer<CastHandback>
 }

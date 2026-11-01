@@ -6,6 +6,7 @@ import com.mytube.app.domain.model.CastDeviceKind
 import com.mytube.app.domain.model.CastEnd
 import com.mytube.app.domain.model.CastHandback
 import com.mytube.app.domain.model.CastItem
+import com.mytube.app.domain.model.CastNarration
 import com.mytube.app.domain.model.CastRefusal
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
@@ -27,10 +28,12 @@ private fun session(
     state: CastState = CastState.Playing,
     end: CastEnd = CastEnd.Running,
     index: Int = 0,
+    narration: CastNarration = CastNarration.Off,
 ) = CastSession(
     id = "s1", device = r1, state = state, end = end,
     queue = listOf("a", "b", "c").map { CastItem(it, "Song ${it.uppercase()}", "Chan", "", 200) },
     currentIndex = index, positionSeconds = 30, durationSeconds = 200, volume = 0, version = 4,
+    narration = narration,
 )
 
 private class FakeCast : CastRepository {
@@ -50,8 +53,13 @@ private class FakeCast : CastRepository {
         sessionCalls++
         return remote
     }
-    override suspend fun start(deviceId: String, videoIds: List<String>, startPositionSeconds: Int): CastAnswer<CastSession> {
-        sent += "start $deviceId $videoIds $startPositionSeconds"
+    override suspend fun start(
+        deviceId: String,
+        videoIds: List<String>,
+        startPositionSeconds: Int,
+        narration: Boolean,
+    ): CastAnswer<CastSession> {
+        sent += "start $deviceId $videoIds $startPositionSeconds" + if (narration) " narrated" else ""
         return CastAnswer.Done(session(CastState.Loading))
     }
     private fun cmd(name: String): CastAnswer<CastSession> {
@@ -65,6 +73,7 @@ private class FakeCast : CastRepository {
     override suspend fun seek(id: String, positionSeconds: Int) = cmd("seek $positionSeconds")
     override suspend fun volume(id: String, percent: Int) = cmd("volume $percent")
     override suspend fun jump(id: String, index: Int) = cmd("jump $index")
+    override suspend fun narration(id: String, on: Boolean) = cmd("narration $on")
     override suspend fun replaceQueue(id: String, version: Int, videoIds: List<String>, currentIndex: Int): CastAnswer<CastSession> {
         sent += "queue $version $videoIds $currentIndex"
         return queueAnswer
@@ -121,10 +130,44 @@ class CastStoreTest {
     fun startingSendsWholeSecondsAndOpensTheRemote() = runTest {
         val fake = FakeCast()
         val store = store(fake)
-        store.start(r1, listOf("a", "b"), 89.6)
+        store.start(r1, listOf("a", "b"), 89.6, narration = false)
         runCurrent()
         assertEquals("start r1-living [a, b] 90", fake.sent.single())
         assertIs<CastRemote.Showing>(store.state.value.remote)
+    }
+
+    @Test
+    fun castingWhileNarratingAsksTheSpeakerToNarrate() = runTest {
+        val fake = FakeCast()
+        store(fake).start(r1, listOf("a", "b"), 12.0, narration = true)
+        runCurrent()
+        assertEquals("start r1-living [a, b] 12 narrated", fake.sent.single())
+    }
+
+    @Test
+    fun theNarrationSwitchShowsAtOnceAndAsksTheSpeaker() = runTest {
+        val fake = FakeCast()
+        val store = store(fake)
+        store.openRemote("s1")
+        runCurrent()
+        store.narration(true)
+        val shown = (store.state.value.remote as CastRemote.Showing).session
+        assertEquals(CastNarration.Preparing, shown.narration, "lit at once, not after the round trip")
+        runCurrent()
+        assertTrue("narration true" in fake.sent, fake.sent.toString())
+    }
+
+    @Test
+    fun aVideoPickedWhileTheSpeakerNarratesIsNarratedToo() = runTest {
+        val fake = FakeCast()
+        fake.running = listOf(session(narration = CastNarration.On))
+        fake.remote = CastAnswer.Done(session(narration = CastNarration.On))
+        val store = store(fake)
+        store.setForeground(true)
+        runCurrent()
+        assertTrue(store.pick(listOf("z", "y")))
+        runCurrent()
+        assertTrue("start r1-living [z, y] 0 narrated" in fake.sent, fake.sent.toString())
     }
 
     @Test

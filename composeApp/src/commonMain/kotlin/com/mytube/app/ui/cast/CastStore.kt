@@ -5,6 +5,7 @@ import com.mytube.app.domain.model.CastDevice
 import com.mytube.app.domain.model.CastEnd
 import com.mytube.app.domain.model.CastHandback
 import com.mytube.app.domain.model.CastItem
+import com.mytube.app.domain.model.CastNarration
 import com.mytube.app.domain.model.CastRefusal
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
@@ -202,10 +203,12 @@ class CastStore(
 
     fun closePicker() = _state.update { it.copy(pickerOpen = false) }
 
-    fun start(device: CastDevice, videoIds: List<String>, positionSeconds: Double) {
+    /** [narration]: the phone was narrating, so the speaker narrates too. */
+    fun start(device: CastDevice, videoIds: List<String>, positionSeconds: Double, narration: Boolean) {
         _state.update { it.copy(pickerOpen = false) }
         scope.launch {
-            when (val answer = repository.start(device.id, videoIds, positionSeconds.roundToInt().coerceAtLeast(0))) {
+            val position = positionSeconds.roundToInt().coerceAtLeast(0)
+            when (val answer = repository.start(device.id, videoIds, position, narration)) {
                 is CastAnswer.Done -> {
                     _state.update { it.copy(remote = CastRemote.Showing(answer.value)) }
                     repoll()
@@ -233,7 +236,8 @@ class CastStore(
         _state.update { it.copy(pending = picked) }
         scope.launch {
             val ids = if (videoIds.size > 1) videoIds else videoIds + followers(picked)
-            when (val answer = repository.start(playing.device.id, ids.distinct(), 0)) {
+            // A new session, which keeps narrating if this one was.
+            when (val answer = repository.start(playing.device.id, ids.distinct(), 0, playing.narration.asked)) {
                 is CastAnswer.Done -> {
                     _state.update {
                         it.copy(remote = CastRemote.Showing(answer.value), running = listOf(answer.value), pending = "")
@@ -302,6 +306,17 @@ class CastStore(
         // reload, replaces it.
         _state.update { it.copy(remote = CastRemote.Showing(session.copy(queue = edited, currentIndex = index))) }
         command { repository.replaceQueue(it, session.version, edited.map(CastItem::videoId), index) }
+    }
+
+    /**
+     * Narration on the speaker, or off. Shown at once as asked; the speaker
+     * moves onto the narrated song when the server has made it.
+     */
+    fun narration(on: Boolean) {
+        val session = showing ?: return
+        val asked = if (on) CastNarration.Preparing else CastNarration.Off
+        _state.update { it.copy(remote = CastRemote.Showing(session.copy(narration = asked))) }
+        command { repository.narration(it, on) }
     }
 
     /** A song dragged by its handle from [from] to [to]. */

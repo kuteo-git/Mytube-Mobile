@@ -72,6 +72,7 @@ import com.mytube.app.domain.model.CastDevice
 import com.mytube.app.domain.model.CastDeviceKind
 import com.mytube.app.domain.model.CastEnd
 import com.mytube.app.domain.model.CastItem
+import com.mytube.app.domain.model.CastNarration
 import com.mytube.app.domain.model.CastRefusal
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
@@ -93,6 +94,8 @@ import com.mytube.app.ui.shell.pressableGlassControl
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
 import com.mytube.app.ui.watch.CloseIcon
+import com.mytube.app.ui.watch.NarrationFilledIcon
+import com.mytube.app.ui.watch.NarrationIcon
 import com.mytube.app.ui.watch.NextIcon
 import com.mytube.app.ui.watch.PauseIcon
 import com.mytube.app.ui.watch.PlayIcon
@@ -181,9 +184,13 @@ internal fun castNoticeText(notice: CastNotice, strings: Strings): String = when
     }
 }
 
-internal fun castStatus(session: CastSession, strings: Strings): String = when (session.state) {
-    CastState.Loading -> strings.castLoadingOn(session.device.name)
-    CastState.Paused -> strings.castPausedOn(session.device.name)
+internal fun castStatus(session: CastSession, strings: Strings): String = when {
+    session.state == CastState.Loading -> strings.castLoadingOn(session.device.name)
+    session.state == CastState.Paused -> strings.castPausedOn(session.device.name)
+    // The song plays as it is meanwhile, and that is worth saying: the switch
+    // is lit and the voice not yet heard.
+    session.narration == CastNarration.Preparing -> strings.castNarrationPreparing
+    session.narration == CastNarration.Unavailable -> strings.castNarrationUnavailable
     else -> strings.castPlayingOn(session.device.name)
 }
 
@@ -300,6 +307,12 @@ fun CastStage(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onSeek: (Int) -> Unit,
+    /**
+     * Narration on the speaker, on or off; null draws no switch (a video with
+     * no captions has nothing to narrate). The player's own switch, in the
+     * same pill as the cast button, as on the player.
+     */
+    onNarration: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -320,8 +333,24 @@ fun CastStage(
                 modifier = Modifier.weight(1f).padding(horizontal = Space.md),
             )
             GlassPane("cast-cast", GlassPaneShape.Capsule) {
-                GlassItem(id = "cast-cast", symbol = "hifispeaker.fill", onPress = onCast) {
-                    ControlButton(icon = CastActiveIcon, label = strings.castButton, width = 48.dp, onClick = onCast)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onNarration != null) {
+                        val asked = session.narration.asked
+                        val toggle = { onNarration(!asked) }
+                        GlassItem(
+                            id = "cast-narration",
+                            symbol = if (asked) "person.wave.2.fill" else "person.wave.2",
+                            onPress = toggle,
+                        ) {
+                            ControlButton(
+                                icon = if (asked) NarrationFilledIcon else NarrationIcon,
+                                label = strings.narration, width = 48.dp, onClick = toggle,
+                            )
+                        }
+                    }
+                    GlassItem(id = "cast-cast", symbol = "hifispeaker.fill", onPress = onCast) {
+                        ControlButton(icon = CastActiveIcon, label = strings.castButton, width = 48.dp, onClick = onCast)
+                    }
                 }
             }
         }
@@ -571,7 +600,10 @@ internal fun castProgress(session: CastSession): Float =
 private val previewKitchen = CastDevice("k", "Kitchen speaker", CastDeviceKind.Google)
 private val previewR1 = CastDevice("r1-living", "Loa R1", CastDeviceKind.R1)
 
-private fun previewSession(state: CastState = CastState.Playing) = CastSession(
+private fun previewSession(
+    state: CastState = CastState.Playing,
+    narration: CastNarration = CastNarration.Off,
+) = CastSession(
     id = "s1", device = previewR1, state = state, end = CastEnd.Running,
     queue = listOf(
         CastItem("a", "Motley Crew", "Post Malone", "", 185),
@@ -579,6 +611,7 @@ private fun previewSession(state: CastState = CastState.Playing) = CastSession(
         CastItem("c", "Cay", "Khắc Hưng", "", 255),
     ),
     currentIndex = 0, positionSeconds = 90, durationSeconds = 185, volume = 40, version = 2,
+    narration = narration,
 )
 
 @Composable
@@ -613,7 +646,17 @@ private fun CastPickerEmptyPreview() = PreviewFrame {
 private fun CastStagePreview() = PreviewFrame {
     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
         CastArtwork(previewSession(), "")
-        CastStage(previewSession(), {}, {}, {}, {}, {}, {})
+        CastStage(previewSession(), {}, {}, {}, {}, {}, {}, onNarration = {})
+    }
+}
+
+@Preview
+@Composable
+private fun CastStageNarrationPreparingPreview() = PreviewFrame(vietnamese = true) {
+    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+        val session = previewSession(narration = CastNarration.Preparing)
+        CastArtwork(session, "")
+        CastStage(session, {}, {}, {}, {}, {}, {}, onNarration = {})
     }
 }
 
@@ -622,7 +665,7 @@ private fun CastStagePreview() = PreviewFrame {
 private fun CastStageLoadingPreview() = PreviewFrame {
     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
         CastArtwork(previewSession(CastState.Loading), "")
-        CastStage(previewSession(CastState.Loading), {}, {}, {}, {}, {}, {})
+        CastStage(previewSession(CastState.Loading), {}, {}, {}, {}, {}, {}, onNarration = null)
     }
 }
 

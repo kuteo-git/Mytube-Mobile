@@ -13,6 +13,7 @@ import com.mytube.app.domain.model.CastDevice
 import com.mytube.app.domain.model.CastDeviceKind
 import com.mytube.app.domain.model.CastEnd
 import com.mytube.app.domain.model.CastItem
+import com.mytube.app.domain.model.CastNarration
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
 import com.mytube.app.ui.theme.MytubeTheme
@@ -34,6 +35,7 @@ class QueueDragGestureTest {
         state = CastState.Playing, end = CastEnd.Running,
         queue = List(30) { CastItem("v$it", "Song $it", "Channel", "", 200) },
         currentIndex = 0, positionSeconds = 30, durationSeconds = 200, volume = 0, version = 1,
+        narration = CastNarration.Off,
     )
 
     @Test

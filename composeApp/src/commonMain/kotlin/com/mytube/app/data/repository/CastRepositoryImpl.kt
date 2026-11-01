@@ -34,12 +34,16 @@ class CastRepositoryImpl(
     override suspend fun session(id: String): CastAnswer<CastSession> =
         session { gateway.castSession(server.baseUrl(), server.profileId(), id) }
 
-    override suspend fun start(deviceId: String, videoIds: List<String>, startPositionSeconds: Int) = session {
-        gateway.startCast(
-            server.baseUrl(), server.profileId(),
-            StartCastBody(deviceId, videoIds.map(::CastIdBody), startIndex = 0, startPositionSeconds.coerceAtLeast(0)),
-        )
-    }
+    override suspend fun start(deviceId: String, videoIds: List<String>, startPositionSeconds: Int, narration: Boolean) =
+        session {
+            gateway.startCast(
+                server.baseUrl(), server.profileId(),
+                StartCastBody(
+                    deviceId, videoIds.map(::CastIdBody), startIndex = 0, startPositionSeconds.coerceAtLeast(0),
+                    narration = narration,
+                ),
+            )
+        }
 
     override suspend fun pause(id: String) = command(id, "pause")
     override suspend fun resume(id: String) = command(id, "resume")
@@ -50,6 +54,7 @@ class CastRepositoryImpl(
     override suspend fun volume(id: String, percent: Int) =
         command(id, "volume", CastCommandBody(percent = percent.coerceIn(0, 100)))
     override suspend fun jump(id: String, index: Int) = command(id, "jump", CastCommandBody(index = index))
+    override suspend fun narration(id: String, on: Boolean) = command(id, "narration", CastCommandBody(on = on))
 
     override suspend fun replaceQueue(id: String, version: Int, videoIds: List<String>, currentIndex: Int) =
         session(conflict = CastRefusal.StaleQueue) {

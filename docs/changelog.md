@@ -6069,3 +6069,35 @@ app hiện nay chứ"* — and *"nhớ có haptic khi drag luôn nha"*.
   list scrolls and the row lands past what the screen first showed. Proven to
   fail with the scroll step switched off ("the list did not scroll under the
   held row").
+
+## The X on the speaker's miniplayer closes everything, and narration reaches the speaker (2026-11-01)
+
+Reported: *"khi đang cast, mini player show là cho cái cast, bấm X button thì
+nó show mini player cho cái watch, yêu cầu nó sẽ tắt hẵn luôn"* and *"bật
+thuyết minh thì ko có work khi cast"*.
+
+- **X stopped only the speaker**, on purpose: the bar's comment said the
+  paused video under it "is the bar then". So the phone's own miniplayer
+  appeared in its place and X had to be pressed twice. It now stops the
+  speaker, stops the video and closes the watch session, as the phone's own X
+  does.
+- **Narration never reached a speaker**: it is the phone's second player
+  speaking over its first, and the speaker was handed the song's `/audio`
+  alone. The server now mixes the narration into the song once its pass is
+  done (server CHANGELOG, "Narration plays on the speakers"); the session
+  carries `narration_status` (`CastNarration`: off, preparing, on,
+  unavailable).
+- **The switch is the player's own**, in the cast stage's pill beside the cast
+  button, drawn when the song has captions or narration is already asked for.
+  Lit at once (`CastStore.narration`); the status line says *"Đang chuẩn bị
+  thuyết minh…"* while the song plays as it is.
+- **Narration follows the cast**: casting from a video being narrated starts
+  the speaker narrated, and a video picked while the speaker narrates starts
+  its new session narrated.
+
+Verified: 456 tests (the switch pressed in an `ImageComposeScene`, proven red
+inverted; `pick` carrying the flag, proven red without it), Android and iOS
+compile; the server's mixer against a real video (residual matches each line
+at ≥0.995). **Not yet heard on a speaker** — the only one free was the
+household's, in use.
+

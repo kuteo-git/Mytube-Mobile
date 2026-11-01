@@ -5,6 +5,7 @@ import com.mytube.app.data.remote.dto.toDomain
 import com.mytube.app.data.repository.refusalFor
 import com.mytube.app.domain.model.CastDeviceKind
 import com.mytube.app.domain.model.CastEnd
+import com.mytube.app.domain.model.CastNarration
 import com.mytube.app.domain.model.CastRefusal
 import com.mytube.app.domain.model.CastState
 import kotlinx.serialization.json.Json
@@ -36,6 +37,19 @@ class CastMappingTest {
         assertEquals(176, s.positionSeconds)
         assertEquals("eq6lKYNgs8Y", s.current?.videoId)
         assertEquals(185, s.queue.single().durationSeconds)
+    }
+
+    @Test
+    fun narrationOnTheSpeakerIsRead() {
+        fun status(wire: String) = json.decodeFromString<CastSessionDto>(
+            running.replace("\"version\":1,", "\"version\":1,\"narration\":true,\"narration_status\":\"$wire\","),
+        ).toDomain().narration
+        assertEquals(CastNarration.Preparing, status("preparing"))
+        assertEquals(CastNarration.On, status("on"))
+        assertEquals(CastNarration.Unavailable, status("unavailable"))
+        assertEquals(CastNarration.Off, status("off"))
+        assertEquals(CastNarration.Off, json.decodeFromString<CastSessionDto>(running).toDomain().narration,
+            "a gateway from before narration on speakers")
     }
 
     @Test

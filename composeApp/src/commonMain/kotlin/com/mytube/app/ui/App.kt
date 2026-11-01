@@ -1626,7 +1626,13 @@ fun App(
                 // Casting is the phone's: the television is the screen the
                 // household watches on, not a remote for a speaker.
                 if (!television) {
-                    castFromWatch = { device -> cast.start(device, watch.castQueue(), watch.handOverToSpeaker()) }
+                    castFromWatch = { device ->
+                        // Narrating here, so narrating there: the speaker plays
+                        // the song as it is until the server has mixed the voice
+                        // in, and then moves onto it.
+                        val narrating = (watch.state.value as? WatchState.Playing)?.narrating == true
+                        cast.start(device, watch.castQueue(), watch.handOverToSpeaker(), narrating)
+                    }
                     resumeFromSpeaker = { back ->
                         if (back.videoId == watching?.videoId) {
                             watch.resumeFromSpeaker(back.positionSeconds.toDouble())
@@ -1777,9 +1783,15 @@ fun App(
                                 mediaBaseUrl = baseUrl,
                                 onExpand = { watching = session.copy(minimised = false) },
                                 onPlayPause = { if (castSpeaker.state == CastState.Paused) cast.resume() else cast.pause() },
-                                // Ends what the bar shows: the speaker. The video
-                                // here is still open, paused, and is the bar then.
-                                onClose = cast::stop,
+                                // Ends everything, as the phone's own bar does:
+                                // the speaker and the paused video under it.
+                                // Stopping only the speaker left that video as
+                                // the bar, and X had to be pressed twice.
+                                onClose = {
+                                    cast.stop()
+                                    watch.stop()
+                                    watching = null
+                                },
                                 collapse = collapse,
                                 bottomInset = navigationInset * barsHidden,
                                 modifier = modifier,
@@ -1933,6 +1945,11 @@ fun App(
                                     WatchCast(
                                         artwork = { CastArtwork(speaker, baseUrl) },
                                         stage = {
+                                            // The watch screen is on the
+                                            // speaker's song, so its answer
+                                            // about captions is that song's.
+                                            val canNarrate = (watch.state.collectAsStateWithLifecycle().value
+                                                as? WatchState.Playing)?.canNarrate == true
                                             CastStage(
                                                 session = speaker,
                                                 onBack = { collapseWatch() },
@@ -1943,6 +1960,9 @@ fun App(
                                                 onPrevious = { cast.jump(speaker.currentIndex - 1) },
                                                 onNext = cast::next,
                                                 onSeek = cast::seek,
+                                                onNarration = cast::narration.takeIf {
+                                                    canNarrate || speaker.narration.asked
+                                                },
                                             )
                                         },
                                         queue = { list ->

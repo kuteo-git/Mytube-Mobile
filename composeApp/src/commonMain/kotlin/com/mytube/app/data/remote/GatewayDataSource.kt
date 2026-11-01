@@ -674,6 +674,7 @@ data class StartCastBody(
     val items: List<CastIdBody>,
     @kotlinx.serialization.SerialName("start_index") val startIndex: Int,
     @kotlinx.serialization.SerialName("start_position_s") val startPositionSeconds: Int,
+    val narration: Boolean,
 )
 
 /** One body for every command that takes one; the gateway reads the field it needs. */
@@ -682,6 +683,7 @@ data class CastCommandBody(
     @kotlinx.serialization.SerialName("position_s") val positionSeconds: Int? = null,
     val percent: Int? = null,
     val index: Int? = null,
+    val on: Boolean? = null,
 )
 
 @kotlinx.serialization.Serializable

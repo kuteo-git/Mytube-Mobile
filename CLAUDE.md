@@ -239,8 +239,11 @@ for a broadcast or when no speaker answers) and a picker sheet. **While a
 speaker plays, the watch screen is the remote**: it follows the speaker's song,
 draws the speaker's controls where the picture is (`WatchCast`) with the
 player's own glass buttons and its queue where up next is; stopping is on the
-lit cast button, whose alert also holds the speaker's volume. The miniplayer
-is the same capsule with the song's artwork. The phone's own volume buttons are
+lit cast button, whose alert also holds the speaker's volume. Narration on the
+speaker is the server's mix of the song and its lines, switched from the
+stage's pill (`CastNarration`); the song plays as it is until the mix is
+ready. The miniplayer is the same capsule with the song's artwork, and its X
+ends the speaker and the paused video under it. The phone's own volume buttons are
 the speaker's too (`FollowVolume`, decided by `VolumeFollower`). A video opened anywhere then goes to the
 speaker (`CastStore.pick`, with its up next when opened alone), never to the
 phone; the phone's paused player reports no progress and starts no narration

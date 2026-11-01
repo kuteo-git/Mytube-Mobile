@@ -9,6 +9,7 @@ import com.mytube.app.domain.model.CastDevice
 import com.mytube.app.domain.model.CastDeviceKind
 import com.mytube.app.domain.model.CastEnd
 import com.mytube.app.domain.model.CastItem
+import com.mytube.app.domain.model.CastNarration
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
 import com.mytube.app.ui.theme.MytubeTheme
@@ -16,7 +17,11 @@ import com.mytube.app.ui.watch.WatchCast
 import com.mytube.app.ui.watch.WatchContent
 import com.mytube.app.ui.watch.WatchState
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * The cast's views, actually measured and drawn where they live.
@@ -32,6 +37,7 @@ class CastRemoteRenderTest {
         state = CastState.Playing, end = CastEnd.Running,
         queue = List(12) { CastItem("v$it", "Song $it", "Channel", "", 200) },
         currentIndex = 0, positionSeconds = 30, durationSeconds = 200, volume = 0, version = 1,
+        narration = CastNarration.Off,
     )
 
     private fun renders(content: @androidx.compose.runtime.Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
@@ -68,7 +74,7 @@ class CastRemoteRenderTest {
     fun theWatchScreenMeasuresAndDrawsAsTheRemote() {
         val cast = WatchCast(
             artwork = { CastArtwork(session, "") },
-            stage = { CastStage(session, {}, {}, {}, {}, {}, {}) },
+            stage = { CastStage(session, {}, {}, {}, {}, {}, {}, onNarration = null) },
             queue = { list -> castQueueItems(session, "", QueueDrag(), list, {}, { _, _ -> }, {}) },
         )
         renders {
@@ -80,5 +86,47 @@ class CastRemoteRenderTest {
                 onOpenVideo = {}, onOpenChannel = {}, onCast = {}, casting = true, cast = cast,
             )
         }
+    }
+
+    /**
+     * The narration switch on the speaker's stage, beside the cast button in
+     * its pill, pressed by a finger: it asks for the opposite of what the
+     * speaker reports, and is not there for a video with nothing to narrate.
+     */
+    @OptIn(ExperimentalComposeUiApi::class)
+    @Test
+    fun theNarrationSwitchAsksForTheOpposite() {
+        fun press(narration: CastNarration, drawn: Boolean): List<Boolean> {
+            val asked = mutableListOf<Boolean>()
+            val density = 3f
+            val scene = ImageComposeScene(width = 390 * 3, height = 220 * 3, density = Density(density)) {
+                MytubeTheme {
+                    Box(Modifier.fillMaxSize()) {
+                        CastStage(
+                            session.copy(narration = narration), {}, {}, {}, {}, {}, {},
+                            onNarration = if (drawn) { on -> asked += on } else null,
+                        )
+                    }
+                }
+            }
+            try {
+                var t = 0L
+                fun frames(n: Int) = repeat(n) { scene.render(t); t += 16_000_000L }
+                frames(5)
+                // The pill's first button: 4dp in, a 48dp cast button, then this.
+                val at = Offset((390 - 4 - 48 - 24) * density, (4 + 24) * density)
+                scene.sendPointerEvent(PointerEventType.Press, at, timeMillis = t / 1_000_000)
+                frames(2)
+                scene.sendPointerEvent(PointerEventType.Release, at, timeMillis = t / 1_000_000)
+                frames(10)
+            } finally {
+                scene.close()
+            }
+            return asked
+        }
+        assertEquals(listOf(true), press(CastNarration.Off, drawn = true), "off: pressing asks for narration")
+        assertEquals(listOf(false), press(CastNarration.Preparing, drawn = true), "asked: pressing turns it off")
+        assertEquals(listOf(false), press(CastNarration.On, drawn = true))
+        assertEquals(emptyList(), press(CastNarration.Off, drawn = false), "no switch for a video with nothing to narrate")
     }
 }

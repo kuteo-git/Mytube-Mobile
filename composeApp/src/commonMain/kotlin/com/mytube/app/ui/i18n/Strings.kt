@@ -160,6 +160,9 @@ interface Strings {
     val narration: String
     /** "Preparing 27/242" — the count is filled in by the caller. */
     fun narrationPreparing(done: Int, total: Int): String
+    /** On the speaker's remote while the song plays as it is and its narration is made. */
+    val castNarrationPreparing: String
+    val castNarrationUnavailable: String
     val narrationFailed: String
 
     /** Over a broadcast, in place of the two timestamps. */
@@ -414,6 +417,8 @@ object EnglishStrings : Strings {
 
     override val narration = "Vietnamese voice"
     override fun narrationPreparing(done: Int, total: Int) = "Preparing $done/$total"
+    override val castNarrationPreparing = "Preparing the Vietnamese voice…"
+    override val castNarrationUnavailable = "No Vietnamese voice for this one"
     override val narrationFailed = "The voice could not be prepared"
 
     // Kept in English in both dictionaries: it is what every player and every
@@ -621,6 +626,8 @@ object VietnameseStrings : Strings {
 
     override val narration = "Thuyết minh"
     override fun narrationPreparing(done: Int, total: Int) = "Đang chuẩn bị $done/$total"
+    override val castNarrationPreparing = "Đang chuẩn bị thuyết minh…"
+    override val castNarrationUnavailable = "Bài này không có thuyết minh"
     override val narrationFailed = "Không chuẩn bị được giọng đọc"
 
     override val live = "LIVE"
