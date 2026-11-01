@@ -508,17 +508,7 @@ fun PlayerControls(
                     // filled and drawn in outline: a change of kind, the
                     // charter's rule for a state.
                     if (canNarrate) {
-                        GlassItem(
-                            id = "narration",
-                            symbol = if (narrating) "person.wave.2.fill" else "person.wave.2",
-                            onPress = { onToggleNarration(); lastTouch++ },
-                        ) {
-                            ControlButton(
-                                icon = if (narrating) NarrationFilledIcon else NarrationIcon,
-                                label = strings.narration,
-                                onClick = { onToggleNarration(); lastTouch++ },
-                            )
-                        }
+                        NarrationItem("narration", narrating, onToggle = { onToggleNarration(); lastTouch++ })
                     }
                     GlassItem(
                         id = "gear",
@@ -1295,6 +1285,20 @@ private val KNOB_DRAGGING = 22.dp
 
 /** How many notches the width is divided into, for the feedback. */
 private const val NOTCHES = 100
+
+/**
+ * The narration switch in a pill of the player's glass: the filled glyph
+ * while narrating, the outline while not. The player's and the speaker's.
+ */
+@Composable
+internal fun NarrationItem(id: String, narrating: Boolean, onToggle: () -> Unit, width: Dp = 56.dp) {
+    GlassItem(id = id, symbol = if (narrating) "person.wave.2.fill" else "person.wave.2", onPress = onToggle) {
+        ControlButton(
+            icon = if (narrating) NarrationFilledIcon else NarrationIcon,
+            label = LocalStrings.current.narration, width = width, onClick = onToggle,
+        )
+    }
+}
 
 @Composable
 internal fun ControlButton(

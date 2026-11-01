@@ -26,8 +26,8 @@ fun contentBounds(width: Int, height: Int, luma: (x: Int, y: Int) -> Int): Bound
     if (width <= 0 || height <= 0) return whole
     val rowStep = maxOf(1, height / SAMPLES)
     val columnStep = maxOf(1, width / SAMPLES)
-    fun darkColumn(x: Int): Boolean = dark((0 until height step rowStep).map { luma(x, it) })
-    fun darkRow(y: Int): Boolean = dark((0 until width step columnStep).map { luma(it, y) })
+    fun darkColumn(x: Int): Boolean = dark(0 until height step rowStep) { luma(x, it) }
+    fun darkRow(y: Int): Boolean = dark(0 until width step columnStep) { luma(it, y) }
 
     val left = (0 until width).firstOrNull { !darkColumn(it) } ?: return whole
     val right = (width - 1 downTo 0).first { !darkColumn(it) } + 1
@@ -39,7 +39,13 @@ fun contentBounds(width: Int, height: Int, luma: (x: Int, y: Int) -> Int): Bound
     return Bounds(x0, y0, x1, y1)
 }
 
-private fun dark(samples: List<Int>): Boolean = samples.count { it > DARK_LUMA } <= samples.size * NOISE_SHARE
+/** Black but for noise: gives up at the first lit sample past the noise budget. */
+private inline fun dark(at: IntProgression, luma: (Int) -> Int): Boolean {
+    val budget = (at.count() * NOISE_SHARE).toInt()
+    var lit = 0
+    for (i in at) if (luma(i) > DARK_LUMA && ++lit > budget) return false
+    return true
+}
 
 /** Two bars, one on each side, alike and wide enough to be bars. */
 private fun bars(start: Int, end: Int, size: Int): Boolean {

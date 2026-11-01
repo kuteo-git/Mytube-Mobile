@@ -97,8 +97,7 @@ import com.mytube.app.ui.shell.pressableGlassControl
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
 import com.mytube.app.ui.watch.CloseIcon
-import com.mytube.app.ui.watch.NarrationFilledIcon
-import com.mytube.app.ui.watch.NarrationIcon
+import com.mytube.app.ui.watch.NarrationItem
 import com.mytube.app.ui.watch.NextIcon
 import com.mytube.app.ui.watch.PauseIcon
 import com.mytube.app.ui.watch.PlayIcon
@@ -339,17 +338,7 @@ fun CastStage(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (onNarration != null) {
                         val asked = session.narration.asked
-                        val toggle = { onNarration(!asked) }
-                        GlassItem(
-                            id = "cast-narration",
-                            symbol = if (asked) "person.wave.2.fill" else "person.wave.2",
-                            onPress = toggle,
-                        ) {
-                            ControlButton(
-                                icon = if (asked) NarrationFilledIcon else NarrationIcon,
-                                label = strings.narration, width = 48.dp, onClick = toggle,
-                            )
-                        }
+                        NarrationItem("cast-narration", asked, onToggle = { onNarration(!asked) }, width = 48.dp)
                     }
                     GlassItem(id = "cast-cast", symbol = "hifispeaker.fill", onPress = onCast) {
                         ControlButton(icon = CastActiveIcon, label = strings.castButton, width = 48.dp, onClick = onCast)

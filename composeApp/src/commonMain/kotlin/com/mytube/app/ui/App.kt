@@ -1789,8 +1789,7 @@ fun App(
                                 // the bar, and X had to be pressed twice.
                                 onClose = {
                                     cast.stop()
-                                    watch.stop()
-                                    watching = null
+                                    closeWatch()
                                 },
                                 collapse = collapse,
                                 bottomInset = navigationInset * barsHidden,
@@ -1816,12 +1815,9 @@ fun App(
                             // navigation inset once that bar has gone, so the
                             // glass still reaches the bottom of the screen.
                             bottomInset = navigationInset * barsHidden,
-                            onClose = {
-                                // Stop first, then let go. The disposal that
-                                // follows only releases the connection.
-                                watch.stop()
-                                watching = null
-                            },
+                            // Stop first, then let go. The disposal that
+                            // follows only releases the connection.
+                            onClose = ::closeWatch,
                             showSurface = showSurface,
                             collapse = collapse,
                             modifier = modifier,
