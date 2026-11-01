@@ -71,6 +71,7 @@ private val states = mapOf(
 )
 
 private val narrations = mapOf(
+    "off" to CastNarration.Off,
     "preparing" to CastNarration.Preparing,
     "on" to CastNarration.On,
     "unavailable" to CastNarration.Unavailable,

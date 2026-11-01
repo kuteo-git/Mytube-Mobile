@@ -313,7 +313,9 @@ press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden
 
 - **No Compose UI tests.** Previews cover what a screen looks like; ViewModel
   tests cover what it does. Each screen is split `XScreen(viewModel)` →
-  `XContent(state, callbacks…)`.
+  `XContent(state, callbacks…)`. The one exception is a jvm
+  `ImageComposeScene` render (`CastRemoteRenderTest`, `QueueDragGestureTest`):
+  for a crash only measuring shows, or a gesture only a pointer reaches.
 - **Every screen has previews, more than one**: loading, empty, failed, and a
   Vietnamese one.
 - **A decision two places must agree on becomes a named pure function with a
