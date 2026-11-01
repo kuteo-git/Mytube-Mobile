@@ -7,6 +7,8 @@ import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.DEFAULT_DUCK_LEVEL
 import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.Narration
+import com.mytube.app.domain.model.SpokenLanguage
+import com.mytube.app.domain.model.narratesOnOpen
 import com.mytube.app.domain.model.StoryboardState
 import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.SubtitleCue
@@ -382,6 +384,12 @@ class WatchViewModel(
      */
     private var passAskedFor = ""
 
+    /**
+     * The switch was pressed on this video: the remembered preference no
+     * longer decides whether it narrates, however late its answer comes.
+     */
+    private var narrationPressed = false
+
     /** The poll watching the server's narration pass, cancelled when it ends. */
     private var narrationPoll: Job? = null
 
@@ -461,6 +469,7 @@ class WatchViewModel(
         report(force = true)
         narrationPoll?.cancel()
         narrationPoll = null
+        narrationPressed = false
         // The player outlives the video, and so would its clips: lines of the
         // last video at the last video's times, spoken over this one and ducking
         // it until its own pass is asked for — which waits on its captions.
@@ -525,7 +534,7 @@ class WatchViewModel(
         seekTo(seconds)
         player.play()
         viewModelScope.launch {
-            val wanted = preferences.narration()
+            val wanted = narratesOnOpen(preferences.narration(), spokenLanguage(videoId))
             val current = _state.value as? WatchState.Playing ?: return@launch
             when {
                 wanted && !current.narrating && current.canNarrate && !current.isLive -> startNarration(seconds)
@@ -690,6 +699,7 @@ class WatchViewModel(
 
     fun toggleNarration() {
         val current = _state.value as? WatchState.Playing ?: return
+        narrationPressed = true
         val next = !current.narrating
         _state.value = current.copy(narrating = next)
 
@@ -703,7 +713,16 @@ class WatchViewModel(
         startNarration(current.playback.positionSeconds)
     }
 
-    /** The switch off: the pass left running, as [toggleNarration] says. */
+    /** Unknown when the server cannot say, which narrates as the switch says. */
+    private suspend fun spokenLanguage(id: String): SpokenLanguage = try {
+        videos.spokenLanguage(id)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        SpokenLanguage.Unknown
+    }
+
+        /** The switch off: the pass left running, as [toggleNarration] says. */
     private fun narrationOff() {
         (_state.value as? WatchState.Playing)?.let { _state.value = it.copy(narrating = false) }
         narrationPoll?.cancel()
@@ -1190,11 +1209,15 @@ class WatchViewModel(
             // by pressing the switch, which is one press and says what it costs
             // by being deliberate.
             // Nor one that plays on a speaker: nobody here is listening.
-            if (!playsElsewhere && preferences.narration() && _state.value.let {
-                    it is WatchState.Playing && !it.isLive
+            // Nor one that speaks Vietnamese (`narratesOnOpen`) — asked only
+            // now, with the video playing, and never over a press made while
+            // the answer was on its way.
+            if (!playsElsewhere && preferences.narration() && (_state.value as? WatchState.Playing)?.isLive == false) {
+                val spoken = spokenLanguage(videoId)
+                val current = _state.value as? WatchState.Playing
+                if (current != null && !narrationPressed && narratesOnOpen(preferred = true, spoken)) {
+                    startNarration(current.playback.positionSeconds)
                 }
-            ) {
-                (_state.value as? WatchState.Playing)?.let { startNarration(it.playback.positionSeconds) }
             }
         }
     }

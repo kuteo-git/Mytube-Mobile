@@ -4,6 +4,7 @@ import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Reaction
+import com.mytube.app.domain.model.SpokenLanguage
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.ExternalVideo
@@ -175,6 +176,13 @@ interface VideoRepository {
      * row, and asking for that is [video].
      */
     suspend fun refreshMetadata(videoId: String)
+
+    /**
+     * The language spoken in a video, for deciding whether it opens narrated
+     * ([narratesOnOpen]). The first ask about a video may wait on YouTube for
+     * a second or two; the answer is kept, and later asks are the catalogue's.
+     */
+    suspend fun spokenLanguage(videoId: String): SpokenLanguage
 
     /** What to play after this one. */
     /**

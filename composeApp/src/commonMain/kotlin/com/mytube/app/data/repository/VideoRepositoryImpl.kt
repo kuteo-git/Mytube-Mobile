@@ -11,6 +11,7 @@ import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.parseWebVtt
 import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Reaction
+import com.mytube.app.domain.model.SpokenLanguage
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.model.Narration
@@ -139,6 +140,9 @@ class VideoRepositoryImpl(
 
     override suspend fun importComments(videoId: String) =
         gateway.importComments(server.requireBaseUrl(), server.profileId(), videoId)
+
+    override suspend fun spokenLanguage(videoId: String): SpokenLanguage =
+        gateway.spokenLanguage(server.requireBaseUrl(), server.profileId(), videoId).toDomain()
 
     override suspend fun refreshMetadata(videoId: String) =
         gateway.refreshMetadata(server.requireBaseUrl(), server.profileId(), videoId)

@@ -5,6 +5,7 @@ import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Reaction
+import com.mytube.app.domain.model.SpokenLanguage
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
@@ -43,6 +44,7 @@ open class StubVideoRepository : VideoRepository {
     override suspend fun comments(videoId: String) = emptyList<Comment>()
     override suspend fun importComments(videoId: String) {}
     override suspend fun refreshMetadata(videoId: String) {}
+    override suspend fun spokenLanguage(videoId: String) = SpokenLanguage.Unknown
     override suspend fun upNext(videoId: String, channelId: String) = emptyList<Video>()
     override suspend fun recordProgress(videoId: String, positionSeconds: Double, watchedFraction: Double) {}
     override suspend fun setReaction(videoId: String, reaction: Reaction) {}
