@@ -15,10 +15,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -242,8 +240,10 @@ fun BoxScope.CastRemoteSheet(
     ) {
         Column(
             Modifier
+                // No scroll of its own: [GlassSheet] scrolls what it holds, and a
+                // second one inside it is measured with an infinite height —
+                // which crashed the iPhone the moment the remote opened.
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
                 .padding(start = Space.lg, end = Space.lg, bottom = Space.lg),
             verticalArrangement = Arrangement.spacedBy(Space.md),
         ) {
