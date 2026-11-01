@@ -6101,3 +6101,23 @@ compile; the server's mixer against a real video (residual matches each line
 at ≥0.995). **Not yet heard on a speaker** — the only one free was the
 household's, in use.
 
+## A Nest narrates at once, and a square cover fills its frame (2026-11-01)
+
+Reported: *"chạy loa family nhưng ko nghe thuyết minh, có thể do nó chậm hơn
+phát bình thường ko? chờ cả 1 phút"* and *"cái cover image nó lúc vuông lúc
+chữ nhật, yêu cầu nếu ratio vuông thì center crop sao cho fit"*.
+
+- **Narration on a speaker waited for the whole pass.** Measured: a minute in,
+  the pass for a never-narrated video was at 68 of 130 lines, and the mixed
+  file needs all of them. A Nest now gets a stream mixed as it plays (server
+  CHANGELOG, "A Nest narrates seconds after…"): first byte 1.9s from 60s into
+  a never-narrated video, 186s of sound in 40s. The app is unchanged; the R1
+  still waits for the file.
+- **Five of six covers on the speaker's queue were 1280×720 with the picture
+  at 720×720 or ~960×720 between black pillars** — baked into the thumbnail,
+  so `ContentScale.Crop` had nothing to crop. `contentBounds` finds the
+  picture (columns black but for JPEG noise, equal on both sides, so a night
+  scene on one side is kept) and `trimBlackBars` cuts the cover to it before
+  the frame crops it from the centre. On the six real covers it agreed with
+  ffmpeg's `cropdetect` to a few pixels. Cast views only for now.
+

@@ -67,6 +67,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.transformations
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.mytube.app.domain.model.CastDevice
 import com.mytube.app.domain.model.CastDeviceKind
@@ -286,7 +289,7 @@ fun CastArtwork(session: CastSession, mediaBaseUrl: String, modifier: Modifier =
     Box(modifier.fillMaxSize().background(Color.Black)) {
         val cover = castImage(mediaBaseUrl, session.current?.thumbnailUrl.orEmpty())
         if (cover.isNotEmpty()) {
-            AsyncImage(cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            CastCover(cover)
         }
         // The controls are white over a picture of any brightness.
         Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = STAGE_SCRIM)))
@@ -386,6 +389,19 @@ fun CastStage(
 }
 
 private const val STAGE_SCRIM = 0.45f
+
+/**
+ * A song's cover, filling its frame from the picture's centre: black bars
+ * baked into the thumbnail are cut off first ([contentBounds]), so a square
+ * cover is cropped to the frame like any other rather than drawn square
+ * between bars.
+ */
+@Composable
+private fun CastCover(url: String) {
+    val context = LocalPlatformContext.current
+    val request = remember(url) { ImageRequest.Builder(context).data(url).transformations(trimBlackBars()).build() }
+    AsyncImage(request, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+}
 
 /**
  * The speaker's volume, in the alert the lit cast button opens — beside the
@@ -522,7 +538,7 @@ private fun QueueRow(
             Box(Modifier.width(80.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Tokens.surface)) {
                 val art = castImage(mediaBaseUrl, item.thumbnailUrl)
                 if (art.isNotEmpty()) {
-                    AsyncImage(art, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    CastCover(art)
                 }
             }
             Spacer(Modifier.width(Space.md))
@@ -574,7 +590,7 @@ fun CastMiniPlayer(
         window = {
             val art = castImage(mediaBaseUrl, item?.thumbnailUrl.orEmpty())
             if (art.isNotEmpty()) {
-                AsyncImage(art, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                CastCover(art)
             }
         },
         title = item?.title.orEmpty(),
