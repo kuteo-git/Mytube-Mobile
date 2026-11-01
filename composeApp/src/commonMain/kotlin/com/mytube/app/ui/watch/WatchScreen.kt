@@ -103,6 +103,9 @@ private const val OVERLAY_FADE_RATE = 6f
  * is. The rest — the description, the comments — is the song's page as ever.
  */
 class WatchCast(
+    /** The song's picture, where the video is: it shrinks with the drag as the video does. */
+    val artwork: @Composable () -> Unit,
+    /** The speaker's controls over it: they fade with the drag as the player's do. */
     val stage: @Composable () -> Unit,
     val controls: @Composable () -> Unit,
     val queue: LazyListScope.() -> Unit,
@@ -472,7 +475,18 @@ fun WatchContent(
             },
             contentAlignment = Alignment.Center,
         ) {
-            if (cast != null) cast.stage() else when (state) {
+            if (cast != null) {
+                cast.artwork()
+                CompositionLocalProvider(LocalGlassVisible provides (LocalGlassVisible.current && drag == 0f)) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = (1f - drag * OVERLAY_FADE_RATE).coerceAtLeast(0f) },
+                    ) {
+                        cast.stage()
+                    }
+                }
+            } else when (state) {
                 is WatchState.Playing -> if (player != null) {
                     // Two different questions, and reading one number for both
                     // is what shipped a fault.
@@ -518,7 +532,10 @@ fun WatchContent(
                     // above the whole scene by SwiftUI, where an alpha set here
                     // cannot reach them. Reported from the phone: the video shrank
                     // away and the buttons rode down over it at full strength.
-                    CompositionLocalProvider(LocalGlassVisible provides (drag == 0f)) {
+                    // And with whatever is outside: a sheet or an alert of the
+                    // app's over this screen switches the platform's glass off
+                    // too, or iOS 26 draws it over the sheet.
+                    CompositionLocalProvider(LocalGlassVisible provides (LocalGlassVisible.current && drag == 0f)) {
                     Box(
                         Modifier
                             .fillMaxSize()

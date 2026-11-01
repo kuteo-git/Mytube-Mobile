@@ -66,8 +66,9 @@ class CastRemoteRenderTest {
     @Test
     fun theWatchScreenMeasuresAndDrawsAsTheRemote() {
         val cast = WatchCast(
-            stage = { CastStage(session, "", {}, {}, {}, {}, {}) },
-            controls = { CastControls(session, {}, {}, {}) },
+            artwork = { CastArtwork(session, "") },
+            stage = { CastStage(session, {}, {}, {}, {}, {}, {}) },
+            controls = { CastControls(session, {}) },
             queue = { castQueueItems(session, "", {}, {}, {}, {}) },
         )
         renders {

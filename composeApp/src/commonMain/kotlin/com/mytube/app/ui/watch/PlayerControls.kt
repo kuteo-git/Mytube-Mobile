@@ -1027,7 +1027,7 @@ internal fun scrubPreviewScale(
  * button does not move under a thumb that is already reaching for it.
  */
 @Composable
-private fun DiscButton(
+internal fun DiscButton(
     id: String,
     symbol: String,
     icon: ImageVector,
@@ -1297,7 +1297,7 @@ private val KNOB_DRAGGING = 22.dp
 private const val NOTCHES = 100
 
 @Composable
-private fun ControlButton(
+internal fun ControlButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,

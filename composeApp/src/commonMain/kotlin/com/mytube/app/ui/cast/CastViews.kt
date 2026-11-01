@@ -1,8 +1,14 @@
 package com.mytube.app.ui.cast
 
 import androidx.compose.foundation.background
+import com.mytube.app.ui.watch.ControlButton
+import com.mytube.app.ui.watch.DiscButton
+import com.mytube.app.ui.watch.PreviousIcon
+import com.mytube.app.ui.watch.ChevronIcon
+import com.mytube.app.ui.shell.GlassItem
+import com.mytube.app.ui.shell.GlassPaneShape
+import com.mytube.app.ui.shell.GlassPane
 import com.mytube.app.ui.watch.MiniBar
-import com.mytube.app.ui.watch.BackIcon
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListScope
@@ -243,22 +249,15 @@ private const val SETTLE_MILLIS = 400L
 
 /**
  * Where the picture is on the watch screen while a speaker plays the song: its
- * artwork, and over it what a player draws over a video. The watch screen *is*
- * the remote — the description, the comments and the queue are below, as they
- * are for a video playing here.
+ * artwork. The watch screen *is* the remote — the description, the comments and
+ * the queue are below, as they are for a video playing here.
+ *
+ * Apart from [CastStage], because the two do different things when the screen
+ * is dragged down: the artwork shrinks into the miniplayer's window, as the
+ * video does, and the controls fade, as the player's do.
  */
 @Composable
-fun CastStage(
-    session: CastSession,
-    mediaBaseUrl: String,
-    onBack: () -> Unit,
-    onCast: () -> Unit,
-    onPlayPause: () -> Unit,
-    onNext: () -> Unit,
-    onSeek: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val strings = LocalStrings.current
+fun CastArtwork(session: CastSession, mediaBaseUrl: String, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize().background(Color.Black)) {
         val cover = castImage(mediaBaseUrl, session.current?.thumbnailUrl.orEmpty())
         if (cover.isNotEmpty()) {
@@ -266,28 +265,67 @@ fun CastStage(
         }
         // The controls are white over a picture of any brightness.
         Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = STAGE_SCRIM)))
+    }
+}
+
+/**
+ * What the player draws over a video, for a speaker: the same glass panes and
+ * buttons as [com.mytube.app.ui.watch.PlayerControls] — platform glass on iOS
+ * 26, painted elsewhere — so the speaker's screen is the watch screen's.
+ */
+@Composable
+fun CastStage(
+    session: CastSession,
+    onBack: () -> Unit,
+    onCast: () -> Unit,
+    onPlayPause: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onSeek: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val strings = LocalStrings.current
+    val playing = session.state != CastState.Paused
+    Box(modifier.fillMaxSize()) {
         Row(
-            Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Space.sm),
+            Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Space.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            RoundControl(BackIcon, strings.back, onBack)
+            GlassPane("cast-back", GlassPaneShape.Capsule) {
+                GlassItem(id = "cast-back", symbol = "chevron.down", onPress = onBack) {
+                    ControlButton(icon = ChevronIcon, label = strings.back, width = 48.dp, onClick = onBack)
+                }
+            }
             Text(
                 castStatus(session, strings), color = Color.White, fontSize = 14.sp, lineHeight = 18.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(horizontal = Space.md),
             )
-            RoundControl(CastActiveIcon, strings.castButton, onCast)
+            GlassPane("cast-cast", GlassPaneShape.Capsule) {
+                GlassItem(id = "cast-cast", symbol = "hifispeaker.fill", onPress = onCast) {
+                    ControlButton(icon = CastActiveIcon, label = strings.castButton, width = 48.dp, onClick = onCast)
+                }
+            }
         }
         Row(
             Modifier.align(Alignment.Center),
-            horizontalArrangement = Arrangement.spacedBy(Space.lg),
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (session.state == CastState.Paused) {
-                RoundControl(PlayIcon, strings.castPlay, onPlayPause)
-            } else {
-                RoundControl(PauseIcon, strings.castPause, onPlayPause, enabled = session.state != CastState.Loading)
-            }
-            RoundControl(NextIcon, strings.castNext, onNext, enabled = session.hasNext)
+            DiscButton(
+                id = "cast-previous", symbol = "backward.end.fill", icon = PreviousIcon,
+                label = strings.playPrevious, enabled = session.currentIndex > 0, onClick = onPrevious,
+            )
+            DiscButton(
+                id = "cast-play", symbol = if (playing) "pause.fill" else "play.fill",
+                icon = if (playing) PauseIcon else PlayIcon,
+                label = if (playing) strings.castPause else strings.castPlay,
+                enabled = session.state != CastState.Loading, size = 64.dp, onClick = onPlayPause,
+            )
+            DiscButton(
+                id = "cast-next", symbol = "forward.end.fill", icon = NextIcon,
+                label = strings.castNext, enabled = session.hasNext, onClick = onNext,
+            )
         }
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = Space.md)) {
             SettlingSlider(session.positionSeconds, session.durationSeconds, onSeek)
@@ -302,29 +340,17 @@ fun CastStage(
 
 private const val STAGE_SCRIM = 0.45f
 
-/** Under the title while a speaker plays: its volume, and the two ways to end it. */
+/**
+ * Under the title while a speaker plays: its volume, which the phone's own
+ * buttons move as well (see [FollowVolume]). Stopping is on the cast button.
+ */
 @Composable
-fun CastControls(
-    session: CastSession,
-    onVolume: (Int) -> Unit,
-    onHandoff: () -> Unit,
-    onStop: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun CastControls(session: CastSession, onVolume: (Int) -> Unit, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
-    Column(
-        modifier.fillMaxWidth().padding(horizontal = Space.lg),
-        verticalArrangement = Arrangement.spacedBy(Space.md),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(strings.castVolume, color = Tokens.text2, fontSize = 14.sp, lineHeight = 18.sp)
-            Spacer(Modifier.width(Space.md))
-            SettlingSlider(session.volume, 100, onVolume, Modifier.weight(1f))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.md)) {
-            GlassButton(strings.castHandoff, onHandoff, modifier = Modifier.weight(1f))
-            GlassButton(strings.castStop, onStop, modifier = Modifier.weight(1f))
-        }
+    Row(modifier.fillMaxWidth().padding(horizontal = Space.lg), verticalAlignment = Alignment.CenterVertically) {
+        Text(strings.castVolume, color = Tokens.text2, fontSize = 14.sp, lineHeight = 18.sp)
+        Spacer(Modifier.width(Space.md))
+        SettlingSlider(session.volume, 100, onVolume, Modifier.weight(1f))
     }
 }
 
@@ -401,18 +427,6 @@ private fun QueueRow(
         SmallControl(DownIcon, strings.castMoveDown(item.title), { onMoveDown(index) }, enabled = !last)
         SmallControl(CloseIcon, strings.castRemove(item.title), { onRemove(index) }, enabled = !single)
     }
-}
-
-@Composable
-private fun RoundControl(icon: ImageVector, label: String, onClick: () -> Unit, enabled: Boolean = true) {
-    Icon(
-        icon, contentDescription = label, tint = if (enabled) Tokens.text else Tokens.text2,
-        modifier = Modifier
-            .size(Size.iconButton + 8.dp)
-            .clip(CircleShape)
-            .pressableGlassControl(CircleShape, enabled = enabled, onClick = onClick)
-            .padding(Space.md),
-    )
 }
 
 @Composable
@@ -514,20 +528,26 @@ private fun CastPickerEmptyPreview() = PreviewFrame {
 @Preview
 @Composable
 private fun CastStagePreview() = PreviewFrame {
-    CastStage(previewSession(), "", {}, {}, {}, {}, {}, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+        CastArtwork(previewSession(), "")
+        CastStage(previewSession(), {}, {}, {}, {}, {}, {})
+    }
 }
 
 @Preview
 @Composable
 private fun CastStageLoadingPreview() = PreviewFrame {
-    CastStage(previewSession(CastState.Loading), "", {}, {}, {}, {}, {}, Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+    Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+        CastArtwork(previewSession(CastState.Loading), "")
+        CastStage(previewSession(CastState.Loading), {}, {}, {}, {}, {}, {})
+    }
 }
 
 @Preview
 @Composable
 private fun CastBelowVietnamesePreview() = PreviewFrame(vietnamese = true) {
     LazyColumn {
-        item { CastControls(previewSession(CastState.Paused), {}, {}, {}) }
+        item { CastControls(previewSession(CastState.Paused), {}) }
         castQueueItems(previewSession(), "", {}, {}, {}, {})
     }
 }

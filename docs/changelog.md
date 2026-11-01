@@ -5972,3 +5972,38 @@ simulator against the Kitchen speaker at volume 0 — reopened mid-cast onto the
 cast screen, collapsed to the speaker's miniplayer, a feed video sent with a
 21-song queue and the screen opened on it, the miniplayer reopening the same
 session, Stop returning to the phone's paused player.
+
+## The speaker's screen wears the player's glass, and the volume buttons are the speaker's (2026-11-01)
+
+Reported: *"volume sẽ sync với device đang play … cast player mấy cái button ko
+blur … khi drag cast player xuống dưới, menu nó shrink từ từ … ko cần 2 button
+stop casting + stop"*.
+
+- **The same buttons as the player.** `DiscButton` and `ControlButton` are the
+  player's (now `internal`), in `GlassPane`/`GlassItem`: platform glass on iOS
+  26, painted on Android — the stage had painted discs of its own on both.
+- **The drag is the player's.** `WatchCast` is split: the artwork shrinks into
+  the miniplayer's window with the box, as the video does; the controls are in
+  the overlay that fades at `OVERLAY_FADE_RATE`, as the player's are. They
+  shrank with the box before.
+- **Stopping is on the lit cast button**: one alert, "Stop casting" (here),
+  "Stop", "Keep casting", stacked — three across cut the last to "Keep casti".
+- **The phone's volume buttons are the speaker's.** `FollowVolume` puts the
+  phone at the speaker's level and sends a press to the speaker; the phone's own
+  level comes back when it is let go. `VolumeFollower` decides, red first: the
+  phone reads back what was set on it (in its own steps, and on iOS a moment
+  late), and a poll that left before a press arrives after it — either way the
+  two argued. Android points the activity's volume keys at the media stream
+  while following, or with nothing playing here they move the ringer.
+- **A sheet or alert over the player now does switch its glass off.** The
+  player's overlay provided `LocalGlassVisible = drag == 0f`, replacing the
+  value from outside, so the switch-off from `App.kt` never reached the panes;
+  it is ANDed now. Seen: the cast alert over the cast screen, panes hidden.
+
+Verified on the simulator against the Kitchen speaker at volume 0: the glass
+buttons, the controls gone mid-drag with the artwork travelling, the stacked
+alert and Stop ending the session, Increase Volume taking the speaker from 0 to
+5. **Not verified: the speaker's level coming to the phone.** The simulator has
+no system volume — its `MPVolumeView` is a "No volume available" label and a
+route button, no slider (seen with a tagged log, since removed). On a phone the
+slider is there; that half wants a phone. Android was compiled, not run.

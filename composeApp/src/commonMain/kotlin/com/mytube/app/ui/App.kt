@@ -82,7 +82,9 @@ import com.mytube.app.ui.cast.CastNotice
 import com.mytube.app.domain.model.CastDevice
 import com.mytube.app.domain.model.CastHandback
 import com.mytube.app.domain.model.CastState
+import com.mytube.app.ui.cast.CastArtwork
 import com.mytube.app.ui.cast.CastControls
+import com.mytube.app.ui.cast.FollowVolume
 import com.mytube.app.ui.cast.CastMiniPlayer
 import com.mytube.app.ui.cast.CastStage
 import com.mytube.app.ui.cast.castQueueItems
@@ -93,6 +95,9 @@ import com.mytube.app.ui.cast.castNoticeText
 import com.mytube.app.ui.shell.GlassAlert
 import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.home.Space
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.deviceLanguage
@@ -590,6 +595,8 @@ fun App(
                     else -> open
                 }
             }
+            // The phone's volume buttons are the speaker's while it plays.
+            FollowVolume(castSpeaker?.volume, cast::volume)
             // And the other way: the watch screen open is the remote open, which
             // is asked about every second; collapsed, every five.
             LaunchedEffect(castSpeaker != null, watching?.minimised) {
@@ -1921,26 +1928,22 @@ fun App(
                                 casting = castState.casting,
                                 cast = castSpeaker?.let { speaker ->
                                     WatchCast(
+                                        artwork = { CastArtwork(speaker, baseUrl) },
                                         stage = {
                                             CastStage(
                                                 session = speaker,
-                                                mediaBaseUrl = baseUrl,
                                                 onBack = { collapseWatch() },
                                                 onCast = cast::askAboutCasting,
                                                 onPlayPause = {
                                                     if (speaker.state == CastState.Paused) cast.resume() else cast.pause()
                                                 },
+                                                onPrevious = { cast.jump(speaker.currentIndex - 1) },
                                                 onNext = cast::next,
                                                 onSeek = cast::seek,
                                             )
                                         },
                                         controls = {
-                                            CastControls(
-                                                session = speaker,
-                                                onVolume = cast::volume,
-                                                onHandoff = { cast.stopCasting(resumeFromSpeaker) },
-                                                onStop = cast::stop,
-                                            )
+                                            CastControls(session = speaker, onVolume = cast::volume)
                                         },
                                         queue = {
                                             castQueueItems(
@@ -2040,8 +2043,29 @@ fun App(
                     backdrop = backdrop,
                     onDismiss = cast::dismissAsking,
                     buttons = {
-                        GlassButton(LocalStrings.current.castHandoff, { cast.stopCasting(resumeFromSpeaker) })
-                        GlassButton(LocalStrings.current.castKeep, cast::keepCasting, primary = true)
+                        // Stacked, one to a line: three across do not fit a
+                        // phone, and "Keep casting" was cut to "Keep casti".
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+                            GlassButton(
+                                LocalStrings.current.castHandoff,
+                                { cast.stopCasting(resumeFromSpeaker) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            GlassButton(
+                                LocalStrings.current.castStop,
+                                {
+                                    cast.dismissAsking()
+                                    cast.stop()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            GlassButton(
+                                LocalStrings.current.castKeep,
+                                cast::keepCasting,
+                                modifier = Modifier.fillMaxWidth(),
+                                primary = true,
+                            )
+                        }
                     },
                 )
                 val castNotice = castNoticeText(castState.notice, LocalStrings.current)

@@ -237,9 +237,11 @@ drives them, so this app never talks to a speaker or carries a Cast SDK. It asks
 the gateway's `/api/cast/*` and shows: a cast item in the player's pill (absent
 for a broadcast or when no speaker answers) and a picker sheet. **While a
 speaker plays, the watch screen is the remote**: it follows the speaker's song,
-draws the speaker's controls where the picture is (`WatchCast`), its volume and
-stop under the title and its queue where up next is, and the miniplayer is the
-same capsule with the song's artwork. A video opened anywhere then goes to the
+draws the speaker's controls where the picture is (`WatchCast`) with the
+player's own glass buttons, its volume under the title and its queue where up
+next is; stopping is on the lit cast button. The miniplayer is the same capsule
+with the song's artwork, and the phone's volume buttons are the speaker's
+(`FollowVolume`, decided by `VolumeFollower`). A video opened anywhere then goes to the
 speaker (`CastStore.pick`, with its up next when opened alone), never to the
 phone; the phone's paused player reports no progress and starts no narration
 (`playsElsewhere`). `CastStore` polls 1s
@@ -318,7 +320,7 @@ press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden
   `focusScale`, `focusRimShape`, `tvSeekStep`, `shelvesFrom`,
   `shelfCardWidth`, `asksWhoIsWatching`, `withTone`, `typed`, `caughtUp`,
   `rowEntryIndex`, `keptInPlace`, `isWaitingForBytes`, `tapJump`,
-  `castPollMillis`.
+  `castPollMillis`, `castQueueOf`, `VolumeFollower`.
 - **Regression tests go red on the reported symptom first.** Test bodies for wire
   mapping are copied from the running gateway, not invented.
 - **A `jvm` target exists only to run tests.** It does not contradict "no desktop".
