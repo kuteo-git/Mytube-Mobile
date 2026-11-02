@@ -127,10 +127,12 @@ to reach for ExoPlayer directly.
   the window's size — and passed to `App` with no default. `LocalTelevision`
   carries it. Only the shell, Home, the player, search, and the profile question
   have TV versions (`ui/tv/`); every other page is the phone's, reached by focus.
-- **On the TV the player's `PlayerView` is a TextureView** (`tv_player_view.xml`);
-  a SurfaceView there left stale pixels over the film.
-- **No sampled glass on the TV**: `LocalBackdrop` is null, so every material
-  falls back to paint.
+- **The player's `PlayerView` is a TextureView** (`player_view.xml`), on the TV
+  and the phone: a SurfaceView left stale pixels over the film on the TV, and
+  has nothing Compose can sample for the glass over it.
+- **No sampled glass on the TV but over the picture**: `LocalBackdrop` is null,
+  so every material falls back to paint; only the player's discs sample the
+  frame (`pictureGlass`).
 - **Focus is worn by `GlassPress`**, only in keyboard input mode, so a phone
   never draws it.
 - **The profile question is asked once**: while the stored profile id names
@@ -388,7 +390,7 @@ Everything on the external volume; `source env.sh` before working.
   elements by label at the moment of the tap, not by remembered coordinates.
 - **When Data2 is not mounted, this project cannot be built.**
 
-## 10. Status (v0.1.19, 2026-11-02)
+## 10. Status (v0.1.20, 2026-11-02)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
   household's iPhone, release build via AltStore).** 486 tests, seven guards.
@@ -479,10 +481,13 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
 ### Glass and rendering
 
 - **Three materials**: `BarBackdrop`/`liquidGlass` *sample* (only for panes drawn
-  outside the recorded layer); `glassControl`/`glassSurface` *paint* (anything on
-  the page or over video on Android); `GlassPane` is *platform-drawn* on iOS 26
-  (only for still chrome over the video). [One material, two kinds; The glass over
-  the picture is finally glass]
+  outside the recorded layer), and on Android `pictureGlass` samples the
+  picture for the controls over it, recorded around `VideoSurface` or the cast
+  artwork and never around the controls; `glassControl`/`glassSurface` *paint*
+  (anything on the page, and over the video where nothing records it);
+  `GlassPane` is *platform-drawn* on iOS 26 (only for still chrome over the
+  video). [One material, two kinds; The glass over the picture is finally glass;
+  The controls over the picture are the miniplayer's glass on Android]
 - **A sampled backdrop inside the recorded layer is a Skia stack overflow, not a
   bad look.** Draw every sheet, alert and menu from `App.kt`, outside every
   recording. `glassSource()` is a no-op under `LocalGlassRecording` and when

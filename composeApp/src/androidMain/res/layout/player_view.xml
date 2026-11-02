@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The television's player view: the same PlayerView, with the picture drawn
-    into a TextureView instead of a SurfaceView.
+    The player view: the same PlayerView, with the picture drawn into a
+    TextureView instead of a SurfaceView. The television's first, then the
+    phone's.
 
     A SurfaceView shows through a hole punched in the window, and on the
     household's Chromecast the hole is only punched where a frame redraws. The
@@ -9,7 +10,13 @@
     1024px tile, then jagged patches of #101010 over the film, changing as the
     controls came and went. A TextureView is drawn inside the window like
     everything else, so there is no hole to punch. It costs a copy per frame,
-    which a 1080p stream on that box absorbs; the phone keeps its SurfaceView.
+    which a 1080p stream on that box absorbs.
+
+    The phone took it for the glass over the picture: a TextureView is drawn by
+    the window, so Compose can record it and the controls can blur the video
+    under them, the miniplayer's material (`pictureGlass`). Through a
+    SurfaceView's hole there was nothing to sample, and the controls were paint
+    — a clear disc with a rim, reported beside the miniplayer's dark glass.
 
     Only an XML attribute can choose the surface type, which is why this file
     exists at all.

@@ -64,6 +64,13 @@ import com.mytube.app.ui.theme.Tokens
  * passes under them is a Compose-drawn feed; this cannot, and no parameter
  * changes that.
  *
+ * # On Android this is now the fallback, not the answer — see [pictureGlass]
+ *
+ * The picture became a TextureView, which the window draws, so a layer
+ * recorded around it has the frame in it and the controls blur it in the
+ * miniplayer's material. This paint is what is left where nothing records the
+ * picture: iOS before 26, a Preview, the JVM render.
+ *
  * # On iOS 26 this is now the fallback, not the answer — see [GlassPane]
  *
  * The paragraph above is still true of *this* modifier and of every platform it

@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CornerBasedShape
@@ -649,3 +650,35 @@ fun Modifier.liquidGlass(
 }
 
 
+
+/**
+ * What the controls over the picture sample: the video, recorded around the
+ * player's surface, or null where nothing records it (iOS, a Preview).
+ *
+ * Its own local rather than [LocalBackdrop]: that one is the shell's feed, and
+ * a disc over a film reading it would frost the tab hidden behind the player.
+ */
+val LocalPictureBackdrop = compositionLocalOf<Backdrop?> { null }
+
+/**
+ * A control over the picture, in the miniplayer's material: the frame under it
+ * blurred and bent, with the bars' tint over it.
+ *
+ * Reported on Android beside the miniplayer: the player's discs were a clear
+ * circle and a rim — [glassSurface], paint, because the picture was a
+ * SurfaceView with nothing to sample — while the capsule under them was dark
+ * glass. One material for both now. Where no picture is recorded, or the shape
+ * has no corners for the lens to read, it is still that paint.
+ */
+@Composable
+fun Modifier.pictureGlass(shape: Shape, press: GlassPress? = null): Modifier {
+    val backdrop = LocalPictureBackdrop.current
+    val corners = shape as? CornerBasedShape
+    if (backdrop == null || corners == null) return this.glassSurface(shape, press = press)
+    return this.drawBackdrop(
+        backdrop = backdrop,
+        shape = { corners },
+        effects = { controlLens(press) },
+        onDrawSurface = { drawRect(Tokens.bg.copy(alpha = TINT_GLASS)) },
+    )
+}

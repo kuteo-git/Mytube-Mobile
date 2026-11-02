@@ -6,6 +6,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.interop.UIKitView
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.player.AvVideoPlayer
 import kotlinx.cinterop.CValue
@@ -205,3 +206,7 @@ private inline fun withoutImplicitAnimation(block: () -> Unit) {
         CATransaction.commit()
     }
 }
+
+/** See the expect: Compose never draws an `AVPlayerLayer`. */
+@Composable
+actual fun rememberPictureBackdrop(): LayerBackdrop? = null

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.mytube.app.domain.repository.VideoPlayer
 
 /**
@@ -19,3 +20,7 @@ import com.mytube.app.domain.repository.VideoPlayer
 actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) {
     Box(modifier.background(Color.Black))
 }
+
+/** Nothing plays here, so there is nothing to sample. */
+@Composable
+actual fun rememberPictureBackdrop(): LayerBackdrop? = null

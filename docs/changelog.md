@@ -6171,3 +6171,44 @@ committed** — a `model` line in a global gitignore. A fresh clone did not
 compile, v0.1.18's tag included. The project's `.gitignore` now names them as
 source; a clean clone compiles.
 
+## The controls over the picture are the miniplayer's glass on Android (2026-11-02)
+
+Reported from Android: the player's buttons were not blurred and not dark like
+the miniplayer — then, the same for the watch screen and the TV's player. On
+the emulator the discs were `glassSurface`, paint: a clear circle with a white
+rim, the frame passing through unchanged, under a miniplayer of dark frosted
+glass.
+
+- **Why it was paint.** The phone's picture was a SurfaceView, a hole punched
+  in the window that Compose never draws, so a backdrop recorded around it had
+  no frame in it. `glassSurface`'s own comment said as much.
+- **The picture is a TextureView on the phone too** (`player_view.xml`, which
+  was the TV's layout). The window draws a TextureView, so a `layerBackdrop`
+  around `VideoSurface` records the frame.
+- **`pictureGlass`** is the miniplayer's material for a control over the
+  picture: `controlLens` (vibrancy, blur 8dp, lens), `TINT_GLASS` over it. It
+  reads `LocalPictureBackdrop`, provided by the watch screen, the cast stage
+  (which records the song's artwork) and the TV's player, and falls back to
+  `glassSurface` where nothing is recorded. `GlassPane`'s fallback and
+  `pressableGlassSurface` both use it, so every disc over the picture on
+  Android changed with one line each.
+- **The recording is under the controls, never around them**: a Box around
+  `VideoSurface` (or the artwork) carries `layerBackdrop`, and the controls are
+  its siblings. iOS returns no backdrop (`rememberPictureBackdrop` is
+  `expect`): its picture is an `AVPlayerLayer` Compose never draws, iOS 26 has
+  `GlassPane`, and a recording nested in the watch page's own is the Skia crash.
+- **On the TV this is the one sampled glass**, against "painted glass only":
+  that rule was about panes over lists, and these are a few discs over the
+  frame, shown for seconds.
+
+Measured on the phone emulator: two screenshots 0.8s apart with the controls
+up, the pause disc's interior carrying the frame's colour in each — sampled
+live, not a still. Dragging to the miniplayer still shrinks the picture into
+its round window. On the TV emulator the transport and action discs are the
+same dark glass, the focused one still wearing its rim.
+
+**Not measured**: the cast stage over the song's artwork (nothing was cast,
+to keep the speakers silent), and the Chromecast's frame time with the
+TextureView sampled — the box was not reachable over `adb`. A `gfxinfo` run
+there decides whether the TV keeps this.
+

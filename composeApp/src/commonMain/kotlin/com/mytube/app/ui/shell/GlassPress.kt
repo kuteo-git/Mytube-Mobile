@@ -428,8 +428,8 @@ fun Modifier.pressableLiquidGlass(
 ): Modifier = pressableMaterial(shape, enabled, onClick) { liquidGlass(shape, selected = selected, press = it) }
 
 /**
- * The same, for a control over the video, which is painted from black — or,
- * [selected], the design system's selected control, the inverted surface.
+ * The same, for a control over the video: [pictureGlass] — or, [selected], the
+ * design system's selected control, the inverted surface.
  *
  * One modifier for both states rather than a choice between this and
  * [pressableGlassControl]: two modifiers are two remembered presses and two
@@ -443,7 +443,7 @@ fun Modifier.pressableGlassSurface(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ): Modifier = pressableMaterial(shape, enabled, onClick) {
-    if (selected) glassControl(shape, selected = true, press = it) else glassSurface(shape, press = it)
+    if (selected) glassControl(shape, selected = true, press = it) else pictureGlass(shape, press = it)
 }
 
 /**

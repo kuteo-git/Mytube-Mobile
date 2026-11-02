@@ -73,6 +73,7 @@ import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.shell.LocalGlassVisible
+import com.mytube.app.ui.shell.LocalPictureBackdrop
 import com.mytube.app.ui.shell.WatchSkeleton
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.theme.MytubeTheme
@@ -476,9 +477,17 @@ fun WatchContent(
             },
             contentAlignment = Alignment.Center,
         ) {
+            // What the controls over the picture blur: the frame itself, or the
+            // song's artwork at a speaker. Recorded here, under the controls and
+            // never around them, so a disc never samples itself.
+            val picture = rememberPictureBackdrop()
+            val recordsPicture = picture?.let { Modifier.layerBackdrop(it) } ?: Modifier
             if (cast != null) {
-                cast.artwork()
-                CompositionLocalProvider(LocalGlassVisible provides (LocalGlassVisible.current && drag == 0f)) {
+                Box(Modifier.fillMaxSize().then(recordsPicture)) { cast.artwork() }
+                CompositionLocalProvider(
+                    LocalGlassVisible provides (LocalGlassVisible.current && drag == 0f),
+                    LocalPictureBackdrop provides picture,
+                ) {
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -510,11 +519,13 @@ fun WatchContent(
                     // Filling the screen there is a thing somebody asks for and
                     // expects to keep, so it is its own state and its own
                     // gesture. See `pinchToFill`.
-                    VideoSurface(
-                        player,
-                        Modifier.fillMaxSize(),
-                        fill = if (fullscreen) zoomedToFill else drag > 0f,
-                    )
+                    Box(Modifier.fillMaxSize().then(recordsPicture)) {
+                        VideoSurface(
+                            player,
+                            Modifier.fillMaxSize(),
+                            fill = if (fullscreen) zoomedToFill else drag > 0f,
+                        )
+                    }
 
                     // Everything drawn *on* the picture goes as soon as the drag
                     // starts, and quickly — gone by a sixth of the journey.
@@ -536,7 +547,10 @@ fun WatchContent(
                     // And with whatever is outside: a sheet or an alert of the
                     // app's over this screen switches the platform's glass off
                     // too, or iOS 26 draws it over the sheet.
-                    CompositionLocalProvider(LocalGlassVisible provides (LocalGlassVisible.current && drag == 0f)) {
+                    CompositionLocalProvider(
+                        LocalGlassVisible provides (LocalGlassVisible.current && drag == 0f),
+                        LocalPictureBackdrop provides picture,
+                    ) {
                     Box(
                         Modifier
                             .fillMaxSize()

@@ -2,6 +2,7 @@ package com.mytube.app.ui.watch
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.mytube.app.domain.repository.VideoPlayer
 
 /**
@@ -40,3 +41,16 @@ expect fun VideoSurface(
      */
     fill: Boolean = false,
 )
+
+/**
+ * What records the picture for the controls over it to sample
+ * (`LocalPictureBackdrop`), or null where Compose cannot see the picture.
+ *
+ * Android's video is a TextureView, which the window draws, so a layer recorded
+ * around [VideoSurface] has the frame in it. iOS's is an `AVPlayerLayer` that
+ * Compose never draws — there iOS 26 has [com.mytube.app.ui.shell.GlassPane]
+ * and earlier versions keep the paint — and a recording would also nest inside
+ * the watch page's own, which Skia does not survive.
+ */
+@Composable
+expect fun rememberPictureBackdrop(): LayerBackdrop?

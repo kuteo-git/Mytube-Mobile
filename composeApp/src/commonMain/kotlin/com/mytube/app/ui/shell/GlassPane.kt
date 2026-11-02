@@ -90,7 +90,7 @@ fun GlassPane(
     val pressSource = remember { MutableInteractionSource() }
 
     if (!LocalNativeGlass.current) {
-        Box(modifier.pressHost(pressSource).glassSurface(shape.compose())) {
+        Box(modifier.pressHost(pressSource).pictureGlass(shape.compose())) {
             CompositionLocalProvider(LocalPressHost provides pressSource) { content() }
         }
         return

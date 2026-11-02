@@ -11,7 +11,8 @@ import androidx.media3.ui.PlayerView
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.R
 import com.mytube.app.player.ExoVideoPlayer
-import com.mytube.app.ui.shell.LocalTelevision
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 @UnstableApi
 @Composable
@@ -20,19 +21,13 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) 
     // until then, which is a fraction of a second and is why the watch screen
     // keeps a black box of the right shape underneath.
     val controller = (player as? ExoVideoPlayer)?.controller ?: return
-    val television = LocalTelevision.current
 
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            // A TextureView on the television — see `tv_player_view.xml` for
-            // what the SurfaceView left over the picture there.
-            val view = if (television) {
-                LayoutInflater.from(context).inflate(R.layout.tv_player_view, null) as PlayerView
-            } else {
-                PlayerView(context)
-            }
-            view.apply {
+            // A TextureView — see `player_view.xml` for what the SurfaceView
+            // left over the picture on the TV, and why the glass needs it.
+            (LayoutInflater.from(context).inflate(R.layout.player_view, null) as PlayerView).apply {
                 this.player = controller
                 // The app draws its own controls, in Compose, shared with iOS.
                 // Media3's are Android-only and would make the two platforms
@@ -91,3 +86,7 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) 
         onRelease = { it.player = null },
     )
 }
+
+/** A TextureView is drawn by the window, so Compose can record it. */
+@Composable
+actual fun rememberPictureBackdrop(): LayerBackdrop? = rememberLayerBackdrop()
