@@ -6212,3 +6212,9 @@ to keep the speakers silent), and the Chromecast's frame time with the
 TextureView sampled — the box was not reachable over `adb`. A `gfxinfo` run
 there decides whether the TV keeps this.
 
+**Taken back on the TV the same day.** Installed on the Chromecast, the
+sampled discs were too slow — reported by the household, not measured — and the
+TV's player records nothing again. Its discs are `pictureGlass`'s dark tint
+(`Tokens.bg` at `TINT_GLASS`) with no blur: the miniplayer's colour without the
+frame bent through it. The phone keeps the sampled glass.
+

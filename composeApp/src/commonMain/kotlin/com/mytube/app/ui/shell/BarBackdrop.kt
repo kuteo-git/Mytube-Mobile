@@ -669,9 +669,14 @@ val LocalPictureBackdrop = compositionLocalOf<Backdrop?> { null }
  * SurfaceView with nothing to sample — while the capsule under them was dark
  * glass. One material for both now. Where no picture is recorded, or the shape
  * has no corners for the lens to read, it is still that paint.
+ *
+ * **The television gets the tint and no blur.** It sampled for a day, and on
+ * the Chromecast it was too slow to keep: the TV's player records nothing, and
+ * its discs are the miniplayer's dark without the frame bent through them.
  */
 @Composable
 fun Modifier.pictureGlass(shape: Shape, press: GlassPress? = null): Modifier {
+    if (LocalTelevision.current) return this.clip(shape).background(Tokens.bg.copy(alpha = TINT_GLASS))
     val backdrop = LocalPictureBackdrop.current
     val corners = shape as? CornerBasedShape
     if (backdrop == null || corners == null) return this.glassSurface(shape, press = press)

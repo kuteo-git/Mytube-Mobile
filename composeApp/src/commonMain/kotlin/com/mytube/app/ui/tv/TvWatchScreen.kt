@@ -94,7 +94,6 @@ import com.mytube.app.ui.i18n.Strings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.shell.FOCUS_MAX_OUTSET
 import com.mytube.app.ui.shell.LocalTelevision
-import com.mytube.app.ui.shell.LocalPictureBackdrop
 import com.mytube.app.ui.shell.TV_SAFE_HORIZONTAL
 import com.mytube.app.ui.shell.TV_SAFE_VERTICAL
 import com.mytube.app.ui.shell.focusStop
@@ -120,8 +119,6 @@ import com.mytube.app.ui.watch.SubtitleOverlay
 import com.mytube.app.ui.watch.ThumbFilledIcon
 import com.mytube.app.ui.watch.ThumbIcon
 import com.mytube.app.ui.watch.VideoSurface
-import com.mytube.app.ui.watch.rememberPictureBackdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
 import com.mytube.app.ui.watch.WatchState
 import com.mytube.app.ui.watch.WatchViewModel
 import com.mytube.app.ui.watch.trackLabel
@@ -448,10 +445,6 @@ private fun Playing(
         draft = draft.press(direction, playback.positionSeconds, playback.durationSeconds)
     }
 
-    // What the controls blur — the one sampled glass on the TV, and only the
-    // frame under a few discs. See `pictureGlass`.
-    val picture = rememberPictureBackdrop()
-    CompositionLocalProvider(LocalPictureBackdrop provides picture) {
     Box(
         Modifier
             .fillMaxSize()
@@ -498,9 +491,7 @@ private fun Playing(
             },
     ) {
         if (player != null) {
-            Box(Modifier.fillMaxSize().then(picture?.let { Modifier.layerBackdrop(it) } ?: Modifier)) {
-                VideoSurface(player = player, modifier = Modifier.fillMaxSize())
-            }
+            VideoSurface(player = player, modifier = Modifier.fillMaxSize())
         }
 
         // Where focus rests while nothing is drawn over the picture.
@@ -652,7 +643,6 @@ private fun Playing(
                 onToggleAutoplay = onToggleAutoplay,
             )
         }
-    }
     }
 }
 

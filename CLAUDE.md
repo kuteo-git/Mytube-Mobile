@@ -130,9 +130,9 @@ to reach for ExoPlayer directly.
 - **The player's `PlayerView` is a TextureView** (`player_view.xml`), on the TV
   and the phone: a SurfaceView left stale pixels over the film on the TV, and
   has nothing Compose can sample for the glass over it.
-- **No sampled glass on the TV but over the picture**: `LocalBackdrop` is null,
-  so every material falls back to paint; only the player's discs sample the
-  frame (`pictureGlass`).
+- **No sampled glass on the TV**: `LocalBackdrop` is null, so every material
+  falls back to paint; the player's discs are `pictureGlass`'s dark tint with no
+  blur — sampling the frame was too slow on the Chromecast.
 - **Focus is worn by `GlassPress`**, only in keyboard input mode, so a phone
   never draws it.
 - **The profile question is asked once**: while the stored profile id names
@@ -481,8 +481,8 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
 ### Glass and rendering
 
 - **Three materials**: `BarBackdrop`/`liquidGlass` *sample* (only for panes drawn
-  outside the recorded layer), and on Android `pictureGlass` samples the
-  picture for the controls over it, recorded around `VideoSurface` or the cast
+  outside the recorded layer), and on an Android phone `pictureGlass` samples
+  the picture for the controls over it, recorded around `VideoSurface` or the cast
   artwork and never around the controls; `glassControl`/`glassSurface` *paint*
   (anything on the page, and over the video where nothing records it);
   `GlassPane` is *platform-drawn* on iOS 26 (only for still chrome over the
