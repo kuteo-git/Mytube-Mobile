@@ -59,7 +59,9 @@ The same APK, on Android TV and Google TV, laid out for a remote.
   speaks them; this app plays the clips over the video and ducks the original
   audio while a line is spoken. Its two levels, how loud the voice is and how far
   the video drops under it, are the viewer's, and they are separate numbers
-  rather than one chained through the other.
+  rather than one chained through the other. A video that already speaks
+  Vietnamese opens with narration off, even with the switch on; pressing it
+  narrates anyway.
 - **Background audio**, a lock-screen entry with artwork and a working scrubber,
   and a miniplayer that crosses every screen.
 - **Search**, which reaches the library *and* YouTube. Opening an upstream result

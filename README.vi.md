@@ -57,6 +57,8 @@ Cùng một APK, chạy trên Android TV và Google TV, bố cục cho remote.
   phát các đoạn tiếng đó đè lên video và hạ tiếng gốc xuống trong lúc đang nói.
   Hai mức, giọng đọc to bao nhiêu và video tụt xuống bao nhiêu dưới nó, là của
   người xem, và là hai con số riêng chứ không phải một cái nhân vào cái kia.
+  Video vốn nói tiếng Việt thì mở ra với thuyết minh tắt, kể cả khi công tắc
+  đang bật; bấm bật thì vẫn thuyết minh.
 - **Phát nền**, mục trên màn hình khoá có ảnh và thanh tua kéo được, và một
   miniplayer đi theo qua mọi màn.
 - **Tìm kiếm** chạm tới cả thư viện *lẫn* YouTube. Mở một kết quả từ YouTube thì

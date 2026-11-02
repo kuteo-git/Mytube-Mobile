@@ -388,10 +388,10 @@ Everything on the external volume; `source env.sh` before working.
   elements by label at the moment of the tap, not by remembered coordinates.
 - **When Data2 is not mounted, this project cannot be built.**
 
-## 10. Status (v0.1.18, 2026-11-01)
+## 10. Status (v0.1.19, 2026-11-02)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
-  household's iPhone, release build via AltStore).** 465 tests, seven guards.
+  household's iPhone, release build via AltStore).** 486 tests, seven guards.
 - **Runs on the household's Chromecast with Google TV** (release build over
   `adb`): rail, shelves, the full-screen player with D-pad seeking, search with
   an on-screen keyboard and voice, the profile question. Released in v0.1.12;
@@ -404,6 +404,8 @@ Everything on the external volume; `source env.sh` before working.
   storyboard scrub preview, pinch-to-fill, double-tap seek, comments, up next,
   autoplay with a queue), Playlists (create/rename/delete, save sheet), Saved,
   History, Subscriptions, Profile, Settings (server, voice, language).
+- **A video that speaks Vietnamese opens with narration off** (v0.1.19): the
+  language from the gateway, on the phone, the TV and the speakers.
 - Background audio, the lock screen and narration have been heard on real
   phones.
 - **Known open items**: an iOS-only one-frame flicker of the watch layer during
