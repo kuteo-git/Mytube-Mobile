@@ -61,6 +61,16 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -552,7 +562,7 @@ private fun Playing(
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .background(BOTTOM_SCRIM)
+                    .scrim(BOTTOM_SCRIM)
                     .padding(horizontal = TV_SAFE_HORIZONTAL, vertical = TV_SAFE_VERTICAL),
             ) {
                 SeekBar(
@@ -718,7 +728,7 @@ private fun Controls(
             Modifier
                 .weight(1f, fill = false)
                 .fillMaxWidth()
-                .background(TOP_SCRIM)
+                .scrim(TOP_SCRIM)
                 .padding(horizontal = TV_SAFE_HORIZONTAL, vertical = TV_SAFE_VERTICAL),
         ) {
             Text(
@@ -743,7 +753,7 @@ private fun Controls(
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(BOTTOM_SCRIM)
+                .scrim(BOTTOM_SCRIM)
                 .padding(top = Space.md, bottom = TV_SAFE_VERTICAL),
         ) {
             Column(Modifier.padding(horizontal = TV_SAFE_HORIZONTAL)) {
@@ -1412,6 +1422,35 @@ private val BOTTOM_SCRIM = Brush.verticalGradient(
     0.35f to Color.Black.copy(alpha = 0.6f),
     1f to Color.Black.copy(alpha = 0.85f),
 )
+
+/**
+ * A vertical scrim, baked once into a strip [SCRIM_STEPS] pixels tall and
+ * stretched over the block.
+ *
+ * Drawn as a gradient, the scrims were most of the player's frame on the
+ * Chromecast: framestats p50 75-79ms a frame and 27-28ms of GPU with the
+ * controls up, 39-43ms and 10ms baked. A stretched texture is a lookup per
+ * pixel where the gradient was a shader.
+ */
+@Composable
+private fun Modifier.scrim(brush: Brush): Modifier {
+    val strip = remember(brush) {
+        ImageBitmap(1, SCRIM_STEPS).also { image ->
+            CanvasDrawScope().draw(
+                Density(1f), LayoutDirection.Ltr, Canvas(image), Size(1f, SCRIM_STEPS.toFloat()),
+            ) { drawRect(brush) }
+        }
+    }
+    return this.drawBehind {
+        drawImage(
+            strip,
+            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+            filterQuality = FilterQuality.Low,
+        )
+    }
+}
+
+private const val SCRIM_STEPS = 256
 
 // --- previews ---------------------------------------------------------------
 
