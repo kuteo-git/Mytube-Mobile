@@ -45,13 +45,17 @@ class DiscoverMappingTest {
         assertEquals(2, videos.size)
         val first = videos.first()
         assertEquals("UH21OnJwxZE", first.id)
-        assertEquals("Phương Mỹ Chi and DTAP", first.channelName)
+        assertEquals("Phương Mỹ Chi and DTAP", first.channel.name)
         assertEquals(247, first.durationSeconds)
         assertEquals(20_954_665, first.viewCount)
         assertTrue(first.inLibrary)
         // Absolute, and pointing at YouTube. Nothing here is resolved against
         // the server's address the way a library thumbnail is.
-        assertTrue(first.thumbnailUrl.startsWith("https://i.ytimg.com/"))
+        assertTrue(first.thumbnailPath.startsWith("https://i.ytimg.com/"))
+        // A gateway older than the channel fields: an initial, nothing to open.
+        assertEquals("", first.channel.id)
+        assertEquals("", first.channel.avatarPath)
+        assertEquals("", first.publishedAt)
         // The address, not an id turned into one by this app.
         assertEquals("https://www.youtube.com/watch?v=UH21OnJwxZE", first.sourceUrl)
     }
@@ -59,9 +63,8 @@ class DiscoverMappingTest {
     /**
      * An empty answer is an answer.
      *
-     * The gateway returns `{"videos":[]}` for a blank query, for a pasted
-     * address naming no video, and for one whose video the library already
-     * holds. None of those is a failure and none may throw.
+     * The gateway returns `{"videos":[]}` for a blank query and for a pasted
+     * address naming no video. Neither is a failure and neither may throw.
      */
     @Test
     fun anEmptyPageIsNotAFailure() {
@@ -84,7 +87,29 @@ class DiscoverMappingTest {
         assertEquals("x", video.id)
         assertEquals(0, video.durationSeconds)
         assertEquals(0, video.viewCount)
-        assertEquals("", video.channelName)
+        assertEquals("", video.channel.name)
         assertFalse(video.inLibrary)
+    }
+
+    /**
+     * The fields the search page's Home card needs: the channel to open from
+     * the avatar, the library's avatar for it, and the upload date. The body is
+     * the shape `TestDiscoverCarriesTheChannelAndTheDate` asserts in the
+     * gateway (services/gateway/internal/api/discover_test.go).
+     */
+    @Test
+    fun readsTheChannelAndTheDate() {
+        val video = json.decodeFromString<ExternalVideoDto>(
+            """{"id":"a","title":"A","channelName":"Known","channelId":"UCknown",
+               "channelAvatarPath":"channels/UCknown/avatar.jpg","durationSeconds":60,
+               "viewCount":5,"thumbnailUrl":"https://i.ytimg.com/vi/a/hq720.jpg",
+               "sourceUrl":"https://www.youtube.com/watch?v=a",
+               "publishedAt":"2026-10-01T08:00:00Z","inLibrary":false}""",
+        ).toDomain()
+
+        assertEquals("UCknown", video.channel.id)
+        assertEquals("channels/UCknown/avatar.jpg", video.channel.avatarPath)
+        assertEquals("2026-10-01T08:00:00Z", video.publishedAt)
+        assertEquals("https://www.youtube.com/watch?v=a", video.sourceUrl)
     }
 }

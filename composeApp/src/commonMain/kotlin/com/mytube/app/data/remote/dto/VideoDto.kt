@@ -9,7 +9,6 @@ import com.mytube.app.domain.model.NarrationStatus
 import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.Topic
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -304,17 +303,24 @@ fun CommentDto.toDomain(): Comment = Comment(
  * One result from `GET /api/discover` — a video on YouTube.
  *
  * Every field defaulted, as every DTO here is: the wire really can omit one, and
- * a parse failure is the worst possible answer to a legal response.
+ * a parse failure is the worst possible answer to a legal response. A gateway
+ * older than the channel fields sends none, and the card draws an initial with
+ * nothing to open.
  */
 @Serializable
 data class ExternalVideoDto(
     val id: String = "",
     val title: String = "",
     val channelName: String = "",
+    val channelId: String = "",
+    /** The library's avatar for the channel, a path under /media; empty when it has none. */
+    val channelAvatarPath: String = "",
     val durationSeconds: Int = 0,
     val viewCount: Long = 0,
+    /** Absolute for a video still on YouTube, a /media path for one on this disk. */
     val thumbnailUrl: String = "",
     val sourceUrl: String = "",
+    val publishedAt: String = "",
     val inLibrary: Boolean = false,
 )
 
@@ -322,19 +328,20 @@ data class ExternalVideoDto(
 data class DiscoverDto(val videos: List<ExternalVideoDto> = emptyList())
 
 /**
- * The wire's shape into the app's.
+ * A search result as a [Video], drawn by Home's card.
  *
- * Nothing is computed here and that is the point: the gateway sends exactly the
- * eight fields this screen draws, so the mapper's whole job is to stop the
- * `@Serializable` annotation from travelling any further inward.
+ * The same shape as a channel page's upstream row ([ChannelVideoDto.toDomain]):
+ * the address and the flag that make it openable, and a thumbnail `imageModel`
+ * resolves whether it is a URL or a path.
  */
-fun ExternalVideoDto.toDomain(): ExternalVideo = ExternalVideo(
+fun ExternalVideoDto.toDomain(): Video = Video(
     id = id,
     title = title,
-    channelName = channelName,
+    channel = Channel(id = channelId, name = channelName, handle = "", avatarPath = channelAvatarPath),
     durationSeconds = durationSeconds,
     viewCount = viewCount,
-    thumbnailUrl = thumbnailUrl,
+    publishedAt = publishedAt,
+    thumbnailPath = thumbnailUrl,
     sourceUrl = sourceUrl,
     inLibrary = inLibrary,
 )

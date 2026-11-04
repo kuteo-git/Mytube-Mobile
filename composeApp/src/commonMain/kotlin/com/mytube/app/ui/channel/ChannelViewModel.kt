@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.SortOption
+import com.mytube.app.domain.repository.ChannelMissing
 import com.mytube.app.domain.repository.VideoRepository
 import com.mytube.app.ui.appendNew
 import com.mytube.app.ui.watch.QueueItem
@@ -20,6 +21,8 @@ sealed interface ChannelState {
     data object Loading : ChannelState
     data object NeedsServer : ChannelState
     data class Failed(val message: String) : ChannelState
+    /** YouTube says there is no such channel; nothing to retry. */
+    data object Missing : ChannelState
 
     data class Ready(
         val channel: Channel,
@@ -115,7 +118,7 @@ class ChannelViewModel(
      * household had never imported. The video was fine; there was simply no row
      * to ask about.
      *
-     * `SearchViewModel.openExternal` is the same three steps for the same
+     * `SearchViewModel.open` is the same three steps for the same
      * reason, and the rules it records hold here:
      *
      * - **The row is written first and the screen navigates second.** Going the
@@ -166,14 +169,6 @@ class ChannelViewModel(
         }
     }
 
-    /**
-     * This row, now in the catalogue under [id].
-     *
-     * The address is carried rather than dropped: it is the only thing a row
-     * can be re-resolved from, and nothing is gained by forgetting it.
-     */
-    private fun QueueItem.written(id: String) =
-        copy(id = id, inLibrary = true)
 
     fun toggleSubscribed() {
         val current = _state.value as? ChannelState.Ready ?: return
@@ -256,5 +251,6 @@ class ChannelViewModel(
     }
 
     private fun asState(error: Throwable): ChannelState =
-        error.toScreenState(ChannelState.NeedsServer, ChannelState::Failed)
+        if (error is ChannelMissing) ChannelState.Missing
+        else error.toScreenState(ChannelState.NeedsServer, ChannelState::Failed)
 }

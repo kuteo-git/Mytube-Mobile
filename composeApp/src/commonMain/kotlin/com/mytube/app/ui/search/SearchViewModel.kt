@@ -3,7 +3,6 @@ package com.mytube.app.ui.search
 import com.mytube.app.ui.toScreenState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.VideoRepository
 import kotlinx.coroutines.CancellationException
@@ -18,15 +17,13 @@ import kotlinx.coroutines.launch
 /**
  * How long to wait after the last keystroke before asking.
  *
- * A search is a full-text query plus a recorded behaviour signal — the gateway
- * records one per request — so typing "nothing phone" without this is thirteen
- * queries and thirteen signals for one intent, and recsys would be learning
- * every prefix of what somebody typed.
+ * Every search is a yt-dlp run against the internet, so typing "nothing phone"
+ * without this is thirteen upstream requests for one intent.
  */
 private const val DEBOUNCE_MILLIS = 300L
 
 /**
- * How many upstream results to ask for, and how many more each time.
+ * How many results to ask for, and how many more each time.
  *
  * The web app's number. Upstream has no cursor — `ytsearchN:` takes a count — so
  * "more" is the same search asked for at a larger size, and the answer is
@@ -34,36 +31,31 @@ private const val DEBOUNCE_MILLIS = 300L
  */
 internal const val UPSTREAM_PAGE = 20
 
+/**
+ * A search, which asks YouTube and nothing else.
+ *
+ * It used to ask the library as well and draw the two answers as two halves.
+ * Asked to stop: what somebody types into search is what they would type into
+ * YouTube, and a result already on the disk is still in YouTube's answer,
+ * marked by [Video.inLibrary] and opened without a round trip.
+ */
 sealed interface SearchState {
-    /** Nothing typed yet. Not an empty result: nobody has asked anything. */
+    /**
+     * No answer: nothing typed, or the first question still out (see
+     * [SearchViewModel.asking]). Not an empty result. The suggestions stay up.
+     */
     data object Idle : SearchState
-    data object Searching : SearchState
     data object NeedsServer : SearchState
     data class Failed(val message: String) : SearchState
-    data class Ready(val query: String, val videos: List<Video>) : SearchState
-}
-
-/**
- * The YouTube half, which fails on its own.
- *
- * A second state rather than a field on [SearchState], because the two halves
- * are two round trips: the library answers off a local index, and this one
- * drives yt-dlp against the internet. One state for both would mean a screen
- * that cannot show the half that worked — and the half that works is usually
- * the local one, which is the half somebody is most likely to want.
- */
-sealed interface UpstreamState {
-    data object Idle : UpstreamState
-    data object Searching : UpstreamState
-    /** Asked and refused. The next keystroke is the retry; there is no button. */
-    data object Failed : UpstreamState
     data class Ready(
-        val videos: List<ExternalVideo>,
+        /** What these videos answer, which the list's scroll position belongs to. */
+        val query: String,
+        val videos: List<Video>,
         /** True while a *larger* page is on its way, with these still on screen. */
         val loadingMore: Boolean = false,
         /** False once an answer comes back shorter than what was asked for. */
         val hasMore: Boolean = true,
-    ) : UpstreamState
+    ) : SearchState
 }
 
 class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
@@ -74,23 +66,42 @@ class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
     private val _state = MutableStateFlow<SearchState>(SearchState.Idle)
     val state: StateFlow<SearchState> = _state.asStateFlow()
 
-    private val _upstream = MutableStateFlow<UpstreamState>(UpstreamState.Idle)
-    val upstream: StateFlow<UpstreamState> = _upstream.asStateFlow()
+    /**
+     * True from a keystroke until its answer, and while a larger page is on its
+     * way — what the field's spinner shows.
+     *
+     * Not derivable from [state]: refining a word keeps the last answer on
+     * screen as `Ready` while the next is asked for, so nothing in it says a
+     * question is out.
+     */
+    private val _asking = MutableStateFlow(false)
+    val asking: StateFlow<Boolean> = _asking.asStateFlow()
+
+    /**
+     * Home's first page, shown under "Suggested videos" while nothing is typed
+     * and under an answer that found nothing.
+     *
+     * Asked once, as the screen opens, and kept for the sitting: clearing the
+     * field is not a reason to ask again. A failure is an empty list and the
+     * section is not drawn — the search still works without it.
+     */
+    private val _suggestions = MutableStateFlow<List<Video>>(emptyList())
+    val suggestions: StateFlow<List<Video>> = _suggestions.asStateFlow()
 
     /**
      * The `sourceUrl` of the card being opened, or empty.
      *
-     * Opening an upstream result is a real round trip — the gateway asks YouTube
-     * for the metadata before there is anything to play — so the card says so
-     * and refuses a second tap. Navigating first and letting the watch screen
-     * find nothing would put "YouTube will not hand this video over" on screen
-     * for a video that is on its way, which is the lie this app has now told
-     * twice for other reasons.
+     * Opening a result is a real round trip — the gateway asks YouTube for the
+     * metadata before there is anything to play — so the card says so and
+     * refuses a second tap. Navigating first and letting the watch screen find
+     * nothing would put "YouTube will not hand this video over" on screen for a
+     * video that is on its way, which is the lie this app has now told twice for
+     * other reasons.
      */
     private val _opening = MutableStateFlow("")
     val opening: StateFlow<String> = _opening.asStateFlow()
 
-    /** True when the last attempt to open an upstream video failed. */
+    /** True when the last attempt to open a result failed. */
     private val _openFailed = MutableStateFlow(false)
     val openFailed: StateFlow<Boolean> = _openFailed.asStateFlow()
 
@@ -106,7 +117,17 @@ class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
     val channelPasted: StateFlow<String> = _channelPasted.asStateFlow()
 
     private var pending: Job? = null
-    private var upstreamLimit = UPSTREAM_PAGE
+    /** A larger page on its way. A new question cancels it: the last question wins. */
+    private var more: Job? = null
+    private var limit = UPSTREAM_PAGE
+
+    init {
+        viewModelScope.launch {
+            runCatching { videos.feed() }
+                .onFailure { if (it is CancellationException) throw it }
+                .onSuccess { page -> _suggestions.value = page.videos.distinctBy { it.id } }
+        }
+    }
 
     fun type(text: String) {
         _query.value = text
@@ -114,65 +135,61 @@ class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
         // Without this the debounce delays each request without reducing how
         // many are eventually made.
         pending?.cancel()
+        more?.cancel()
 
         _channelPasted.value = ""
+        // A failed open belongs to the last answer; it is not news on the next.
+        _openFailed.value = false
 
         if (text.isBlank()) {
             _state.value = SearchState.Idle
-            _upstream.value = UpstreamState.Idle
+            _asking.value = false
             return
         }
+        _asking.value = true
 
         // A new question, so the page size goes back to its first size. Without
         // this, refining a word inherits however large the previous search had
-        // grown — a hundred upstream results for a word just typed.
-        upstreamLimit = UPSTREAM_PAGE
+        // grown — a hundred results for a word just typed.
+        limit = UPSTREAM_PAGE
 
         pending = viewModelScope.launch {
             delay(DEBOUNCE_MILLIS)
-            // Both halves, side by side and after the same wait.
-            //
-            // Not a fallback for an empty library: the gateway's own note says
-            // upstream search "runs on every search, not only when the library
-            // comes up empty — topics decide what the feed offers, and searching
-            // is how someone deliberately looks past that."
-            launch { searchLibrary(text) }
-            launch { searchUpstream() }
+            launch { search(text) }
             launch { resolveChannel(text) }
         }
     }
 
-    private suspend fun searchLibrary(text: String) {
-        // Only blank the screen on the *first* search. Replacing results
-        // with a spinner on every keystroke makes a list that is mostly
-        // still correct flicker away while somebody refines a word.
-        if (_state.value !is SearchState.Ready) _state.value = SearchState.Searching
-        _state.value = runCatching { videos.search(text) }
+    private suspend fun search(text: String) {
+        val asked = limit
+        // The last answer stays on screen while the next is asked for: a list
+        // replaced by a spinner on every keystroke flickers away while somebody
+        // refines a word. The field's spinner says a question is out.
+        _state.value = runCatching { videos.discover(text, asked) }
             // A search replaced by the next keystroke is cancelled, and
-            // `runCatching` catches that like any error — which drew "could not
-            // reach the library" over a query nobody was waiting on any more.
+            // `runCatching` catches that like any error — which drew a failure
+            // over a query nobody was waiting on any more.
             .onFailure { if (it is CancellationException) throw it }
             .fold(
-            onSuccess = { SearchState.Ready(text, it) },
-            onFailure = ::asState,
-        )
+                // `distinctBy` for the reason `appendNew` exists: rows are keyed,
+                // and a key arriving twice throws out of `subcompose` during
+                // measure. This is yt-dlp's answer, which promises nothing.
+                onSuccess = { SearchState.Ready(text, it.distinctBy { v -> v.id }, hasMore = it.size >= asked) },
+                onFailure = { error -> keptAfterAFailedPage(text) ?: asState(error) },
+            )
+        _asking.value = false
     }
 
-    private suspend fun searchUpstream() {
-        val text = _query.value
-        val asked = upstreamLimit
-        if (_upstream.value !is UpstreamState.Ready) _upstream.value = UpstreamState.Searching
-        _upstream.value = runCatching { videos.discover(text, asked) }
-            .onFailure { if (it is CancellationException) throw it }
-            .fold(
-            onSuccess = {
-                UpstreamState.Ready(videos = it, hasMore = it.size >= asked)
-            },
-            // No message drawn. The library half already says what went wrong
-            // when *it* fails, and there is nothing a reader can do about
-            // yt-dlp's — the next keystroke is the retry.
-            onFailure = { UpstreamState.Failed },
-        )
+    /**
+     * The page already read, when what failed was a larger one of the same
+     * question: the reader keeps the list, and the next reach for the bottom
+     * asks for that size again.
+     */
+    private fun keptAfterAFailedPage(text: String): SearchState? {
+        val ready = _state.value as? SearchState.Ready ?: return null
+        if (!ready.loadingMore || ready.query != text) return null
+        limit -= UPSTREAM_PAGE
+        return ready.copy(loadingMore = false)
     }
 
     /**
@@ -184,7 +201,7 @@ class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
      * upstream request at all.
      *
      * A failure is silence. Nothing is wrong with a search that could not be
-     * checked for being an address; the two halves already running will answer.
+     * checked for being an address; the search already running will answer.
      */
     private suspend fun resolveChannel(text: String) {
         val id = runCatching { videos.resolveChannel(text) }.getOrDefault("")
@@ -200,31 +217,33 @@ class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
     }
 
     /**
-     * Ask for a larger upstream page.
+     * Ask for a larger page.
      *
      * Refused while one is already in flight and once the answers have run out,
      * so reaching the bottom of a finished list costs nothing.
      */
-    fun loadMoreUpstream() {
-        val ready = _upstream.value as? UpstreamState.Ready ?: return
-        if (ready.loadingMore || !ready.hasMore || _query.value.isBlank()) return
+    fun loadMore() {
+        val ready = _state.value as? SearchState.Ready ?: return
+        if (ready.loadingMore || !ready.hasMore || ready.query != _query.value) return
 
-        _upstream.value = ready.copy(loadingMore = true)
-        upstreamLimit += UPSTREAM_PAGE
-        viewModelScope.launch { searchUpstream() }
+        _state.value = ready.copy(loadingMore = true)
+        _asking.value = true
+        limit += UPSTREAM_PAGE
+        more = viewModelScope.launch { search(ready.query) }
     }
 
     /**
-     * Open an upstream result, writing its catalogue row first if it has none.
+     * Open a result or a suggestion, writing its catalogue row first if it has
+     * none.
      *
      * `inLibrary` skips the round trip: the row is already there, and the id the
      * gateway would answer with is the id already in hand.
      */
-    fun openExternal(video: ExternalVideo, onOpened: (String) -> Unit) {
+    fun open(video: Video, onOpened: (String) -> Unit) {
         if (_opening.value.isNotEmpty()) return
         _openFailed.value = false
 
-        if (video.inLibrary) {
+        if (video.inLibrary || video.sourceUrl.isEmpty()) {
             onOpened(video.id)
             return
         }
@@ -240,11 +259,19 @@ class SearchViewModel(private val videos: VideoRepository) : ViewModel() {
 
     fun clear() {
         pending?.cancel()
+        more?.cancel()
         _query.value = ""
         _state.value = SearchState.Idle
-        _upstream.value = UpstreamState.Idle
+        _asking.value = false
         _channelPasted.value = ""
-        upstreamLimit = UPSTREAM_PAGE
+        _openFailed.value = false
+        limit = UPSTREAM_PAGE
+    }
+
+    /** A suggestion taken off the list and out of the feed, as on Home. */
+    fun notInterested(video: Video) {
+        _suggestions.value = _suggestions.value.filterNot { it.id == video.id }
+        viewModelScope.launch { runCatching { videos.setNotInterested(video.id) } }
     }
 
     fun retry() {

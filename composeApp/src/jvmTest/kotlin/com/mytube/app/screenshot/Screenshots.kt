@@ -11,6 +11,17 @@ import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.settings.CheckState
 import com.mytube.app.ui.settings.ServerSetupContent
 import com.mytube.app.ui.settings.ServerSetupState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import com.mytube.app.ui.search.SearchContent
+import com.mytube.app.ui.search.SearchState
+import com.mytube.app.ui.shell.LocalTelevision
+import com.mytube.app.ui.theme.Tokens
+import com.mytube.app.ui.tv.KeyboardLayout
+import com.mytube.app.ui.tv.TvSearchContent
 import java.io.File
 import kotlin.test.Test
 
@@ -91,6 +102,46 @@ class Screenshots {
         }
         renderer.render("home-failed-vi", VietnameseStrings) {
             HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {})
+        }
+    }
+
+    private val tv = ScreenRenderer(File("build/screenshots"), width = 1920, height = 1080, density = 2f)
+
+    /** The search page in each of its states, on the phone and the television. */
+    @Test
+    fun renderSearch() {
+        val upstream = feed().map { it.copy(inLibrary = false, sourceUrl = "https://www.youtube.com/watch?v=${it.id}") }
+        val states = listOf(
+            "idle" to (SearchState.Idle to false),
+            "asking" to (SearchState.Idle to true),
+            "results" to (SearchState.Ready("nepal", upstream) to false),
+            "refining" to (SearchState.Ready("nepal", upstream) to true),
+            "none" to (SearchState.Ready("zzzz", emptyList()) to false),
+            "failed" to (SearchState.Failed("x") to false),
+        )
+        for ((name, pair) in states) {
+            val (state, asking) = pair
+            val query = (state as? SearchState.Ready)?.query ?: if (name == "idle") "" else "nepal"
+            renderer.render("search-$name", EnglishStrings) {
+                SearchContent(
+                    state = state, suggestions = feed(), asking = asking, opening = "",
+                    openFailed = false, query = query, mediaBaseUrl = mediaBase,
+                    onBack = {}, onType = {}, onClear = {}, onRetry = {}, onOpen = {},
+                    onLoadMore = {}, onOpenChannel = {}, onNotInterested = {},
+                )
+            }
+            tv.render("tv-search-$name", EnglishStrings) {
+                CompositionLocalProvider(LocalTelevision provides true) {
+                    Box(Modifier.fillMaxSize().background(Tokens.bg)) {
+                        TvSearchContent(
+                            query = query, state = state, suggestions = feed(), asking = asking,
+                            opening = "", openFailed = false, mediaBaseUrl = mediaBase, startLayout = KeyboardLayout.Latin,
+                            voice = {}, onType = {}, onRetry = {}, onOpen = {}, onMore = {},
+                            onNotInterested = {}, onSaveToPlaylist = {},
+                        )
+                    }
+                }
+            }
         }
     }
 

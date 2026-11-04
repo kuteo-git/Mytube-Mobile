@@ -2,7 +2,6 @@ package com.mytube.app
 
 import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Comment
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.SpokenLanguage
@@ -31,8 +30,7 @@ open class StubVideoRepository : VideoRepository {
     override suspend fun feed(topic: String, pageToken: String) = FeedPage(emptyList(), "")
     override suspend fun missed(pageToken: String) = FeedPage(emptyList(), "")
     override suspend fun video(id: String): Video = notStubbed("video")
-    override suspend fun search(query: String) = emptyList<Video>()
-    override suspend fun discover(query: String, limit: Int) = emptyList<ExternalVideo>()
+    override suspend fun discover(query: String, limit: Int) = emptyList<Video>()
     override suspend fun ensureExternal(sourceUrl: String) = ""
     override suspend fun resolveChannel(query: String) = ""
     override suspend fun topics() = emptyList<Topic>()

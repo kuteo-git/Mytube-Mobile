@@ -259,6 +259,10 @@ speaker (`CastStore.pick`, with its up next when opened alone), never to the
 phone; the phone's paused player reports no progress and starts no narration
 (`playsElsewhere`). `CastStore` polls 1s
 with the remote open, 5s otherwise, never in the background (`castPollMillis`).
+**A cast belongs to the profile that started it**: the phone asks only for its
+own (`/api/cast/sessions?mine=true`), and a profile switch forgets the last
+one's (`CastStore.profileChanged`), still playing on its speaker. Another
+profile may cast to that speaker, which takes it over.
 See changelog, "The library plays on the household's speakers".
 
 Deliberately absent, with reasons:
@@ -390,22 +394,27 @@ Everything on the external volume; `source env.sh` before working.
   elements by label at the moment of the tap, not by remembered coordinates.
 - **When Data2 is not mounted, this project cannot be built.**
 
-## 10. Status (v0.1.20, 2026-11-02)
+## 10. Status (v0.1.21, 2026-11-04)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
-  household's iPhone, release build via AltStore).** 486 tests, seven guards.
+  household's iPhone, release build via AltStore).** 505 tests, seven guards.
 - **Runs on the household's Chromecast with Google TV** (release build over
   `adb`): rail, shelves, the full-screen player with D-pad seeking, search with
   an on-screen keyboard and voice, the profile question. Released in v0.1.12;
   installed with `tools/tv-install.sh`.
 - **Casts to the household's speakers** (v0.1.18): the R1 and the Google
   Cast speakers (Nest Audio, Nest Mini, speaker groups), driven by the
-  server; the watch screen as the remote, narration on the speaker.
-- Built: Home with chips (incl. Live and Missed), Search (library + YouTube),
+  server; the watch screen as the remote, narration on the speaker. Each
+  profile casts on its own (v0.1.21).
+- Built: Home with chips (incl. Live and Missed), Search (YouTube only),
   Channel, Watch (layer with drag-to-miniplayer, controls, subtitles, narration,
   storyboard scrub preview, pinch-to-fill, double-tap seek, comments, up next,
   autoplay with a queue), Playlists (create/rename/delete, save sheet), Saved,
   History, Subscriptions, Profile, Settings (server, voice, language).
+- **Search reads YouTube only** (v0.1.21), with Home's suggestions under an
+  empty or answerless query, a spinner in the field, and a result's avatar
+  opening its channel; a video opened from a channel's tab has that tab as up
+  next.
 - **A video that speaks Vietnamese opens with narration off** (v0.1.19): the
   language from the gateway, on the phone, the TV and the speakers.
 - Background audio, the lock screen and narration have been heard on real
@@ -433,6 +442,10 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   unread field put "YouTube will not hand this over" on screen. [A live broadcast
   said YouTube had refused it; A downloaded video said…; The queue was a list of
   ids…]
+- **Requests sent together never rely on each other's writes.** Every route
+  that reads a channel learns it (`channelOrLearn`); the channel page asks for
+  its header and its videos at once. [The channel and its videos are asked
+  together, and only one learned]
 - **Upstream (YouTube) rows are written to the catalogue before they are opened**
   (`POST /api/videos/external`), and an empty returned id is a refusal.
 - **A state is a change of kind, not of shade.** `surface` and `surfaceHover` are
@@ -471,6 +484,9 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
 - **The last question wins, not the last answer**: switching cancels in-flight
   jobs; pages merge into the state as it is *now*; `CancellationException` is
   rethrown, never caught as a failure.
+- **A list's scroll position belongs to the question it answers**: a new
+  answer is a new `LazyListState` (`rememberResultsState`), a larger page of
+  the same one is not. [Search is YouTube's answer, read from its top]
 - **A page's contents change by more than arrival** — anything composed under the
   watch layer must refresh on edits made elsewhere (`playlistEdits`).
 - **No default on a flag where the rare value matters** (`startAtBeginning`,
@@ -572,6 +588,9 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   [The profile question once, the spinner until the picture…]
 - **A video that has ended is not stalled** (`shouldRecoverStall`); a broadcast has
   no end, no zero and no progress to report; draw LIVE, not a bar.
+- **Up next is the rest of the list a video was opened from, then the rail**
+  (`upNextFrom`), and next is its first card. A queue used only for autoplay
+  is a list nobody sees. [Up next is the channel's list]
 - **Lock screen**: duration travels on every tick; late artwork applies only if
   still current; remote-command targets are removed on release.
 - **Subtitles are attached at load; language and disabled-flag move together**;
@@ -580,6 +599,9 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   on advancing to another video, `narrate(emptyList())` first.
 - **Keep the screen on only while the expanded player is playing**, via the
   window flag / `idleTimerDisabled`, as state.
+- **A profile switch clears what the last profile held, in long-lived stores
+  too** (`CastStore` outlives every screen). [A cast followed the phone into
+  another profile]
 - **Preferences per device** (subtitles language, narration, autoplay) live in
   `PreferencesRepository`; a per-sitting choice (fill) does not persist.
 
@@ -624,6 +646,9 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   refresh under the remote keeps the focused card (`keptInPlace`), and
   `scrollToItem` on a lazy state with no layout waits for ever
   (`requestScrollToItem`).
+- **A list replaced under focus hands focus to its new first row**: the TV
+  search remembers that the list held focus until the keyboard takes it
+  back. [The search page's review round]
 - **Every pointer gesture has a key, or `focus-guard:` says why not.**
 - **A rim must read on a white surface** — white rim, dark hairline inside;
   anything 480dp or wider keeps its size and wears the rim only.
@@ -632,6 +657,11 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
 - **Nothing is painted twice on the TV's GPU**: no window background under the
   shell, a picture's surface is its placeholder. Check with
   `setprop debug.hwui.overdraw show`. [The television, measured on the Chromecast]
+- **No gradient shader over a large area on the TV**: a scrim is baked once
+  into a 1×256 strip and stretched (`scrim`). Drawn as a gradient, the player's
+  two scrims were two thirds of its GPU time. Split CPU, GPU and buffer waits
+  with `gfxinfo framestats` before guessing. [The player's scrims were most of
+  its frame on the Chromecast]
 - **What a key press shows is composed before the press** — the player's
   controls stay composed, faded to alpha 0, semantics cleared, focus barred.
   Built on the press, it froze the picture for 218ms.

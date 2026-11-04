@@ -101,12 +101,6 @@ class GatewayDataSource(private val client: HttpClient) {
             identify(userId)
         }.orThrow().body()
 
-    suspend fun search(baseUrl: String, userId: String, query: String): List<VideoDto> =
-        client.get("${baseUrl.trimEnd('/')}/api/search") {
-            identify(userId)
-            parameter("q", query)
-        }.orThrow().body<FeedDto>().videos
-
     /**
      * Upstream search.
      *
@@ -571,7 +565,11 @@ class GatewayDataSource(private val client: HttpClient) {
         client.get("${baseUrl.trimEnd('/')}/api/cast/devices") { identify(userId) }.orThrow().body()
 
     suspend fun castSessions(baseUrl: String, userId: String): List<CastSessionDto> =
-        client.get("${baseUrl.trimEnd('/')}/api/cast/sessions") { identify(userId) }.orThrow().body()
+        client.get("${baseUrl.trimEnd('/')}/api/cast/sessions") {
+            identify(userId)
+            // This profile's casts only: another profile's speaker is not this one's to follow.
+            parameter("mine", "true")
+        }.orThrow().body()
 
     suspend fun castSession(baseUrl: String, userId: String, id: String): CastSessionDto =
         client.get("${baseUrl.trimEnd('/')}/api/cast/sessions/$id") { identify(userId) }.orThrow().body()

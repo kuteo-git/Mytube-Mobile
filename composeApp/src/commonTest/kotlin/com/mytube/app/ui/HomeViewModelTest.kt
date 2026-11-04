@@ -420,7 +420,6 @@ class HomeViewModelTest {
         }
 
         override suspend fun video(id: String) = throw NotImplementedError()
-        override suspend fun search(query: String) = throw NotImplementedError()
         override suspend fun discover(query: String, limit: Int) = throw NotImplementedError()
         override suspend fun ensureExternal(sourceUrl: String) = throw NotImplementedError()
 

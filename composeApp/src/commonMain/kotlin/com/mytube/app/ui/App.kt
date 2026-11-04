@@ -1240,7 +1240,10 @@ fun App(
                         onPick = { picked ->
                             if (picked.id != profileId) {
                                 profileId = picked.id
-                                scope.launch { container.serverRepository.setProfileId(picked.id) }
+                                scope.launch {
+                                    container.serverRepository.setProfileId(picked.id)
+                                    cast.profileChanged()
+                                }
                             }
                             route = Route.Home
                         },
@@ -1340,6 +1343,8 @@ fun App(
                                     tab = Tab.Home
                                     scope.launch {
                                         container.serverRepository.setProfileId(picked.id)
+                                        // After the write: the list it asks again is the new profile's.
+                                        cast.profileChanged()
                                     }
                                 }
                                 route = Route.Home

@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -61,11 +61,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mytube.app.domain.model.Channel
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
+import com.mytube.app.ui.home.VideoCard
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.mytube.app.ui.home.Size
 import com.mytube.app.ui.home.Space
-import com.mytube.app.ui.home.VideoCard
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.playlist.SaveTarget
@@ -103,9 +105,10 @@ fun SearchScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
-    val upstream by viewModel.upstream.collectAsStateWithLifecycle()
     val opening by viewModel.opening.collectAsStateWithLifecycle()
     val openFailed by viewModel.openFailed.collectAsStateWithLifecycle()
+    val asking by viewModel.asking.collectAsStateWithLifecycle()
+    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val channelPasted by viewModel.channelPasted.collectAsStateWithLifecycle()
 
     // A pasted channel address is not a question, so it does not stay on this
@@ -125,7 +128,8 @@ fun SearchScreen(
 
     SearchContent(
         state = state,
-        upstream = upstream,
+        suggestions = suggestions,
+        asking = asking,
         opening = opening,
         openFailed = openFailed,
         query = query,
@@ -134,45 +138,35 @@ fun SearchScreen(
         onType = viewModel::type,
         onClear = viewModel::clear,
         onRetry = viewModel::retry,
-        onOpenVideo = onOpenVideo,
         // The row is written when the video is opened, not before, and the
         // screen navigates only once the gateway has answered with an id.
-        onOpenExternal = { video -> viewModel.openExternal(video, onOpenVideo) },
-        onLoadMoreUpstream = viewModel::loadMoreUpstream,
+        onOpen = { video -> viewModel.open(video, onOpenVideo) },
+        onLoadMore = viewModel::loadMore,
         onOpenChannel = onOpenChannel,
+        onNotInterested = viewModel::notInterested,
         onSaveToPlaylist = onSaveToPlaylist,
     )
 }
 
 /**
- * Search over this library.
+ * Search, answered by YouTube.
  *
  * ## Why the field replaces the top bar rather than sitting under it
  *
  * The bar's search box is what somebody presses to get here, so the field they
  * land on has to be where that box was. Drawing a second field below the first
  * would leave two on screen, one of them inert.
- *
- * ## Two halves, and why they are both here
- *
- * This screen used to draw the library's answer alone, on the reasoning that
- * *"the gateway has one search route and it answers from the catalogue only"*.
- * That was simply wrong: `GET /api/discover` exists, the web app has always
- * called it, and its own note says why it is not a fallback — *"topics decide
- * what the feed offers, and searching is how someone deliberately looks past
- * that."* A library search that cannot reach past the library is half a search.
- *
- * The two halves fail independently and are drawn independently: an upstream
- * search that will not answer leaves a line under its own heading and takes
- * nothing else with it.
  */
 @Composable
 fun SearchContent(
     state: SearchState,
-    upstream: UpstreamState,
-    /** The `sourceUrl` of the upstream card being opened, or empty. */
+    /** Home's first page, drawn while nothing is typed and under an empty answer. */
+    suggestions: List<Video>,
+    /** A question is out: the field's clear button is a spinner. */
+    asking: Boolean,
+    /** The `sourceUrl` of the card being opened, or empty. */
     opening: String,
-    /** True when the last attempt to open an upstream video failed. */
+    /** True when the last attempt to open a result failed. */
     openFailed: Boolean,
     query: String,
     mediaBaseUrl: String,
@@ -180,18 +174,10 @@ fun SearchContent(
     onType: (String) -> Unit,
     onClear: () -> Unit,
     onRetry: () -> Unit,
-    onOpenVideo: (String) -> Unit,
-    onOpenExternal: (ExternalVideo) -> Unit,
-    onLoadMoreUpstream: () -> Unit,
-    /**
-     * Open the channel behind a result's avatar.
-     *
-     * It was not passed at all, so every avatar in this list opened the video
-     * instead — the fault the charter already records from the feed, repeated on
-     * the one screen that was written after it: *"the avatar does nothing",
-     * because something did happen and it was not what they aimed at.*
-     */
+    onOpen: (Video) -> Unit,
+    onLoadMore: () -> Unit,
     onOpenChannel: (String) -> Unit,
+    onNotInterested: (Video) -> Unit,
     onSaveToPlaylist: (SaveTarget) -> Unit = {},
 ) {
     val strings = LocalStrings.current
@@ -259,9 +245,9 @@ fun SearchContent(
             // reaching either end stopped dead at an invisible edge instead of
             // passing behind the glass.
             val padding = searchContentPadding()
-            val results = rememberLazyListState()
+            val results = rememberResultsState(state)
 
-            // Asking for a larger upstream page as the bottom comes near.
+            // Asking for a larger page as the bottom comes near.
             //
             // Everything read here comes from `layoutInfo`, which is snapshot
             // state and grows with the list. The feed learned this the hard way:
@@ -275,163 +261,95 @@ fun SearchContent(
                     last >= info.totalItemsCount - 3 && info.totalItemsCount > 0
                 }
                     .distinctUntilChanged()
-                    .collect { near -> if (near) onLoadMoreUpstream() }
+                    .collect { near -> if (near) onLoadMore() }
             }
 
-            // Videos already listed under "in your library" are not listed
-            // again under "on YouTube". `inLibrary` is not what decides it: that
-            // flag answers "is it on the disk", and the question here is "has
-            // this row already appeared on this screen".
-            val local = (state as? SearchState.Ready)?.videos.orEmpty()
-            val localIds = local.map { it.id }.toSet()
-            // `distinctBy` for the reason `appendNew` exists: these rows are
-            // keyed, and a key arriving twice throws out of `subcompose` during
-            // measure rather than drawing one row twice. Upstream is yt-dlp's
-            // answer, which this app does not get to promise anything about.
-            val remaining = upstreamResults(upstream)
-                .filter { it.id !in localIds }
-                .distinctBy { it.id }
+            val found = (state as? SearchState.Ready)?.videos.orEmpty()
 
-            // A library half with nothing in it is not drawn at all.
-            //
-            // It used to say "Nothing here matches" under its heading,
-            // which is a sentence with a job on a screen where the
-            // library is the only answer — and this screen has two. Beside
-            // a list of YouTube results it reads as a fault: a heading, a
-            // line of apology, and the thing being looked for sitting
-            // right underneath it.
-            //
-            // A *failed* library search still draws, because that is a
-            // different sentence: "could not reach the library" is news,
-            // and it comes with the retry.
-            val libraryDrawn = state !is SearchState.Ready || local.isNotEmpty()
+            // One card for a result and a suggestion: Home's. Its avatar opens
+            // the channel when the gateway named one; a suggestion is a feed row
+            // and keeps Home's "not interested".
+            val card: @Composable (Video, Boolean) -> Unit = { video, suggested ->
+                VideoCard(
+                    video = video,
+                    mediaBaseUrl = mediaBaseUrl,
+                    strings = strings,
+                    opening = opening.isNotEmpty() && opening == video.sourceUrl,
+                    onClick = {
+                        // Hidden here as well as on scroll: opening a video
+                        // leaves this screen composed underneath the watch
+                        // layer, and a keyboard left up is drawn over that layer.
+                        keyboard?.hide()
+                        onOpen(video)
+                    },
+                    onOpenChannel = if (video.channel.id.isNotEmpty()) {
+                        { keyboard?.hide(); onOpenChannel(video.channel.id) }
+                    } else {
+                        null
+                    },
+                    onSave = {
+                        keyboard?.hide()
+                        onSaveToPlaylist(saveTargetOf(video))
+                    },
+                    onNotInterested = if (suggested) {
+                        { onNotInterested(video) }
+                    } else {
+                        null
+                    },
+                )
+            }
 
             when {
-                // Nothing typed. One line for the whole screen rather than two
-                // headings over two empty sections, which reads as a page that
-                // failed to load.
-                state is SearchState.Idle -> Box(Modifier.padding(padding)) {
-                    EmptyState(strings.search, strings.searchPrompt)
-                }
-
                 state is SearchState.NeedsServer -> Box(Modifier.padding(padding)) {
                     EmptyState(strings.noServerTitle, strings.setTheAddress)
                 }
+
+                // No answer and nothing to suggest: one line for the whole
+                // screen, or nothing while the first question is out.
+                state is SearchState.Idle && suggestions.isEmpty() ->
+                    Box(Modifier.padding(padding)) {
+                        if (query.isBlank()) EmptyState(strings.search, strings.searchPrompt)
+                    }
 
                 else -> LazyColumn(
                     state = results,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = padding,
                 ) {
-                    // --- this library ------------------------------------
-                    if (libraryDrawn) {
-                        item(key = "heading-library") {
-                            SectionHeading(
-                                strings.inLibrary,
-                                loading = state is SearchState.Searching,
-                            )
-                        }
-
-                        when (state) {
-                            is SearchState.Failed -> item(key = "local-failed") {
-                                Column(
-                                    Modifier.fillMaxWidth().padding(horizontal = Space.lg),
-                                    horizontalAlignment = Alignment.Start,
-                                ) {
-                                    Text(
-                                        strings.couldNotReach,
-                                        color = Tokens.text2,
-                                        fontSize = 13.sp,
-                                    )
-                                    Text(
-                                        text = strings.tryAgain,
-                                        color = Tokens.brand,
-                                        fontSize = 13.sp,
-                                        modifier = Modifier
-                                            .pressable(onClick = onRetry)
-                                            .padding(vertical = Space.sm),
-                                    )
-                                }
-                            }
-
-                            is SearchState.Ready -> {
-                                items(local, key = { "local-${it.id}" }) { video ->
-                                    VideoCard(
-                                        video,
-                                        mediaBaseUrl,
-                                        strings,
-                                        onClick = {
-                                            // Hidden here as well as on scroll:
-                                            // opening a video leaves this screen
-                                            // composed underneath the watch layer,
-                                            // and a keyboard left up is drawn over
-                                            // that layer.
-                                            keyboard?.hide()
-                                            onOpenVideo(video.id)
-                                        },
-                                        onOpenChannel = { onOpenChannel(video.channel.id) },
-                                        onSave = {
-                                            onSaveToPlaylist(
-                                                saveTargetOf(video),
-                                            )
-                                        },
-                                    )
-                                }
-                            }
-
-                            else -> Unit
-                        }
-                    }
-
-                    // --- and YouTube -------------------------------------
-                    item(key = "heading-youtube") {
-                        SectionHeading(
-                            strings.onYouTube,
-                            loading = upstream is UpstreamState.Searching ||
-                                (upstream as? UpstreamState.Ready)?.loadingMore == true,
-                            // Room above it only when there is something above
-                            // it. With the library half hidden this heading is
-                            // the first thing on the page.
-                            modifier = if (libraryDrawn) {
-                                Modifier.padding(top = Space.xl)
-                            } else {
-                                Modifier
-                            },
-                        )
+                    if (openFailed) {
+                        item(key = "open-failed") { SectionNote(strings.youtubeUnreachable) }
                     }
 
                     when {
-                        upstream is UpstreamState.Failed || openFailed ->
-                            item(key = "upstream-failed") {
-                                SectionNote(strings.youtubeUnreachable)
+                        state is SearchState.Failed -> item(key = "failed") {
+                            NoAnswer(strings.youtubeUnreachable) {
+                                Text(
+                                    text = strings.tryAgain,
+                                    color = Tokens.brand,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier
+                                        .pressable(onClick = onRetry)
+                                        .padding(vertical = Space.sm),
+                                )
                             }
+                        }
 
-                        upstream is UpstreamState.Ready && remaining.isEmpty() ->
-                            item(key = "upstream-empty") {
-                                SectionNote(strings.noMoreResults)
+                        state is SearchState.Ready && found.isEmpty() -> item(key = "empty") {
+                            NoAnswer(strings.noResults) {
+                                Text(strings.noResultsDetail, color = Tokens.text2, fontSize = 13.sp)
                             }
+                        }
 
                         else -> Unit
                     }
 
-                    items(remaining, key = { "yt-${it.id}" }) { video ->
-                        ExternalVideoCard(
-                            video = video,
-                            strings = strings,
-                            opening = opening == video.sourceUrl,
-                            onClick = {
-                                keyboard?.hide()
-                                onOpenExternal(video)
-                            },
-                            // An upstream result has no id yet; the address is
-                            // what the sheet writes a row from on Save.
-                            onSaveToPlaylist = {
-                                keyboard?.hide()
-                                onSaveToPlaylist(
-                                    saveTargetOf(video),
-                                )
-                            },
-                        )
+                    items(found, key = { it.id }) { video -> card(video, false) }
+
+                    if (found.isEmpty() && suggestions.isNotEmpty()) {
+                        item(key = "suggested-heading") {
+                            SectionHeading(strings.suggestedVideos)
+                        }
+                        items(suggestions, key = { "suggested-${it.id}" }) { video -> card(video, true) }
                     }
                 }
             }
@@ -452,6 +370,7 @@ fun SearchContent(
             // screen**. It moved; it did not go.
             SearchField(
                 query = query,
+                asking = asking,
                 onType = onType,
                 onClear = onClear,
                 onClose = onBack,
@@ -461,35 +380,47 @@ fun SearchContent(
     }
 }
 
-/** The results in hand, whatever the upstream half is doing. */
-private fun upstreamResults(state: UpstreamState): List<ExternalVideo> =
-    (state as? UpstreamState.Ready)?.videos.orEmpty()
-
 /**
- * A heading over one half of the answer.
+ * The results list's position, which belongs to the question it answers.
  *
- * The spinner sits *in* the heading rather than over the section, so a half that
- * is still working says so without the other half's results moving.
+ * One state for every answer kept the offset of the last: scrolled down one
+ * search and another typed, the new answer opened half way down. A new answer
+ * is a new list, read from its top; a larger page of the same answer is not.
  */
 @Composable
-private fun SectionHeading(text: String, loading: Boolean, modifier: Modifier = Modifier) {
-    Row(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = Space.lg, vertical = Space.md),
-        verticalAlignment = Alignment.CenterVertically,
+internal fun rememberResultsState(state: SearchState): LazyListState =
+    remember((state as? SearchState.Ready)?.query) { LazyListState() }
+
+/** The heading over the suggested videos. */
+@Composable
+private fun SectionHeading(text: String) {
+    Text(
+        text,
+        color = Tokens.text2,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Space.lg, vertical = Space.md),
+    )
+}
+
+/**
+ * An answer that has nothing in it, or none at all — tall enough to read as
+ * the answer rather than as a line above the suggestions under it.
+ */
+@Composable
+private fun NoAnswer(title: String, detail: @Composable () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().height(NO_ANSWER_HEIGHT).padding(horizontal = Space.lg),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text, color = Tokens.text2, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-        if (loading) {
-            Spacer(Modifier.width(Space.sm))
-            CircularProgressIndicator(
-                color = Tokens.text2,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(14.dp),
-            )
-        }
+        Text(title, color = Tokens.text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(Space.xs))
+        detail()
     }
 }
+
+private val NO_ANSWER_HEIGHT = 200.dp
 
 /** One quiet line under a heading, for a section with nothing to list. */
 @Composable
@@ -584,6 +515,8 @@ internal val SEARCH_FIELD_ROW = SEARCH_FIELD_GAP + SEARCH_FIELD_HEIGHT
 @Composable
 private fun SearchField(
     query: String,
+    /** A question is out: the clear button turns into a spinner, and still clears. */
+    asking: Boolean,
     onType: (String) -> Unit,
     onClear: () -> Unit,
     /** Leave the screen. This is the only way out — see the call site. */
@@ -759,12 +692,28 @@ private fun SearchField(
             }
         if (query.isNotEmpty()) {
             Spacer(Modifier.width(Space.sm))
-            Icon(
-                imageVector = CloseIcon,
-                contentDescription = strings.clear,
-                tint = Tokens.text2,
-                modifier = Modifier.size(20.dp).pressable(onClick = onClear),
-            )
+            // The spinner takes the clear button's place, and its job: a press
+            // on it still clears. The question is out, and wanting a different
+            // one is no reason to wait for its answer.
+            Box(
+                Modifier.size(20.dp).pressable(onClick = onClear),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (asking) {
+                    CircularProgressIndicator(
+                        color = Tokens.text2,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp).semantics { contentDescription = strings.clear },
+                    )
+                } else {
+                    Icon(
+                        imageVector = CloseIcon,
+                        contentDescription = strings.clear,
+                        tint = Tokens.text2,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
         }
         }
 
@@ -798,44 +747,36 @@ private fun SearchField(
 
 // --- previews ---------------------------------------------------------------
 
-private fun sample(id: String, title: String) = Video(
+private fun sample(id: String, title: String, inLibrary: Boolean = false) = Video(
     id = id,
     title = title,
-    channel = Channel(
-        id = "c",
-        name = "relab",
-        handle = "@relab",
-        avatarPath = "channels/c/avatar.jpg",
-    ),
-    durationSeconds = 140,
-    viewCount = 2_400,
-    publishedAt = "2026-08-23T05:35:52Z",
-    thumbnailPath = "thumbnails/$id.jpg",
-)
-
-private fun upstreamSample(id: String, title: String) = ExternalVideo(
-    id = id,
-    title = title,
-    channelName = "Marques Brownlee",
+    channel = Channel(id = "UC1", name = "Marques Brownlee", handle = "", avatarPath = ""),
     durationSeconds = 512,
     viewCount = 1_200_000,
-    thumbnailUrl = "https://i.ytimg.com/vi/$id/hqdefault.jpg",
+    publishedAt = "2026-10-01T08:00:00Z",
+    thumbnailPath = "https://i.ytimg.com/vi/$id/hqdefault.jpg",
     sourceUrl = "https://www.youtube.com/watch?v=$id",
-    inLibrary = false,
+    inLibrary = inLibrary,
+)
+
+private val previewSuggestions = listOf(
+    sample("s1", "A suggestion from Home", inLibrary = true),
+    sample("s2", "Another one", inLibrary = true),
 )
 
 @Composable
 private fun preview(
     state: SearchState,
     query: String,
-    upstream: UpstreamState = UpstreamState.Idle,
+    asking: Boolean = false,
     opening: String = "",
     openFailed: Boolean = false,
 ) {
     MytubeTheme {
         SearchContent(
             state = state,
-            upstream = upstream,
+            suggestions = previewSuggestions,
+            asking = asking,
             opening = opening,
             openFailed = openFailed,
             query = query,
@@ -844,50 +785,40 @@ private fun preview(
             onType = {},
             onClear = {},
             onRetry = {},
-            onOpenVideo = {},
-            onOpenExternal = {},
-            onLoadMoreUpstream = {},
+            onOpen = {},
+            onLoadMore = {},
             onOpenChannel = {},
+            onNotInterested = {},
         )
     }
 }
 
-/** Both halves answered, which is the ordinary case. */
 @Preview
 @Composable
 private fun SearchResultsPreview() =
     preview(
-        state = SearchState.Ready("nothing", listOf(sample("a", "Nothing Phone (4a) Pro"))),
-        query = "nothing",
-        upstream = UpstreamState.Ready(
-            listOf(upstreamSample("b", "Nothing Phone (4a) Pro — the honest review")),
+        state = SearchState.Ready(
+            "nothing",
+            listOf(
+                sample("a", "Nothing Phone (4a) Pro"),
+                sample("b", "Nothing Phone (4a) Pro — the honest review", inLibrary = true),
+            ),
         ),
+        query = "nothing",
     )
 
-/**
- * The library answered and YouTube did not.
- *
- * The state that matters most and is hardest to reach on a device: it is the one
- * this screen is written to survive, and the half that worked has to still be
- * readable.
- */
 @Preview
 @Composable
-private fun SearchUpstreamFailedPreview() =
-    preview(
-        state = SearchState.Ready("nothing", listOf(sample("a", "Nothing Phone (4a) Pro"))),
-        query = "nothing",
-        upstream = UpstreamState.Failed,
-    )
+private fun SearchFailedPreview() =
+    preview(state = SearchState.Failed("could not reach YouTube"), query = "nothing")
 
 /** A card being written into the catalogue, which takes seconds and says so. */
 @Preview
 @Composable
 private fun SearchOpeningPreview() =
     preview(
-        state = SearchState.Ready("nothing", emptyList()),
+        state = SearchState.Ready("nothing", listOf(sample("b", "Nothing Phone (4a) Pro"))),
         query = "nothing",
-        upstream = UpstreamState.Ready(listOf(upstreamSample("b", "Nothing Phone (4a) Pro"))),
         opening = "https://www.youtube.com/watch?v=b",
     )
 
@@ -895,6 +826,11 @@ private fun SearchOpeningPreview() =
 @Preview
 @Composable
 private fun SearchIdlePreview() = preview(SearchState.Idle, "")
+
+/** The first question out: the suggestions stay, the field spins. */
+@Preview
+@Composable
+private fun SearchAskingPreview() = preview(SearchState.Idle, "nothing", asking = true)
 
 @Preview
 @Composable
@@ -904,7 +840,7 @@ private fun SearchEmptyPreview() = preview(SearchState.Ready("zzz", emptyList())
 @Composable
 private fun SearchVietnamesePreview() {
     CompositionLocalProvider(LocalStrings provides VietnameseStrings) {
-        preview(SearchState.Idle, "")
+        preview(SearchState.Ready("sơn tùng", listOf(sample("a", "Sơn Tùng M-TP"))), "sơn tùng")
     }
 }
 

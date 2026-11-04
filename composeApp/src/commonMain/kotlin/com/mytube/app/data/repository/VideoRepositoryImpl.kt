@@ -4,7 +4,6 @@ import com.mytube.app.domain.repository.ServerNotConfigured
 import com.mytube.app.data.remote.GatewayDataSource
 import com.mytube.app.data.remote.dto.toDomain
 import com.mytube.app.domain.model.Channel
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.SubtitleCue
@@ -20,6 +19,8 @@ import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.ServerRepository
 import com.mytube.app.domain.repository.PlaylistPage
 import com.mytube.app.domain.repository.SortOption
+import com.mytube.app.domain.repository.ChannelMissing
+import com.mytube.app.data.remote.GatewayException
 import com.mytube.app.domain.repository.VideoRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -88,10 +89,7 @@ class VideoRepositoryImpl(
     override suspend fun video(id: String): Video =
         gateway.video(server.requireBaseUrl(), server.profileId(), id).toDomain()
 
-    override suspend fun search(query: String): List<Video> =
-        gateway.search(server.requireBaseUrl(), server.profileId(), query).map { it.toDomain() }
-
-    override suspend fun discover(query: String, limit: Int): List<ExternalVideo> =
+    override suspend fun discover(query: String, limit: Int): List<Video> =
         gateway.discover(server.requireBaseUrl(), server.profileId(), query, limit)
             .videos.map { it.toDomain() }
 
@@ -194,10 +192,17 @@ class VideoRepositoryImpl(
         // channel, since the listing carries none of its own — but the two
         // requests do not depend on each other, and in sequence every open,
         // sort and page waited for two round trips.
-        val (detail, page) = coroutineScope {
-            val detail = async { gateway.channel(base, user, channelId) }
-            val page = gateway.channelVideos(base, user, channelId, channelToken(sortToken, pageToken))
-            detail.await() to page
+        val (detail, page) = try {
+            coroutineScope {
+                val detail = async { gateway.channel(base, user, channelId) }
+                val page = gateway.channelVideos(base, user, channelId, channelToken(sortToken, pageToken))
+                detail.await() to page
+            }
+        } catch (e: GatewayException) {
+            // The gateway asks YouTube about a channel the library has never
+            // met before it answers, so a 404 here is YouTube's answer: there
+            // is no such channel. Not "could not reach the library".
+            if (e.status == 404) throw ChannelMissing(channelId) else throw e
         }
         val channel = detail.channel.toDomain()
         return ChannelPage(

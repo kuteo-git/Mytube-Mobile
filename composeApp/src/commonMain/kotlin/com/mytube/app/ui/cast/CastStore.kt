@@ -190,6 +190,18 @@ class CastStore(
         repoll()
     }
 
+    /**
+     * Another profile on this phone. Its casts are its own (the gateway lists
+     * only the asker's), so whatever the last profile was casting is
+     * forgotten here, still playing on its speaker, and the list asked again.
+     * Kept, it lit the button and took the new profile's next video to the
+     * last one's speaker.
+     */
+    fun profileChanged() {
+        _state.update { CastUiState(devices = it.devices) }
+        repoll()
+    }
+
     /** Asked once when a player appears, and again whenever the picker opens. */
     fun loadDevices() {
         _state.update { it.copy(devicesLoading = true) }

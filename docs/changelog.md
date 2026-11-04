@@ -6218,3 +6218,231 @@ TV's player records nothing again. Its discs are `pictureGlass`'s dark tint
 (`Tokens.bg` at `TINT_GLASS`) with no blur: the miniplayer's colour without the
 frame bent through it. The phone keeps the sampled glass.
 
+## The player's scrims were most of its frame on the Chromecast (2026-11-03)
+
+Asked to check the television's performance after the blur came off its
+player. Measured on the household's Chromecast with `dumpsys gfxinfo` over
+a scripted run, the release build compiled `speed`, the video held paused
+(the HDMI output is a full-volume device; the box cannot mute itself).
+
+- **Home is where it was**: p50 20-28ms, 8-14% janky, as on 2026-10-25.
+- **The player was not**: with its controls coming and going, 47% janky
+  frames and p50 57ms, three runs alike.
+
+Two premises failed before the cause was found, each by an alternated build:
+
+- **Not the fade.** Snapping the controls instead of fading them: 43-45%
+  janky against 46-48%, the same p50 and the same number of frames. Reverted.
+- **Not the picture.** A build with no video at all was still 38% janky, p50
+  53ms. The TextureView is a small part.
+- **The scrims.** `gfxinfo framestats` split each frame: the player's GPU time
+  after swap was 28ms against Home's 8ms, its UI thread 1.6ms. A build without
+  `TOP_SCRIM` and `BOTTOM_SCRIM` drew a player frame in p50 22.9ms with 9.9ms
+  of GPU, against 79.7ms and 28.5ms. Two vertical gradients, together the
+  whole screen, were two thirds of the GPU's work: a gradient is a shader run
+  per pixel, and this Mali is slow at it.
+
+**The fix keeps the look**: each scrim is baked once into a 1x256 strip and
+stretched over its block (`scrim` in `TvWatchScreen`), a texture lookup per
+pixel. framestats p50, two alternated runs each: as it was 75-79ms (GPU
+27-28ms), baked 39-43ms (GPU 10ms), a solid fill 37-38ms (GPU 9-10ms). Then
+gfxinfo, three alternated runs each:
+
+| player | janky | p50 | p90 | p99 | frames |
+|---|---|---|---|---|---|
+| as it was | 47.0-47.6% | 57-61ms | 77ms | 89-93ms | 208-213 |
+| baked | 16.1-21.8% | 32-36ms | 48-57ms | 69-73ms | 248-261 |
+
+Screenshots of the two builds over the same paused frame show the same
+scrims. The app's own part of a frame is not all of it: SurfaceFlinger
+composes on the same GPU, and the frame timeline marked many frames
+"SurfaceFlinger GPU Deadline Missed". The household's Switch Access still
+costs the UI thread its semantics diffing (`checkForSemanticsChanges`, ~0.3s
+in a 30s run), as before.
+
+**Not measured**: the player over a playing video, where every frame of the
+film redraws the scrims under the TextureView — the box could not be muted
+at night. The same saving should apply there, unmeasured.
+
+
+## Search is YouTube's answer, read from its top (2026-11-03)
+
+Two reports in one: *"phần search của app ko nên search từ thư viện, lấy trực
+tiếp từ youtube luôn"* and *"khi search, scroll xuống, sau đó search text khác
+thì nó vẫn search nhưng offset của scroll vẫn như cũ"*.
+
+- **The library half is gone.** `SearchViewModel` asks `GET /api/discover` and
+  nothing else; `SearchState` and `UpstreamState` are one state, whose `Ready`
+  carries the query it answers. A result already on the disk is still in
+  YouTube's answer and opens without a round trip (`ExternalVideo.inLibrary`).
+  `VideoRepository.search` and `GatewayDataSource.search` had no other caller
+  and were deleted; so were `Strings.inLibrary` and `noMoreResults`. The
+  gateway's `/api/search` stays for the web app.
+- **The scroll offset outlived the question.** One `LazyListState` for every
+  answer kept the offset of the last: the rows were replaced, none of the old
+  keys survived, and the list kept its index. Now the state is keyed on
+  `Ready.query` (`rememberResultsState`, phone and TV), so a new answer starts
+  at its top and a larger page of the same answer does not move.
+- **Regression test**: `SearchScrollTest` (jvm `ImageComposeScene`, mouse-wheel
+  scroll, read through semantics). Red on the reported symptom before the fix
+  — *"the new answer opened where the old one was scrolled to"* — and red again
+  with the key taken out; green with it.
+- **A larger page of the old question no longer lands on the new one**: the
+  page's job is cancelled by the next keystroke (`more`), the charter's "last
+  question wins".
+- `RenderScreens` sets Coil's loader with `setUnsafe`: the new render test can
+  draw an `AsyncImage` first in the same JVM, and `setSafe` then throws.
+
+## Up next is the channel's list (2026-11-03)
+
+Reported: *"vào channel, bấm vào video ở popular, latest, older thì nó ko load
+playlist của video đó vào watch khi play"*.
+
+The channel page (and a playlist) did hand its rows to the watch screen as a
+queue — but the queue decided only what autoplay picked, unseen. Up next always
+drew the server's recommendation rail. `QueueItem` now carries the row as the
+page drew it (`video`, drawn as `shown` under its current id), and
+`WatchViewModel.upNextFrom` draws the rest of the queue first, then the rail
+without repeats; next is up next's first card. A row picked from up next is the
+same sitting, so the queue survives and its upstream rows are still written
+before they are opened (`ensureInCatalogue`).
+
+Regression test: `WatchQueueTest` "up next is the rest of the list the video
+was opened from, then the rail" — red before (`[third, recommended]`, the rail
+alone), green after.
+
+## Search shows suggestions, a spinner in the field, and Home's cards (2026-11-03)
+
+Asked for: *"khi search, show indicator ở chỗ cái search để biết đang loading,
+khi ko có search thì show suggest videos với header là suggested videos, nếu
+search result là ko có item nào thì show no result nằm ở giữa … sau đó là
+Suggested video sections"*, and results and suggestions drawn as Home draws
+them. Settled in one grilling round: suggestions are Home's first page
+(`feed()`), asked once per sitting and hidden on failure; the field's clear
+button becomes a spinner while a question is out and still clears; the first
+question keeps the suggestions up; an empty answer and a failed one are a
+200dp centred block followed by the suggestions; results lose their heading;
+the TV keeps rows.
+
+- **One card.** `ExternalVideo` and `ExternalVideoCard` are gone: a discover
+  result maps to `Video` exactly as a channel page's upstream row does, and
+  draws with `VideoCard` / `TvVideoRow`. `saveTargetOf(Video)` writes from the
+  address when the row is not in the library — which the channel page's
+  upstream rows needed too.
+- **`asking` is its own flow**: refining a word keeps the last answer up as
+  `Ready`, so nothing in the state says a question is out. `SearchState.Searching`
+  went with it — `Idle` is "no answer yet".
+- **The server first** (`services/gateway/internal/api/ingest.go`): discover
+  sends `channelId`, the library's `channelAvatarPath` (a bounded, one-second
+  fan-out of `GetChannel`; there is no batch call), and `publishedAt`. A pasted
+  address of a video already on this disk now answers with it, marked in the
+  library — it used to answer nothing because the library half showed it. A
+  gateway older than this sends none of the three, and the card draws an
+  initial with nothing to open.
+- `QueueItem` is one `video`, rewritten by `written(id)`; the render tests share
+  one `coilReady` instead of racing for Coil's singleton.
+
+## The search page's review round (2026-11-03)
+
+Three reviewers, one per area, then each finding read again in the code before
+it was believed; each fix below went red first.
+
+- **A channel among the videos** (ingest `searchResults`). `ytsearchN:`
+  answers a singer's name with the singer's channel and with playlists, and
+  ingest kept every entry with an id. Measured live: "son tung" →
+  `UClyA28-01x4z60eWQ2kiNbA`, a `/channel/` address, duration 0. Only ids of
+  a video's shape are kept now (`TestSearchResultsAreVideosOnly`).
+- **The third page was shorter than the second** (ingest `searchLimit`): a
+  limit over 50 fell back to 20, so asking for 60 answered 20 and the list
+  shrank under the reader. Capped at 50 instead.
+- **A larger page that failed emptied the list**: it now keeps the page read
+  and asks for that size again on the next reach for the bottom.
+- **"Could not reach YouTube" after a failed open stayed up** on every later
+  answer; it is the last answer's, and a new question or clearing forgets it.
+  The TV now says it at all.
+- **Focus on the TV list went with the rows.** Search on the keyboard sends
+  focus to the suggestions while the first question is out, and the answer
+  removed them — taking focus to the rail. The list remembers holding focus
+  and hands it to its new first row (`TvSearchFocusTest`); Search scrolls to
+  the top first, because a row scrolled away is not composed. On the way:
+  `scrollToItem` on a fresh list state waited for ever again —
+  `requestScrollToItem`, as §11 already says.
+- **Up next**: the list is drawn before the rail answers; "from this channel"
+  narrows the list too; the rail never repeats a row of the list (which let
+  autoplay loop it); at most `UP_NEXT_QUEUE_ROWS` (20) rows are drawn at once.
+
+Not fixed, and why: an open still in flight when search is left can still open
+the video (as before this change); a library video's Saved tick is unknown to
+discover and shows unticked; Previous after a row written under a new id would
+404, which no gateway does today; the web search page can flash a library
+video's card without its picture while its own library half loads.
+
+## A channel nobody has met, and a channel nobody has (2026-11-03)
+
+Reported: *"Could not reach the library — gateway answered 404 for
+…/api/channels/UCSvstDQw5-yIHVRzXkOURyg"*.
+
+- **The gateway answered 404 for any channel the catalogue had not recorded**,
+  and the channel page asks the catalogue for its header. A pasted channel
+  address was learned first (`/api/channels/resolve`); an avatar on a search
+  result — tappable since this morning — was not. `GET /api/channels/{id}`
+  now learns a channel it does not know (`learnChannel`, shared with the
+  resolve route) and answers (`TestAChannelTheLibraryHasNeverMetIsLearned`).
+- **This particular channel does not exist.** Asked directly, yt-dlp says
+  *"This channel does not exist"* and YouTube's own page and feed answer 404;
+  the catalogue holds no video naming it. The gateway's 404 is the truth, and
+  the page now says so — `ChannelMissing` from the repository, `ChannelState.Missing`,
+  "This channel isn't on YouTube" — rather than blaming the library.
+  Where the app found the id is not known.
+
+## The channel and its videos are asked together, and only one learned (2026-11-04)
+
+Reported: search "guh huub", press a result's channel avatar, and the page
+says *"This channel isn't on YouTube"*.
+
+- **Yesterday's fix taught one of two requests.** The channel page asks
+  `GET /api/channels/{id}` and `GET /api/channels/{id}/videos` at once
+  (`channelPage`, to save a round trip). Only the first learned an unknown
+  channel; the listing read the catalogue and answered 404. Whichever
+  arrived first decided the page. Measured against the running gateway on
+  three fresh channels from a search, `/videos` first answered 404 three
+  times out of three, `/channels/{id}` then 200, `/videos` again 200. curl
+  asking them one after the other hid it: the first request had already
+  written the channel down.
+- **Both now go through `channelOrLearn`**, and concurrent lookups of one
+  unknown channel are one upstream request (`singleflight`, as `audioCuts`
+  already does), so YouTube is asked once
+  (`TestTheVideosOfAChannelTheLibraryHasNeverMetAreListed`,
+  `TestAChannelAndItsVideosAskedTogetherLearnOnce`, which goes red at 2
+  requests without the singleflight). After the restart, 32 of 32 fresh
+  channels from two searches answered 200 to both requests sent together.
+- **A result without a channel id** (one in twenty for "guh huub") draws no
+  tappable avatar, as before; that path never asked.
+
+## A cast followed the phone into another profile (2026-11-04)
+
+Reported: profile A casts video A1 to a Google speaker; Settings → Profile,
+switch to B, open B1; B1 plays on A's speaker. Asked for: each profile casts
+on its own; B casts only when B asks to.
+
+- **Two things made the speaker the phone's, not the profile's.**
+  `GET /api/cast/sessions` listed every cast in the house, though each
+  session records `started_by`; and `CastStore`, which outlives every screen,
+  kept the remote and the running list across the switch (only `watching`
+  was cleared). `pick` then sent B's video to `speaker`.
+- **The gateway answers `?mine=true` with the asker's casts only**
+  (`started_by == userID(r)`, so an unidentified phone gets the default
+  profile's). Without it the list is unchanged, for the web app's bar
+  (`TestAPhoneSeesOnlyTheCastsItsProfileStarted`,
+  `TestWithoutMineEveryCastInTheHouseIsListed`). The app always asks it.
+- **`CastStore.profileChanged()` forgets the last profile's casts** and asks
+  again, called from both profile pickers after the new id is written
+  (`anotherProfileDoesNotInheritTheCastOfTheOneBefore`, red on "profile B's
+  video opens on the phone" before). A's speaker keeps playing; switching
+  back finds it again on the next poll, lit, with the remote closed.
+- **B may still cast to A's speaker** from the picker. The cast service
+  starts a new session there, and A's ends as `replaced` (`Repo.Create`).
+- **Measured on the running gateway**: a cast started as KuTeo on the
+  Kitchen speaker (volume 0 at once, then stopped) was listed for KuTeo
+  only; Lượm's list held only Lượm's own session on Mom speaker, which was
+  playing at the time and was left alone; without `mine`, both.

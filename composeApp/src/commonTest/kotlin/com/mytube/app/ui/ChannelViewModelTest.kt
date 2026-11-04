@@ -8,6 +8,7 @@ import kotlinx.coroutines.delay
 import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.ui.channel.ChannelState
 import com.mytube.app.ui.channel.ChannelViewModel
+import com.mytube.app.domain.repository.ChannelMissing
 import com.mytube.app.ui.watch.QueueItem
 import com.mytube.app.ui.watch.asQueueItem
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * The channel page, and the one thing about it that is not like any other list
@@ -59,18 +61,12 @@ class ChannelViewModelTest {
         // The row is written now, and the queue says so — otherwise the watch
         // screen writes it a second time on arrival, which is one full metadata
         // fetch upstream for a row that is already there.
-        assertEquals(
-            listOf(
-                QueueItem(
-                    "written-id",
-                    // `written` keeps the address: the row is findable by it if
-                    // the id ever has to be resolved again.
-                    sourceUrl = "https://www.youtube.com/watch?v=abc",
-                    inLibrary = true,
-                ),
-            ),
-            queue,
-        )
+        val row = queue.single()
+        assertEquals("written-id", row.id)
+        assertTrue(row.inLibrary)
+        // `written` keeps the address: the row is findable by it if the id ever
+        // has to be resolved again.
+        assertEquals("https://www.youtube.com/watch?v=abc", row.sourceUrl)
         // The id the *server* answered with, not the one that was pressed. They
         // are usually the same and the difference is not this side's to assume.
         assertEquals("written-id", opened)
@@ -199,6 +195,20 @@ class ChannelViewModelTest {
         inLibrary = false,
     )
 
+    /**
+     * A channel YouTube says does not exist is not the library being out of
+     * reach — reported as "Could not reach the library … gateway answered 404
+     * for …/api/channels/UCSvstDQw5-yIHVRzXkOURyg", a channel whose page and
+     * feed YouTube itself answers 404 for.
+     */
+    @Test
+    fun aChannelThatDoesNotExistSaysSo() = runTest(dispatcher) {
+        val model = ChannelViewModel("UCSvstDQw5-yIHVRzXkOURyg", FakeVideos(missing = true))
+        advance()
+
+        assertIs<ChannelState.Missing>(model.state.value)
+    }
+
     private inner class FakeVideos(
         private val page: List<Video> = emptyList(),
         private val ensured: String = "written-id",
@@ -206,6 +216,7 @@ class ChannelViewModelTest {
         /** Pages by (sort token, page token), each with its next token; [page] otherwise. */
         private val pages: Map<Pair<String, String>, Pair<List<Video>, String>> = emptyMap(),
         private val delays: Map<Pair<String, String>, Long> = emptyMap(),
+        private val missing: Boolean = false,
     ) : StubVideoRepository() {
         var ensureCalls = 0
             private set
@@ -215,6 +226,7 @@ class ChannelViewModelTest {
             sortToken: String,
             pageToken: String,
         ): ChannelPage {
+            if (missing) throw ChannelMissing(channelId)
             val key = sortToken to pageToken
             delays[key]?.let { delay(it) }
             val (videos, next) = pages[key] ?: (page to "")

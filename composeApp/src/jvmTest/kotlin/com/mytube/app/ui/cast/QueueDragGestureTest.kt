@@ -16,6 +16,7 @@ import com.mytube.app.domain.model.CastItem
 import com.mytube.app.domain.model.CastNarration
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
+import com.mytube.app.screenshot.coilReady
 import com.mytube.app.ui.theme.MytubeTheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,6 +41,7 @@ class QueueDragGestureTest {
 
     @Test
     fun aRowHeldAtTheBottomEdgeScrollsTheListAndLandsFurtherDown() {
+        coilReady
         val list = LazyListState()
         val drag = QueueDrag()
         var moved: Pair<Int, Int>? = null

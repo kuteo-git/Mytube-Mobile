@@ -7,7 +7,6 @@ import com.mytube.app.domain.model.Reaction
 import com.mytube.app.domain.model.SpokenLanguage
 import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Topic
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
 
 /**
@@ -70,22 +69,15 @@ interface VideoRepository {
 
     suspend fun video(id: String): Video
 
-    /** Videos in *this library* matching a query. */
-    suspend fun search(query: String): List<Video>
-
     /**
-     * Videos on YouTube matching a query.
-     *
-     * A second call rather than a second half of [search], because the two are
-     * two round trips with two failure modes: the library answers off a local
-     * index in milliseconds, and this one drives yt-dlp against the internet.
-     * Folding them together would make a screen that cannot show the half that
-     * worked.
+     * Videos on YouTube matching a query: what the search screen shows. Rows
+     * already on this disk come back with `inLibrary`; the rest carry the
+     * address to write them from.
      *
      * Upstream has **no cursor**. Asking for more means asking for a larger
      * page, and the answer is complete when it comes back shorter than [limit].
      */
-    suspend fun discover(query: String, limit: Int): List<ExternalVideo>
+    suspend fun discover(query: String, limit: Int): List<Video>
 
     /**
      * Make a catalogue row for an upstream video, and answer with its id.
@@ -317,3 +309,9 @@ data class ChannelPage(
  * day upstream adds a fourth.
  */
 data class SortOption(val label: String, val token: String)
+
+/**
+ * The channel asked about does not exist upstream — removed, terminated, or an
+ * id nothing answers to. Not a failure to reach anything: YouTube answered.
+ */
+class ChannelMissing(val channelId: String) : Exception("channel $channelId does not exist")

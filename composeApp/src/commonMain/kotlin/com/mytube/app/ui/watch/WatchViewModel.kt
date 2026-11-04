@@ -66,6 +66,15 @@ const val TV_MAX_HEIGHT = 1080
  * the cost of reporting on every tick is four writes a second per viewer for a
  * number that has moved by a quarter of a second.
  */
+/**
+ * How many rows of the list a video was opened from up next draws at once.
+ *
+ * The rail is drawn as one item, so every row is composed with its picture; a
+ * long playlist drawn whole is hundreds of thumbnails for a list read from the
+ * top. The rest come into view as the list moves on.
+ */
+internal const val UP_NEXT_QUEUE_ROWS = 20
+
 private const val PROGRESS_EVERY_SECONDS = 10.0
 
 /**
@@ -653,18 +662,37 @@ class WatchViewModel(
     }
 
     /**
-     * What next means for this video.
+     * What up next shows: the rest of the list this video was opened from, then
+     * the rail.
      *
-     * The queue wins when this video is in it, which is what makes a channel
-     * sorted by Popular play through in that order. Falling back to the rail —
-     * rather than to nothing — matters when a queue runs out: the last video of
-     * a channel page still has somewhere to go, which is what the rail is for.
+     * Opened from a channel's Popular, Latest or Older, or from a playlist, the
+     * list being read is what somebody expects to see continue. Up next used to
+     * be the rail alone, with that list used only, unseen, for what autoplay
+     * picked — reported as the channel's order "not loaded into watch".
      */
-    private fun nextId(upNext: List<Video>): String {
+    private fun upNextFrom(rail: List<Video>, channelOnly: Boolean = false, channelId: String = ""): List<Video> {
         val here = queue.indexOfFirst { it.id == videoId }
-        if (here >= 0 && here + 1 < queue.size) return queue[here + 1].id
-        return upNext.firstOrNull()?.id.orEmpty()
+        val listed = if (here >= 0) queue.drop(here + 1).map { it.video } else emptyList()
+        // "From this channel" narrows the list too: a playlist mixing channels
+        // would otherwise put the others first, and autoplay would play them.
+        val shown = listed
+            .filter { !channelOnly || it.channel.id == channelId }
+            .take(UP_NEXT_QUEUE_ROWS)
+        // None of the list, played or not: a rail recommending a row already
+        // played sends autoplay round the list again.
+        val listedIds = queue.mapTo(mutableSetOf()) { it.id } + videoId
+        return shown + rail.filter { it.id !in listedIds }
     }
+
+    /**
+     * What next means for this video: the first card up next draws.
+     *
+     * [upNextFrom] puts the queue first, which is what makes a channel sorted by
+     * Popular play through in that order. Falling back to the rail — rather
+     * than to nothing — matters when a queue runs out: the last video of a
+     * channel page still has somewhere to go, which is what the rail is for.
+     */
+    private fun nextId(upNext: List<Video>): String = upNext.firstOrNull()?.id.orEmpty()
 
     /**
      * Apply the levels chosen in Settings to the player.
@@ -709,11 +737,13 @@ class WatchViewModel(
         val current = _state.value as? WatchState.Playing ?: return
         if (current.railChannelOnly == channelOnly) return
         // nextId goes with the rail it came from. Left behind, "next" would
-        // point into a list this screen is no longer showing.
+        // point into a list this screen is no longer showing. The queue's rest
+        // stays up while the narrowed rail is asked for.
+        val listed = upNextFrom(emptyList(), channelOnly, current.video.channel.id)
         _state.value = current.copy(
             railChannelOnly = channelOnly,
-            upNext = emptyList(),
-            nextId = nextId(emptyList()),
+            upNext = listed,
+            nextId = nextId(listed),
             loadingUpNext = true,
         )
         loadUpNext(if (channelOnly) current.video.channel.id else "")
@@ -1028,7 +1058,7 @@ class WatchViewModel(
         // it.
         queue = queue.map {
             if (it.id == entry.id) {
-                QueueItem(id = written, sourceUrl = it.sourceUrl, inLibrary = true)
+                it.written(written)
             } else {
                 it
             }
@@ -1183,6 +1213,9 @@ class WatchViewModel(
                         val voiceLevel = preferences.voiceLevel()
                         val duckLevel = preferences.duckLevel()
                         player.setNarrationLevels(voiceLevel, duckLevel)
+                        // The list is known before the rail is asked for: next
+                        // and up next do not wait on a second round trip.
+                        val listed = upNextFrom(emptyList())
 
                         WatchState.Playing(
                             video = playable,
@@ -1205,6 +1238,8 @@ class WatchViewModel(
                             // from one place is how a preference becomes an
                             // action nobody asked for on this video.
                             narrating = false,
+                            upNext = listed,
+                            nextId = nextId(listed),
                         )
                     }
                     is Stream.Upcoming -> WatchState.Upcoming(video)
@@ -1413,7 +1448,8 @@ class WatchViewModel(
                 .getOrDefault(emptyList())
             _state.update { current ->
                 if (current is WatchState.Playing) {
-                    current.copy(upNext = rail, nextId = nextId(rail), loadingUpNext = false)
+                    val shown = upNextFrom(rail, current.railChannelOnly, current.video.channel.id)
+                    current.copy(upNext = shown, nextId = nextId(shown), loadingUpNext = false)
                 } else {
                     current
                 }

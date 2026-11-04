@@ -29,7 +29,13 @@ import java.io.File
  * draw the same composables the phone draws, so this costs nothing but the file
  * it writes.
  */
-private val coilReady: Unit by lazy {
+/**
+ * Coil's loader, installed once per JVM. Every test that draws an AsyncImage
+ * reads this first: Coil builds a default singleton on the first image, and
+ * `setSafe` after that throws — so a render test drawn before this one, in
+ * whatever order the runner picks, would break it.
+ */
+internal val coilReady: Unit by lazy {
     // Coil needs an ImageLoader before AsyncImage will fetch anything, and off
     // Android nobody installs one. Without this every image in a screenshot is
     // the placeholder — which is exactly what the first batch showed.

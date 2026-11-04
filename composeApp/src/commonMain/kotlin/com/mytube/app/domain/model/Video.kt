@@ -40,9 +40,7 @@ data class Video(
      * anything to play. The address, not an id this app formats into a URL: the
      * gateway's `POST /api/videos/external` takes one and already sends one, and
      * building it here would be guessing at a format that was handed over.
-     *
-     * See [ExternalVideo.sourceUrl], which says the same thing for the search
-     * screen's half of this.
+     * Search results are the same.
      */
     val sourceUrl: String = "",
     /**

@@ -102,13 +102,10 @@ fun VideoCard(
     /**
      * Its row is being written into the catalogue, so it cannot be opened yet.
      *
-     * True only on the channel page, whose rows come from YouTube — see
-     * `ChannelViewModel.openVideo`. The card says so over its own picture and
-     * stops taking presses, because writing the row is a round trip to YouTube
-     * and a card that looks idle is one somebody presses again.
-     *
-     * `ExternalVideoCard` draws the same thing for the search screen's upstream
-     * half, which is the same state on the other list that has it.
+     * True on the channel page and the search page, whose rows come from
+     * YouTube — see `ChannelViewModel.openVideo`. The card says so over its own
+     * picture and stops taking presses, because writing the row is a round trip
+     * to YouTube and a card that looks idle is one somebody presses again.
      */
     opening: Boolean = false,
 ) {

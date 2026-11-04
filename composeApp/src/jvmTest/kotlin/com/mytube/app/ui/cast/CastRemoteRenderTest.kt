@@ -12,6 +12,7 @@ import com.mytube.app.domain.model.CastItem
 import com.mytube.app.domain.model.CastNarration
 import com.mytube.app.domain.model.CastSession
 import com.mytube.app.domain.model.CastState
+import com.mytube.app.screenshot.coilReady
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.watch.WatchCast
 import com.mytube.app.ui.watch.WatchContent
@@ -53,6 +54,7 @@ class CastRemoteRenderTest {
 
     @Test
     fun thePickerAndTheMiniplayerMeasureAndDraw() {
+        coilReady
         val r1 = CastDevice("r1-living", "Loa R1", CastDeviceKind.R1)
         renders { CastPickerSheet(listOf(r1), loading = false, visible = true, backdrop = null, onPick = {}, onDismiss = {}) }
         renders { CastPickerSheet(emptyList(), loading = true, visible = true, backdrop = null, onPick = {}, onDismiss = {}) }
@@ -72,6 +74,7 @@ class CastRemoteRenderTest {
      */
     @Test
     fun theWatchScreenMeasuresAndDrawsAsTheRemote() {
+        coilReady
         val cast = WatchCast(
             artwork = { CastArtwork(session, "") },
             stage = { CastStage(session, {}, {}, {}, {}, {}, {}, onNarration = null) },
@@ -96,6 +99,7 @@ class CastRemoteRenderTest {
     @OptIn(ExperimentalComposeUiApi::class)
     @Test
     fun theNarrationSwitchAsksForTheOpposite() {
+        coilReady
         fun press(narration: CastNarration, drawn: Boolean): List<Boolean> {
             val asked = mutableListOf<Boolean>()
             val density = 3f

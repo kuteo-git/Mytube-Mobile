@@ -366,6 +366,27 @@ class CastStoreTest {
         assertIs<CastRemote.Showing>(store.state.value.remote, "the remote, not the watch screen")
     }
 
+    // Reported: profile A casts to a speaker, the phone switches to profile B,
+    // and B's next video went to A's speaker. Each profile casts on its own.
+    @Test
+    fun anotherProfileDoesNotInheritTheCastOfTheOneBefore() = runTest {
+        val fake = FakeCast()
+        val store = store(fake)
+        runCurrent()
+        store.start(r1, listOf("a"), 0.0, narrateFirst = false)
+        runCurrent()
+        assertTrue(store.state.value.casting)
+
+        fake.running = emptyList()
+        store.profileChanged()
+        runCurrent()
+
+        assertFalse(store.pick(listOf("x")), "profile B's video opens on the phone")
+        assertFalse(store.state.value.casting, "B's cast button is not lit by A's speaker")
+        assertEquals(CastRemote.Closed, store.state.value.remote)
+        assertTrue(fake.sent.none { it.startsWith("start r1-living [x") }, fake.sent.toString())
+    }
+
     @Test
     fun aVideoPickedAloneWhileCastingTakesItsUpNextWithIt() = runTest {
         val fake = FakeCast()

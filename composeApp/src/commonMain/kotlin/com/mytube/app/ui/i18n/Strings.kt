@@ -76,6 +76,9 @@ interface Strings {
     val voiceSearch: String
     /** Shown when a topic or Live has nothing in it. */
     val nothingHere: String
+    /** A channel YouTube says does not exist, opened from a link to it. */
+    val channelMissing: String
+    val channelMissingDetail: String
 
     // --- watch -------------------------------------------------------------
     val couldNotPlay: String
@@ -147,14 +150,10 @@ interface Strings {
     val noResults: String
     val noResultsDetail: String
     val searchPrompt: String
-    /** The heading over results that are already on this disk. */
-    val inLibrary: String
-    /** The heading over results that are still on YouTube. */
-    val onYouTube: String
+    /** The heading over Home's videos on the search page, before and under an empty answer. */
+    val suggestedVideos: String
     /** Said under that heading when the upstream search itself failed. */
     val youtubeUnreachable: String
-    /** Said under that heading when YouTube has nothing more to give. */
-    val noMoreResults: String
 
     // --- narration ---------------------------------------------------------
     val narration: String
@@ -371,6 +370,8 @@ object EnglishStrings : Strings {
     override val keyBackspace = "Delete"
     override val voiceSearch = "Search by voice"
     override val nothingHere = "Nothing here"
+    override val channelMissing = "This channel isn't on YouTube"
+    override val channelMissingDetail = "It may have been removed, or the link names no channel."
 
     override val couldNotPlay = "Could not play this"
     override val upcomingTitle = "Not started yet"
@@ -406,14 +407,12 @@ object EnglishStrings : Strings {
     override val clear = "Clear"
 
     override val videos = "videos"
-    override val searchHint = "Search this library"
+    override val searchHint = "Search YouTube"
     override val noResults = "Nothing here matches"
     override val noResultsDetail = "Try fewer words, or the name of the channel."
-    override val searchPrompt = "Titles and channels in this library."
-    override val inLibrary = "In your library"
-    override val onYouTube = "On YouTube"
+    override val searchPrompt = "Search YouTube for a video or a channel."
+    override val suggestedVideos = "Suggested videos"
     override val youtubeUnreachable = "Could not reach YouTube"
-    override val noMoreResults = "Nothing more on YouTube"
 
     override val narration = "Vietnamese voice"
     override fun narrationPreparing(done: Int, total: Int) = "Preparing $done/$total"
@@ -583,6 +582,8 @@ object VietnameseStrings : Strings {
     override val keyBackspace = "Xoá một chữ"
     override val voiceSearch = "Tìm bằng giọng nói"
     override val nothingHere = "Chưa có gì ở đây"
+    override val channelMissing = "Kênh này không có trên YouTube"
+    override val channelMissingDetail = "Kênh có thể đã bị xoá, hoặc đường dẫn không trỏ tới kênh nào."
 
     override val couldNotPlay = "Không phát được"
     override val upcomingTitle = "Chưa bắt đầu"
@@ -615,14 +616,12 @@ object VietnameseStrings : Strings {
     override val clear = "Xoá"
 
     override val videos = "video"
-    override val searchHint = "Tìm trong thư viện"
+    override val searchHint = "Tìm trên YouTube"
     override val noResults = "Không có gì khớp"
     override val noResultsDetail = "Thử ít chữ hơn, hoặc gõ tên kênh."
-    override val searchPrompt = "Tìm theo tên video và tên kênh trong thư viện."
-    override val inLibrary = "Trong thư viện"
-    override val onYouTube = "Trên YouTube"
+    override val searchPrompt = "Tìm video hoặc kênh trên YouTube."
+    override val suggestedVideos = "Video gợi ý"
     override val youtubeUnreachable = "Không tới được YouTube"
-    override val noMoreResults = "Hết kết quả trên YouTube"
 
     override val narration = "Thuyết minh"
     override fun narrationPreparing(done: Int, total: Int) = "Đang chuẩn bị $done/$total"

@@ -137,7 +137,9 @@ fun ChannelContent(
 
     // Recorded, so the miniplayer floating over this page is glass here too.
     Box(Modifier.fillMaxSize().glassSource()) {
-    TabScaffold(
+    if (state is ChannelState.Missing) {
+        EmptyState(strings.channelMissing, strings.channelMissingDetail)
+    } else TabScaffold(
         loading = state is ChannelState.Loading,
         needsServer = state is ChannelState.NeedsServer,
         failure = (state as? ChannelState.Failed)?.message.orEmpty(),
@@ -490,6 +492,11 @@ private fun ChannelPreview() = preview(sampleReady(subscribed = true))
 @Preview
 @Composable
 private fun ChannelUnsubscribedPreview() = preview(sampleReady(subscribed = false))
+
+/** A channel YouTube says does not exist. */
+@Preview
+@Composable
+private fun ChannelMissingPreview() = preview(ChannelState.Missing)
 
 @Preview
 @Composable

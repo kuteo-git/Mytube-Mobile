@@ -1,6 +1,5 @@
 package com.mytube.app.ui.playlist
 
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.domain.model.Video
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -29,11 +28,16 @@ data class SaveTarget(
     val isExternal: Boolean get() = videoId.isEmpty() && sourceUrl.isNotEmpty()
 }
 
-/** A library video as the sheet's target: its id, and whether it is already saved. */
-fun saveTargetOf(video: Video) = SaveTarget(video.id, saved = video.saved)
-
-/** An upstream result as the sheet's target: no id yet, so the address the row is written from. */
-fun saveTargetOf(video: ExternalVideo) = SaveTarget(videoId = "", sourceUrl = video.sourceUrl)
+/**
+ * A video as the sheet's target: its id and whether it is already saved, or —
+ * for a row still on YouTube — no id yet, so the address the row is written from.
+ */
+fun saveTargetOf(video: Video) =
+    if (!video.inLibrary && video.sourceUrl.isNotEmpty()) {
+        SaveTarget(videoId = "", sourceUrl = video.sourceUrl)
+    } else {
+        SaveTarget(video.id, saved = video.saved)
+    }
 
 sealed interface SaveSheetState {
     data object Loading : SaveSheetState
@@ -162,7 +166,7 @@ class SavePlaylistViewModel(
      *
      * For an upstream result there is none until one is made — the row is
      * written first and its answer names the video, which is
-     * `SearchViewModel.openExternal`'s pattern. Empty means the gateway could
+     * `SearchViewModel.open`'s pattern. Empty means the gateway could
      * not resolve the address: a refusal wearing a success's clothes, and adding
      * with it would write rows naming no video.
      *

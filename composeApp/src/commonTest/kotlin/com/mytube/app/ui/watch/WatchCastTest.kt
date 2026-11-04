@@ -111,7 +111,12 @@ class WatchCastTest {
         assertFalse((model.state.value as WatchState.Playing).narrating, "the speaker stopped narrating; the phone did not")
     }
 
-    private fun item(id: String, inLibrary: Boolean = true) = QueueItem(id = id, sourceUrl = "", inLibrary = inLibrary)
+    private fun item(id: String, inLibrary: Boolean = true) =
+        Video(
+            id = id, title = id, channel = Channel(id = "c", name = "c", handle = "", avatarPath = ""),
+            durationSeconds = 1, viewCount = 0, publishedAt = "", thumbnailPath = "",
+            sourceUrl = "", inLibrary = inLibrary,
+        ).asQueueItem()
 
     private fun TestScope.open(
         videos: RailVideos,

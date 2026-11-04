@@ -27,14 +27,29 @@ import com.mytube.app.domain.model.Video
  * convenient default is the bug itself.
  */
 data class QueueItem(
-    val id: String,
+    /**
+     * The row as the page drew it — up next draws it again — and as it is now:
+     * once the sitting writes it into the catalogue, under the id it was
+     * written as and marked as in the library ([written]).
+     */
+    val video: Video,
+) {
+    val id: String get() = video.id
     /** @see Video.sourceUrl */
-    val sourceUrl: String,
+    val sourceUrl: String get() = video.sourceUrl
     /** @see Video.inLibrary */
-    val inLibrary: Boolean,
-)
+    val inLibrary: Boolean get() = video.inLibrary
 
-fun Video.asQueueItem() = QueueItem(id = id, sourceUrl = sourceUrl, inLibrary = inLibrary)
+    /**
+     * This row, now in the catalogue under [id].
+     *
+     * The address is carried rather than dropped: it is the only thing a row
+     * can be re-resolved from, and nothing is gained by forgetting it.
+     */
+    fun written(id: String) = QueueItem(video.copy(id = id, inLibrary = true))
+}
+
+fun Video.asQueueItem() = QueueItem(this)
 
 /**
  * What a speaker should play for [videoId] opened from [queue]: the video, then

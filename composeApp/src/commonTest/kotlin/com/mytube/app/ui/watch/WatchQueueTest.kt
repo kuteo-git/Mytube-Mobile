@@ -71,6 +71,73 @@ class WatchQueueTest {
         assertEquals(listOf("https://www.youtube.com/watch?v=second"), videos.ensured)
     }
 
+    /**
+     * Opened from a channel's Popular, Latest or Older, the list read there is
+     * what up next shows — "bấm vào video ở popular, latest, older thì nó ko
+     * load playlist của video đó vào watch khi play". It used to show the
+     * server's recommendations, with the channel's order used only, unseen, for
+     * what autoplay picked.
+     */
+    @Test
+    fun `up next is the rest of the list the video was opened from, then the rail`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"), rail = listOf("third", "recommended"))
+        val model = open(
+            videos,
+            queue = listOf(item("zeroth"), item("first", inLibrary = true), item("second"), item("third")),
+        )
+
+        val state = model.state.value
+        assertTrue(state is WatchState.Playing, "expected the video to play, was $state")
+        assertEquals(listOf("second", "third", "recommended"), state.upNext.map { it.id })
+        assertEquals("second", state.nextId)
+    }
+
+    @Test
+    fun `up next shows the list before the rail has answered`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"), rail = listOf("recommended"), railNeverAnswers = true)
+        val model = open(videos, queue = listOf(item("first", inLibrary = true), item("second")))
+
+        val state = model.state.value
+        assertTrue(state is WatchState.Playing, "expected the video to play, was $state")
+        assertEquals(listOf("second"), state.upNext.map { it.id })
+        assertEquals("second", state.nextId)
+    }
+
+    /** The rail recommending a row of the list already played would loop autoplay through it again. */
+    @Test
+    fun `the rail never repeats a row of the list`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"), rail = listOf("zeroth", "recommended"))
+        val model = open(videos, queue = listOf(item("zeroth"), item("first", inLibrary = true), item("second")))
+
+        val state = model.state.value as WatchState.Playing
+        assertEquals(listOf("second", "recommended"), state.upNext.map { it.id })
+    }
+
+    @Test
+    fun `from this channel keeps only this channel's rows of the list`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"), rail = listOf("recommended"))
+        val model = open(
+            videos,
+            queue = listOf(item("first", inLibrary = true), item("elsewhere", channelId = "other"), item("second")),
+        )
+
+        model.filterRail(channelOnly = true)
+        advanceUntilIdle()
+
+        val state = model.state.value as WatchState.Playing
+        assertEquals(listOf("second", "recommended"), state.upNext.map { it.id })
+        assertEquals("second", state.nextId)
+    }
+
+    @Test
+    fun `a long list is drawn a page at a time`() = runTest(dispatcher) {
+        val videos = FakeVideos(catalogue = mutableSetOf("first"), rail = listOf("recommended"))
+        val model = open(videos, queue = listOf(item("first", inLibrary = true)) + List(60) { item("row$it") })
+
+        val state = model.state.value as WatchState.Playing
+        assertEquals(List(UP_NEXT_QUEUE_ROWS) { "row$it" } + "recommended", state.upNext.map { it.id })
+    }
+
     @Test
     fun `a row already in the library is not written again`() = runTest(dispatcher) {
         val videos = FakeVideos(catalogue = mutableSetOf("first", "second"))
@@ -310,11 +377,17 @@ class WatchQueueTest {
         assertTrue(model.state.value is WatchState.Playing, "the newer video is what plays")
     }
 
-    private fun item(id: String, inLibrary: Boolean = false) = QueueItem(
+    private fun item(id: String, inLibrary: Boolean = false, channelId: String = "c") = Video(
         id = id,
+        title = id,
+        channel = Channel(id = channelId, name = "Hoài Lâm", handle = "@hl", avatarPath = ""),
+        durationSeconds = 100,
+        viewCount = 0,
+        publishedAt = "",
+        thumbnailPath = "",
         sourceUrl = if (inLibrary) "" else "https://www.youtube.com/watch?v=$id",
         inLibrary = inLibrary,
-    )
+    ).asQueueItem()
 
     private suspend fun kotlinx.coroutines.test.TestScope.open(
         videos: FakeVideos,
@@ -407,23 +480,33 @@ class WatchQueueTest {
          * network. The concurrency tests set it.
          */
         private val ensureDelayMillis: Long = 0,
+        /** What the gateway recommends after any video, by id. */
+        private val rail: List<String> = emptyList(),
+        private val railNeverAnswers: Boolean = false,
     ) : StubVideoRepository() {
         val ensured = mutableListOf<String>()
+
+        override suspend fun upNext(videoId: String, channelId: String): List<Video> {
+            if (railNeverAnswers) kotlinx.coroutines.awaitCancellation()
+            return rail.map { row(it) }
+        }
 
         override suspend fun video(id: String): Video {
             // What the gateway does for a video it has no row for, and what the
             // watch screen turned into "gateway answered 404".
             if (id !in catalogue) error("gateway answered 404 for /api/videos/$id")
-            return Video(
-                id = id,
-                title = id,
-                channel = Channel(id = "c", name = "Hoài Lâm", handle = "@hl", avatarPath = ""),
-                durationSeconds = 100,
-                viewCount = 0,
-                publishedAt = "",
-                thumbnailPath = "thumbnails/$id.jpg",
-            )
+            return row(id)
         }
+
+        private fun row(id: String) = Video(
+            id = id,
+            title = id,
+            channel = Channel(id = "c", name = "Hoài Lâm", handle = "@hl", avatarPath = ""),
+            durationSeconds = 100,
+            viewCount = 0,
+            publishedAt = "",
+            thumbnailPath = "thumbnails/$id.jpg",
+        )
 
         override suspend fun ensureExternal(sourceUrl: String): String {
             ensured += sourceUrl

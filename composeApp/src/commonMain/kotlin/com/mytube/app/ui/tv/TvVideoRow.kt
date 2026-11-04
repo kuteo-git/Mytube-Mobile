@@ -21,7 +21,6 @@ import com.mytube.app.ui.home.metaLine
 import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.home.formatViews
 import com.mytube.app.domain.model.Video
-import com.mytube.app.domain.model.ExternalVideo
 import com.mytube.app.ui.shell.MenuAction
 import com.mytube.app.ui.theme.Tokens
 
@@ -44,32 +43,6 @@ fun TvVideoRow(
     meta = metaLine(video, strings),
     durationSeconds = video.durationSeconds,
     watchedFraction = video.watchedFraction,
-    opening = opening,
-    onClick = onClick,
-    menu = menu,
-    modifier = modifier,
-)
-
-/**
- * An upstream result as a row — search's "On YouTube" half. Upstream sends no
- * date, so the meta line is the views alone, and none at all for a count of zero.
- */
-@Composable
-fun TvVideoRow(
-    video: ExternalVideo,
-    strings: Strings,
-    opening: Boolean,
-    onClick: () -> Unit,
-    /** See [TvThumbnail]. */
-    menu: List<MenuAction>,
-    modifier: Modifier = Modifier,
-) = TvVideoRow(
-    thumbnail = video.thumbnailUrl,
-    title = video.title,
-    channel = video.channelName,
-    meta = if (video.viewCount > 0) formatViews(video.viewCount, strings) else "",
-    durationSeconds = video.durationSeconds,
-    watchedFraction = 0.0,
     opening = opening,
     onClick = onClick,
     menu = menu,
