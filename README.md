@@ -38,7 +38,7 @@ The same APK, on Android TV and Google TV, laid out for a remote.
 </p>
 <p align="center">
   <img src="docs/screenshots/tv-menu.jpg" width="48%" alt="Holding OK on a card opens its menu: Save to playlist" />
-  <img src="docs/screenshots/tv-search.jpg" width="48%" alt="Search with the on-screen keyboard and a microphone, library results on the right" />
+  <img src="docs/screenshots/tv-search.jpg" width="48%" alt="Search with the on-screen keyboard and a microphone, results on the right" />
 </p>
 <p align="center">
   <em>Android TV emulator, 1920×1080, v0.1.12.</em>
@@ -64,8 +64,9 @@ The same APK, on Android TV and Google TV, laid out for a remote.
   narrates anyway.
 - **Background audio**, a lock-screen entry with artwork and a working scrubber,
   and a miniplayer that crosses every screen.
-- **Search**, which reaches the library *and* YouTube. Opening an upstream result
-  writes its catalogue row first, so the player never lands on nothing.
+- **Search**, straight from YouTube, with Home's suggestions under an empty or
+  answerless query. Opening a result writes its catalogue row first, so the
+  player never lands on nothing; its avatar opens the channel.
 - **English and Vietnamese**, chosen per device.
 - **The television**, from the same APK on Android TV and Google TV: a rail
   instead of the tab bar, Home as shelves, a full-screen player with D-pad
@@ -82,8 +83,10 @@ The same APK, on Android TV and Google TV, laid out for a remote.
   plays, the watch screen is its remote: play, pause, seek, skip, volume (on the
   phone's own buttons too), a queue reordered by dragging, and the Vietnamese
   narration mixed into the song by the server. A Nest gets the voice within
-  seconds; the R1 gets it once the whole video has been narrated. Sound only:
-  a Chromecast on a television is not offered.
+  seconds; the R1 gets it once the whole video has been narrated. Each profile
+  casts on its own: switching profile on a phone leaves the last one's speaker
+  playing and does not follow it. Sound only: a Chromecast on a television is
+  not offered.
 
 ## What it needs
 

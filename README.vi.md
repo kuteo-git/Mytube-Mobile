@@ -37,7 +37,7 @@ Cùng một APK, chạy trên Android TV và Google TV, bố cục cho remote.
 </p>
 <p align="center">
   <img src="docs/screenshots/tv-menu.jpg" width="48%" alt="Giữ OK trên một thẻ để mở menu: Lưu vào playlist" />
-  <img src="docs/screenshots/tv-search.jpg" width="48%" alt="Tìm kiếm với bàn phím trên màn hình và micro, kết quả thư viện bên phải" />
+  <img src="docs/screenshots/tv-search.jpg" width="48%" alt="Tìm kiếm với bàn phím trên màn hình và micro, kết quả bên phải" />
 </p>
 <p align="center">
   <em>Emulator Android TV, 1920×1080, bản v0.1.12.</em>
@@ -61,9 +61,9 @@ Cùng một APK, chạy trên Android TV và Google TV, bố cục cho remote.
   đang bật; bấm bật thì vẫn thuyết minh.
 - **Phát nền**, mục trên màn hình khoá có ảnh và thanh tua kéo được, và một
   miniplayer đi theo qua mọi màn.
-- **Tìm kiếm** chạm tới cả thư viện *lẫn* YouTube. Mở một kết quả từ YouTube thì
-  hàng trong catalogue được ghi trước, nên trình phát không bao giờ mở vào chỗ
-  trống.
+- **Tìm kiếm** thẳng từ YouTube, kèm video gợi ý của trang chủ khi chưa gõ gì
+  hoặc không có kết quả. Mở một kết quả thì hàng trong catalogue được ghi trước,
+  nên trình phát không bao giờ mở vào chỗ trống; bấm avatar thì mở kênh.
 - **Tiếng Anh và tiếng Việt**, chọn theo từng máy.
 - **TV**, cùng một APK trên Android TV và Google TV: thanh rail thay cho thanh
   tab, trang chủ dạng kệ, trình phát toàn màn hình tua bằng D-pad có ảnh xem
@@ -79,8 +79,9 @@ Cùng một APK, chạy trên Android TV và Google TV, bố cục cho remote.
   loa. Khi loa đang phát, màn xem video là remote của loa: phát, dừng, tua, chuyển
   bài, âm lượng (cả bằng nút âm lượng của điện thoại), hàng chờ sắp lại bằng cách
   kéo, và thuyết minh tiếng Việt do máy chủ trộn vào bài. Loa Nest có giọng sau
-  vài giây; loa R1 có giọng khi cả video đã được thuyết minh xong. Chỉ có tiếng:
-  Chromecast cắm TV không nằm trong danh sách.
+  vài giây; loa R1 có giọng khi cả video đã được thuyết minh xong. Mỗi hồ sơ cast
+  riêng: đổi hồ sơ trên điện thoại thì loa của hồ sơ trước vẫn phát và không đi
+  theo. Chỉ có tiếng: Chromecast cắm TV không nằm trong danh sách.
 
 ## Nó cần gì
 
