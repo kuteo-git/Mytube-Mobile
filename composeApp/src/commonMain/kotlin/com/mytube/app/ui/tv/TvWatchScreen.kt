@@ -729,7 +729,9 @@ private fun Controls(
                 .weight(1f, fill = false)
                 .fillMaxWidth()
                 .scrim(TOP_SCRIM)
-                .padding(horizontal = TV_SAFE_HORIZONTAL, vertical = TV_SAFE_VERTICAL),
+                // Only the top is a screen edge. The safe margin under it too
+                // was what a two-line title cost the channel's name.
+                .padding(start = TV_SAFE_HORIZONTAL, end = TV_SAFE_HORIZONTAL, top = TV_SAFE_VERTICAL, bottom = Space.sm),
         ) {
             Text(
                 text = video.title,

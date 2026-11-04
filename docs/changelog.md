@@ -6446,3 +6446,22 @@ on its own; B casts only when B asks to.
   Kitchen speaker (volume 0 at once, then stopped) was listed for KuTeo
   only; Lượm's list held only Lượm's own session on Mom speaker, which was
   playing at the time and was left alone; without `mine`, both.
+
+## The channel's name under a two-line title was cut on the television (2026-11-04)
+
+Reported on the Chromecast, with a screenshot: the controls up over "HẺM CỤT
+FULL- TRẤN THÀNH | NS NGỌC GIÀU, …", a two-line title, and under it only the
+tops of "TRẤN THÀNH TOWN".
+
+- **The title block had a screen edge's margin where there is no edge.** It
+  is weighted (`fill = false`), so it gets what the bottom block leaves:
+  about 124dp on a 540dp screen. It needs 27 + 2 × 28 + 4 + 20 = 107dp for
+  its text, and the 27dp safe margin under it as well made 134dp. The column
+  cut its last child, the channel's name.
+- **The margin under it is now `Space.sm`** (115dp needed). The top is still
+  `TV_SAFE_VERTICAL`. The seek bar did not move (y = 298px before and after),
+  up next keeps its two-line titles, and the channel's name is drawn whole
+  with the focused control's name showing as well.
+- **No unit seam**, as with the last fault in this column: it is measuring
+  order and padding. Before and after are screenshots of the same video on
+  the TV.
