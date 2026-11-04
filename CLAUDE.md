@@ -394,7 +394,7 @@ Everything on the external volume; `source env.sh` before working.
   elements by label at the moment of the tap, not by remembered coordinates.
 - **When Data2 is not mounted, this project cannot be built.**
 
-## 10. Status (v0.1.21, 2026-11-04)
+## 10. Status (v0.1.22, 2026-11-04)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
   household's iPhone, release build via AltStore).** 505 tests, seven guards.
