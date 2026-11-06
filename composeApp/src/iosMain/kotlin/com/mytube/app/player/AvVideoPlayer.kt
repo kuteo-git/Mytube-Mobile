@@ -9,6 +9,7 @@ import com.mytube.app.domain.repository.PlaybackState
 import com.mytube.app.domain.repository.PlayingMedia
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.domain.repository.VideoPlayerFactory
+import kotlinx.cinterop.CValue
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.readValue
 import kotlinx.cinterop.useContents
@@ -21,6 +22,7 @@ import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.AVFAudio.setActive
 import platform.AVFoundation.AVPlayer
+import platform.AVFoundation.AVPlayerRateDidChangeNotification
 import platform.AVFoundation.AVMediaCharacteristicLegible
 import platform.AVFoundation.AVMediaTypeSubtitle
 import platform.AVFoundation.AVMediaSelectionGroup
@@ -39,18 +41,23 @@ import platform.AVFoundation.AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRa
 import platform.AVFoundation.addPeriodicTimeObserverForInterval
 import platform.AVFoundation.removeTimeObserver
 import platform.AVFoundation.currentItem
+import platform.AVFoundation.currentTime
 import platform.AVFoundation.duration
 import platform.AVFoundation.pause
 import platform.AVFoundation.play
 import platform.AVFoundation.replaceCurrentItemWithPlayerItem
 import platform.AVFoundation.seekToTime
 import platform.AVFoundation.timeControlStatus
+import platform.AVFoundation.rate
+import platform.CoreMedia.CMTime
 import platform.CoreMedia.CMTimeRangeGetEnd
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMakeWithSeconds
 import platform.AVFoundation.CMTimeRangeValue
 import platform.AVFoundation.seekableTimeRanges
 import platform.Foundation.NSDate
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSOperationQueue
 import platform.Foundation.timeIntervalSince1970
 import platform.Foundation.NSTimer
 import platform.Foundation.NSURL
@@ -99,6 +106,27 @@ class AvVideoPlayer : VideoPlayer {
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
     private var observer: Any? = null
+
+    /**
+     * Hears the clock stop, which the periodic tick cannot be trusted to.
+     *
+     * The tick runs on the playback clock. When a video reached its end with
+     * autoplay off, the last tick still read Playing and no tick came after
+     * it, so `isPlaying` stayed true over a stopped picture for as long as the
+     * page was open: the screen was held awake (`KeepScreenOn`) and Pause stayed
+     * drawn, and pressing it changed nothing because the player was already
+     * paused. Measured on the simulator: `timeControlStatus` paused,
+     * `isPlaying` true, for 44 minutes.
+     */
+    private val rateChanges: Any = NSNotificationCenter.defaultCenter.addObserverForName(
+        name = AVPlayerRateDidChangeNotification,
+        `object` = av,
+        queue = NSOperationQueue.mainQueue,
+    ) {
+        // `stop()` empties the player after pausing it; a stopped player has
+        // nothing to report and must not refill the lock screen it cleared.
+        if (av.currentItem != null) refresh(av.currentTime())
+    }
 
     /** Built on first use: most videos are never narrated. */
     private var narrator: Narrator? = null
@@ -492,6 +520,7 @@ class AvVideoPlayer : VideoPlayer {
         watchdog = null
         observer?.let { av.removeTimeObserver(it) }
         observer = null
+        NSNotificationCenter.defaultCenter.removeObserver(rateChanges)
         av.pause()
         // Handing the session back, so another app's audio can resume. Holding
         // it after playback ends is how an app becomes the reason music stopped.
@@ -503,95 +532,103 @@ class AvVideoPlayer : VideoPlayer {
      *
      * AVPlayer offers one, it is driven by the playback clock rather than by
      * wall time, and it stops on its own while paused — three things a `delay`
-     * loop would have to be told.
+     * loop would have to be told. Being on that clock is also why it cannot be
+     * the only listener: see [rateChanges].
      */
     private fun startObserving() {
         observer = av.addPeriodicTimeObserverForInterval(
             interval = CMTimeMakeWithSeconds(0.25, 600),
             queue = dispatch_get_main_queue(),
-        ) { time ->
-            val item = av.currentItem
-            val duration = item?.duration?.let { CMTimeGetSeconds(it) } ?: 0.0
-            // Two ticks in a row with the clock moving forward is a picture
-            // being drawn; AVPlayer's own Playing is not (see
-            // `isWaitingForBytes`).
-            val at = CMTimeGetSeconds(time)
-            if (av.timeControlStatus == AVPlayerTimeControlStatusPlaying &&
-                !lastTickSeconds.isNaN() && at > lastTickSeconds
-            ) {
-                playedSinceLoad = true
-            }
-            lastTickSeconds = at
-            // A failed item is otherwise completely silent: the picture stays
-            // black, the clock stays at zero, and nothing anywhere says why.
-            // Read from this tick rather than through KVO — the observer is
-            // already running, and one source of truth for "how is playback
-            // getting on" is better than two that can disagree.
-            // A live broadcast declares an indefinite duration, which
-            // `CMTimeGetSeconds` reports as NaN — so asking for a real number
-            // first is what stops every broadcast being called finished the
-            // moment it opens. Half a second of slack because the last sample
-            // rarely lands exactly on the declared length.
-            val ended = duration > 0 && !duration.isNaN() &&
-                CMTimeGetSeconds(time) >= duration - 0.5
-            val failure = if (item?.status == AVPlayerItemStatusFailed) {
-                item.error?.localizedDescription ?: "playback failed"
-            } else {
-                null
-            }
-            // The rewindable window, which is the only length a broadcast
-            // declares. Read every tick rather than once: it slides forward
-            // with the picture, and a window read at open is wrong a minute
-            // later. Several ranges is legal after a seek across a gap, so the
-            // first start and the last end are what bound the whole of it.
-            var windowStart = 0.0
-            var windowEnd = 0.0
-            if (isLive) {
-                val ranges = item?.seekableTimeRanges.orEmpty()
-                if (ranges.isNotEmpty()) {
-                    (ranges.first() as? NSValue)?.CMTimeRangeValue?.useContents {
-                        windowStart = CMTimeGetSeconds(start.readValue())
-                    }
-                    (ranges.last() as? NSValue)?.CMTimeRangeValue?.let {
-                        windowEnd = CMTimeGetSeconds(CMTimeRangeGetEnd(it))
-                    }
-                }
-                if (windowStart.isNaN() || windowEnd.isNaN()) {
-                    windowStart = 0.0
-                    windowEnd = 0.0
-                }
-            }
-            _state.update {
-                it.copy(
-                    hasEnded = ended,
-                    liveStartSeconds = windowStart,
-                    liveEndSeconds = windowEnd,
-                    // Cleared once it plays again — the stall watchdog's
-                    // reattach is a recovery, and an error left set would be
-                    // offered as "could not play" over the next pause.
-                    error = failure
-                        ?: if (av.timeControlStatus == AVPlayerTimeControlStatusPlaying) "" else it.error,
-                    positionSeconds = CMTimeGetSeconds(time),
-                    // NaN is what AVPlayer reports before it knows, and it must
-                    // not reach a progress bar: NaN/NaN draws as nothing at all.
-                    durationSeconds = if (duration.isNaN()) it.durationSeconds else duration,
-                    isPlaying = av.timeControlStatus == AVPlayerTimeControlStatusPlaying,
-                    // The tick also fires as playback starts or stops, which
-                    // is every moment this changes.
-                    isBuffering = buffering(),
-                )
-            }
-            // The lock screen is told from the same tick. iOS interpolates
-            // between updates from the rate, so four a second is more than it
-            // needs — but the *rate* has to be right the instant it changes, or
-            // the lock screen's clock counts on through a pause.
-            val now = _state.value
-            nowPlaying.progress(now.positionSeconds, now.isPlaying, now.durationSeconds)
-            // The track the viewer asked for, applied once the item can say
-            // what tracks it has. Asking at load is what this observer exists
-            // to replace — see `legibleGroup`.
-            if (wantedSubtitles.isNotEmpty()) applySubtitles()
+        ) { time -> refresh(time) }
+    }
+
+    private fun refresh(time: CValue<CMTime>) {
+        val item = av.currentItem
+        val duration = item?.duration?.let { CMTimeGetSeconds(it) } ?: 0.0
+        // Both, because `timeControlStatus` lags the rate where a video stops
+        // by itself: at its end the rate was already 0 and the status still
+        // read Playing. Measured on the simulator, from the rate's own
+        // notification.
+        val playing = av.rate != 0f && av.timeControlStatus == AVPlayerTimeControlStatusPlaying
+        // Two ticks in a row with the clock moving forward is a picture
+        // being drawn; AVPlayer's own Playing is not (see
+        // `isWaitingForBytes`).
+        val at = CMTimeGetSeconds(time)
+        if (playing &&
+            !lastTickSeconds.isNaN() && at > lastTickSeconds
+        ) {
+            playedSinceLoad = true
         }
+        lastTickSeconds = at
+        // A failed item is otherwise completely silent: the picture stays
+        // black, the clock stays at zero, and nothing anywhere says why.
+        // Read from this tick rather than through KVO — the observer is
+        // already running, and one source of truth for "how is playback
+        // getting on" is better than two that can disagree.
+        // A live broadcast declares an indefinite duration, which
+        // `CMTimeGetSeconds` reports as NaN — so asking for a real number
+        // first is what stops every broadcast being called finished the
+        // moment it opens. Half a second of slack because the last sample
+        // rarely lands exactly on the declared length.
+        val ended = duration > 0 && !duration.isNaN() &&
+            CMTimeGetSeconds(time) >= duration - 0.5
+        val failure = if (item?.status == AVPlayerItemStatusFailed) {
+            item.error?.localizedDescription ?: "playback failed"
+        } else {
+            null
+        }
+        // The rewindable window, which is the only length a broadcast
+        // declares. Read every tick rather than once: it slides forward
+        // with the picture, and a window read at open is wrong a minute
+        // later. Several ranges is legal after a seek across a gap, so the
+        // first start and the last end are what bound the whole of it.
+        var windowStart = 0.0
+        var windowEnd = 0.0
+        if (isLive) {
+            val ranges = item?.seekableTimeRanges.orEmpty()
+            if (ranges.isNotEmpty()) {
+                (ranges.first() as? NSValue)?.CMTimeRangeValue?.useContents {
+                    windowStart = CMTimeGetSeconds(start.readValue())
+                }
+                (ranges.last() as? NSValue)?.CMTimeRangeValue?.let {
+                    windowEnd = CMTimeGetSeconds(CMTimeRangeGetEnd(it))
+                }
+            }
+            if (windowStart.isNaN() || windowEnd.isNaN()) {
+                windowStart = 0.0
+                windowEnd = 0.0
+            }
+        }
+        _state.update {
+            it.copy(
+                hasEnded = ended,
+                liveStartSeconds = windowStart,
+                liveEndSeconds = windowEnd,
+                // Cleared once it plays again — the stall watchdog's
+                // reattach is a recovery, and an error left set would be
+                // offered as "could not play" over the next pause.
+                error = failure
+                    ?: if (playing) "" else it.error,
+                positionSeconds = CMTimeGetSeconds(time),
+                // NaN is what AVPlayer reports before it knows, and it must
+                // not reach a progress bar: NaN/NaN draws as nothing at all.
+                durationSeconds = if (duration.isNaN()) it.durationSeconds else duration,
+                isPlaying = playing,
+                // Stopping is heard through [rateChanges], not from the
+                // tick: see there.
+                isBuffering = buffering(),
+            )
+        }
+        // The lock screen is told from the same tick. iOS interpolates
+        // between updates from the rate, so four a second is more than it
+        // needs — but the *rate* has to be right the instant it changes, or
+        // the lock screen's clock counts on through a pause.
+        val now = _state.value
+        nowPlaying.progress(now.positionSeconds, now.isPlaying, now.durationSeconds)
+        // The track the viewer asked for, applied once the item can say
+        // what tracks it has. Asking at load is what this observer exists
+        // to replace — see `legibleGroup`.
+        if (wantedSubtitles.isNotEmpty()) applySubtitles()
     }
 }
 

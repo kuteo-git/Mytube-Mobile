@@ -318,7 +318,7 @@ Written alongside, not after.
 Guards, each **proven to fail** before it was believed: `ArchitectureGuardTest`
 (dependency direction), `UntranslatedGuardTest` (literals in composables),
 `PressGuardTest` (every `clickable(` answers a finger, or says `press-guard:
-<reason>`), `FocusGuardTest` (every pointer gesture has a key handler, or says
+<reason>`), `SkeletonGuardTest` (`skeletonShade()` only inside a `*Skeleton`), `FocusGuardTest` (every pointer gesture has a key handler, or says
 `focus-guard: <reason>`), `ManifestGuardTest` (`MainActivity` is
 `singleTask`), `ScrollRoomGuardTest` (a horizontal scroll row carries padding so a
 press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden ⇔
@@ -399,7 +399,7 @@ Everything on the external volume; `source env.sh` before working.
 ## 10. Status (v0.1.23, 2026-11-06)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
-  household's iPhone, release build via AltStore).** 513 tests, seven guards.
+  household's iPhone, release build via AltStore).** 521 tests, eight guards.
 - **Runs on the household's Chromecast with Google TV** (release build over
   `adb`): rail, shelves, the full-screen player with D-pad seeking, search with
   an on-screen keyboard and voice, the profile question. Released in v0.1.12;
@@ -520,6 +520,11 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
 - **No popups** (`ModalBottomSheet`, `DropdownMenu`, `AlertDialog`): their own
   coordinate space breaks sampling. Use `GlassSheet`, `GlassAlert`, `MenuHost`,
   always composed and told whether they show, drawn last.
+- **An infinite animation read in composition recomposes its caller every
+  frame** — `skeletonShade()` only inside the skeleton it colours
+  (`SkeletonGuardTest`). Before blaming the glass for heat, profile:
+  `BroadcastFrameClock#sendFrame` under a still page is a pulse left running.
+  [The watch page redrew sixty times a second…]
 - **Liquid glass is mostly not blur**: blur 8dp, lens with depth and chromatic
   aberration; refraction height ≤ smallest corner radius. One `GLASS_BLUR`, one
   `TINT_GLASS`; modal and page grounds use `TINT_MODAL`. A full-screen ground has
@@ -604,6 +609,10 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
 - **Up next is the rest of the list a video was opened from, then the rail**
   (`upNextFrom`), and next is its first card. A queue used only for autoplay
   is a list nobody sees. [Up next is the channel's list]
+- **AVPlayer's stop is heard, not ticked**: the periodic tick runs on the
+  playback clock and saw no end; `isPlaying` is rate and `timeControlStatus`
+  together, from `AVPlayerRateDidChangeNotification` too. [The watch page
+  redrew sixty times a second…]
 - **Lock screen**: duration travels on every tick; late artwork applies only if
   still current; remote-command targets are removed on release.
 - **Subtitles are attached at load; language and disabled-flag move together**;

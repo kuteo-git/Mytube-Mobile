@@ -86,7 +86,6 @@ fun UpNextRail(
 ) {
     val strings = LocalStrings.current
 
-    val shade = skeletonShade()
     val turn by animateFloatAsState(if (collapsed) 0f else 180f, label = "up-next-chevron")
 
     Column(modifier.fillMaxWidth().padding(horizontal = Space.lg)) {
@@ -134,9 +133,7 @@ fun UpNextRail(
                     // way, as a bar rather than as empty space: the row is a
                     // pane, and a pane that grows a line when a request lands
                     // moves everything under a thumb already reaching for it.
-                    loading -> Box(Modifier.padding(top = 3.dp)) {
-                        SkeletonLine(shade, 0.4f, 12.dp)
-                    }
+                    loading -> NextLineSkeleton()
                 }
             }
             Icon(
@@ -186,6 +183,14 @@ fun UpNextRail(
                 }
             }
         }
+    }
+}
+
+/** The header's second line while the rail is on its way. */
+@Composable
+private fun NextLineSkeleton() {
+    Box(Modifier.padding(top = 3.dp)) {
+        SkeletonLine(skeletonShade(), 0.4f, 12.dp)
     }
 }
 

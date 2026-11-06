@@ -6564,3 +6564,51 @@ choice.
 
 **Not yet seen on hardware**: the switch on the phone, the TV and an Android 11
 device.
+
+## The watch page redrew sixty times a second, and an ended video held the screen awake (2026-11-06)
+
+Two reports from the household's iPhone: the phone grew hot playing a video on
+the watch page, and the screen did not go off on its own with the video
+stopped.
+
+**The heat was a skeleton's pulse that never stopped.** `UpNextRail` called
+`skeletonShade()` at its top for the one bar it draws while the rail loads.
+That is an infinite transition read in composition, so the rail and every row
+in it recomposed and redrew on every frame for the life of the watch page,
+loaded or not. Measured on the iPhone 16e over USB, the same long video in
+portrait, Activity Monitor 3 × 20s and Time Profiler 15s:
+
+| | Mytube CPU | backboardd | profile samples / 15s |
+|---|---|---|---|
+| before, effects on | 60–63% | 27–35% | 4280 |
+| before, effects off | 28–29% | 27–30% | — |
+| after, effects on | 11–12% | 14–17% | 1605 |
+
+Before the fix, with effects off, 43% of the samples under the frame clock
+were `UpNextRail`'s lambda beside `InfiniteTransition`. The call moved into
+`NextLineSkeleton`, composed only while the rail is missing.
+`SkeletonGuardTest` fails when `skeletonShade()` is called from a function
+whose name does not say it is a skeleton. It was proven red on the old file
+(`UpNextRail.kt:89 in UpNextRail`). Effects off was not measured after the fix.
+The first reading is also partly the glass. It was not split further, because
+the fixed page with effects on is already under the old page with them off.
+
+**The screen was held by a video that had ended.** `isPlaying` on iOS came only
+from the periodic tick, and that tick runs on the playback clock. When a short
+reached its end with autoplay off, the last tick still read
+`timeControlStatus` Playing. No tick came after it, so `KeepScreenOn` stayed
+true and Pause stayed drawn over a stopped picture. Pressing Pause changed
+nothing, because the player was already paused. Measured on the simulator:
+`timeControlStatus` paused and `isPlaying` true for 44 minutes. Pausing by
+hand was never affected; on the phone it released the screen as it should.
+
+- **`AVPlayerRateDidChangeNotification` is now heard as well as the tick.**
+  At a video's end it is the only signal: no tick fired.
+- **`isPlaying` is the rate and the status together.** When that notification
+  arrived at the end, the rate was already 0 and `timeControlStatus` still
+  read Playing. The status alone would have repeated the fault.
+- KVO on `timeControlStatus` was the first try. Kotlin/Native's Foundation has
+  no binding for `NSKeyValueObserving`, so the notification is used instead.
+- Verified on the simulator: the short played to its end, then
+  `keep=false`, `idleTimerDisabled=false`. Not yet seen at the end of a video
+  on the phone.
