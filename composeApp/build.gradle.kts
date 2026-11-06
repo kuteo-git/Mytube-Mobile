@@ -153,8 +153,8 @@ android {
         //
         // `versionCode` is the release count and has to rise for Android to
         // accept an install; `versionName` is the tag without its `v`.
-        versionCode = 22
-        versionName = "0.1.22"
+        versionCode = 23
+        versionName = "0.1.23"
     }
 
     signingConfigs {
