@@ -33,6 +33,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
@@ -72,6 +73,8 @@ import com.mytube.app.ui.home.todayISO
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.shell.GlassButton
+import com.mytube.app.ui.shell.LocalEffects
+import com.mytube.app.ui.shell.on
 import com.mytube.app.ui.shell.LocalGlassVisible
 import com.mytube.app.ui.shell.LocalPictureBackdrop
 import com.mytube.app.ui.shell.WatchSkeleton
@@ -253,6 +256,16 @@ fun WatchContent(
     LaunchedEffect(fullscreen) { if (!fullscreen) zoomedToFill = false }
     var settingsOpen by remember { mutableStateOf(false) }
     val videoId = (state as? WatchState.Playing)?.video?.id.orEmpty()
+    // Where the finger is on the seek bar, or -1: written by the controls,
+    // read by them and by the reflection. Never read here, or every frame of
+    // a scrub would recompose the whole page.
+    val scrub = remember(videoId) { mutableFloatStateOf(-1f) }
+    // What the controls over the picture blur: the frame itself, or the song's
+    // artwork at a speaker. Here rather than in the picture's box because the
+    // reflection under it draws the same recording.
+    // Not recorded with effects off: no pictureGlass samples it and no
+    // reflection draws it.
+    val picture = rememberPictureBackdrop().takeIf { LocalEffects.current.on }
 
     // Which comments have their replies showing.
     //
@@ -477,10 +490,8 @@ fun WatchContent(
             },
             contentAlignment = Alignment.Center,
         ) {
-            // What the controls over the picture blur: the frame itself, or the
-            // song's artwork at a speaker. Recorded here, under the controls and
-            // never around them, so a disc never samples itself.
-            val picture = rememberPictureBackdrop()
+            // Recorded here, under the controls and never around them, so a disc
+            // never samples itself.
             val recordsPicture = picture?.let { Modifier.layerBackdrop(it) } ?: Modifier
             if (cast != null) {
                 Box(Modifier.fillMaxSize().then(recordsPicture)) { cast.artwork() }
@@ -588,6 +599,7 @@ fun WatchContent(
                         isLive = state.isLive,
                         fullscreen = fullscreen,
                         storyboard = state.storyboard,
+                        scrubState = scrub,
                         zoomedToFill = zoomedToFill,
                         mediaBaseUrl = mediaBaseUrl,
                         title = state.video.title,
@@ -720,6 +732,18 @@ fun WatchContent(
                 val railCollapsed = state.railCollapsed
                 val loadingUpNext = state.loadingUpNext
                 val railChannelOnly = state.railChannelOnly
+                // First, so the title and the rest of the page scroll over it.
+                if (showsReflection(LocalEffects.current.on, player != null, cast != null, fullscreen, drag)) {
+                    PictureReflection(
+                        player = player!!,
+                        picture = picture,
+                        scrub = scrub,
+                        storyboard = state.storyboard,
+                        durationSeconds = state.playback.durationSeconds,
+                        mediaBaseUrl = mediaBaseUrl,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f / REFLECTION_BAND),
+                    )
+                }
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     state = listState,

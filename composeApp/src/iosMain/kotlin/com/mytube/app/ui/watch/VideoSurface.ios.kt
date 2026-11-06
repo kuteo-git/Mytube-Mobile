@@ -15,6 +15,7 @@ import kotlinx.cinterop.readValue
 import kotlinx.cinterop.useContents
 import platform.AVFoundation.AVLayerVideoGravityResizeAspect
 import platform.AVFoundation.AVLayerVideoGravityResizeAspectFill
+import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerLayer
 import platform.CoreGraphics.CGRect
 import platform.CoreGraphics.CGRectMake
@@ -120,18 +121,47 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) 
         }
     }
 
-    // Detach the layer while the app is in the background, and put it back on
-    // the way in.
-    //
-    // This is what "the video pauses when the screen goes off" was. iOS stops
-    // playback of a player whose video is attached to a layer that is no longer
-    // on screen — the audio session being `Playback` is necessary and not
-    // sufficient. With the layer let go, the same player keeps going as an
-    // audio stream, which is exactly what the lock screen is for and the whole
-    // reason this app exists (server charter, risk 4).
-    //
-    // Android needs none of this: Media3's foreground service holds playback,
-    // and nothing there ties the decoder to a visible view.
+    DetachInBackground(playerLayer, av)
+
+    UIKitView(
+        modifier = modifier,
+        factory = {
+            VideoContainer(playerLayer).apply {
+                backgroundColor = UIColor.blackColor
+                layer.addSublayer(playerLayer)
+            }
+        },
+        onResize = { view: UIView, rect: CValue<CGRect> ->
+            withoutImplicitAnimation {
+                view.layer.setFrame(rect)
+                rect.useContents {
+                    playerLayer.setFrame(CGRectMake(0.0, 0.0, size.width, size.height))
+                }
+            }
+        },
+    )
+}
+
+/**
+ * Detaches [playerLayer] from [av] while the app is in the background, and puts
+ * it back on the way in.
+ *
+ * This is what "the video pauses when the screen goes off" was. iOS stops
+ * playback of a player whose video is attached to a layer that is no longer
+ * on screen — the audio session being `Playback` is necessary and not
+ * sufficient. With the layer let go, the same player keeps going as an
+ * audio stream, which is exactly what the lock screen is for and the whole
+ * reason this app exists (server charter, risk 4).
+ *
+ * **Every** `AVPlayerLayer` on the player goes through this, not only the
+ * picture's: with the picture's let go and the reflection's still attached,
+ * the video paused all the same.
+ *
+ * Android needs none of this: Media3's foreground service holds playback,
+ * and nothing there ties the decoder to a visible view.
+ */
+@Composable
+internal fun DetachInBackground(playerLayer: AVPlayerLayer, av: AVPlayer) {
     DisposableEffect(playerLayer, av) {
         val centre = NSNotificationCenter.defaultCenter
         val background = centre.addObserverForName(
@@ -152,24 +182,6 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) 
             playerLayer.player = av
         }
     }
-
-    UIKitView(
-        modifier = modifier,
-        factory = {
-            VideoContainer(playerLayer).apply {
-                backgroundColor = UIColor.blackColor
-                layer.addSublayer(playerLayer)
-            }
-        },
-        onResize = { view: UIView, rect: CValue<CGRect> ->
-            withoutImplicitAnimation {
-                view.layer.setFrame(rect)
-                rect.useContents {
-                    playerLayer.setFrame(CGRectMake(0.0, 0.0, size.width, size.height))
-                }
-            }
-        },
-    )
 }
 
 /**
@@ -197,7 +209,7 @@ actual fun VideoSurface(player: VideoPlayer, modifier: Modifier, fill: Boolean) 
  * Compose's own, driven by the drag's offset. There is no second one to keep.
  */
 @OptIn(ExperimentalForeignApi::class)
-private inline fun withoutImplicitAnimation(block: () -> Unit) {
+internal inline fun withoutImplicitAnimation(block: () -> Unit) {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     try {

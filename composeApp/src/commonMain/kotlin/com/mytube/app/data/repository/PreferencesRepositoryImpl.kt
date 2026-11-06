@@ -11,9 +11,9 @@ import com.mytube.app.domain.repository.PreferencesRepository
  * The playback preferences, on the device.
  *
  * Thin on purpose: every method reads or writes one key. The only judgement is
- * what an absent key means, and it is the same for all three — off, and no
- * subtitles. A device nobody has set up should play a video the way YouTube
- * does, not with a voice over it.
+ * what an absent key means: off, and no subtitles, for playback — a device
+ * nobody has set up should play a video the way YouTube does, not with a voice
+ * over it — and on for the effects, which are how the app is meant to look.
  */
 class PreferencesRepositoryImpl(
     private val settings: SettingsDataSource,
@@ -50,6 +50,10 @@ class PreferencesRepositoryImpl(
 
     override suspend fun setLastVideoId(id: String) =
         settings.set(SettingsKeys.LAST_VIDEO, id)
+
+    override suspend fun effects(): Boolean = settings.get(SettingsKeys.EFFECTS) != "false"
+
+    override suspend fun setEffects(on: Boolean) = write(SettingsKeys.EFFECTS, on)
 
     /**
      * A stored level, or the default.

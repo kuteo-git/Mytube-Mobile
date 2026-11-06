@@ -109,6 +109,7 @@ iOS are built together rather than one after the other.
 | background + lock screen | `MediaSessionService` + foreground service, `MediaMetadata` | `AVAudioSessionCategoryPlayback` + `UIBackgroundModes: audio`, `MPNowPlayingInfoCenter` + `MPRemoteCommandCenter` |
 | `ApplyFullscreen`, `KeepScreenOn`, `TabGlyph` | window calls | view controller / `idleTimerDisabled` / SF Symbols |
 | `GlassPane` / `GlassItem` | paints `glassSurface` | SwiftUI `.glassEffect()` over the whole hosting view, iOS 26+ (`LocalNativeGlass`) |
+| `ReflectedVideo` (the band under the picture) | the picture's recording drawn flipped, `BlurEffect`; none below API 31 (`effectsSupported`) | a second `AVPlayerLayer` on the player, flipped, in three rasterized stages |
 
 - **Narration is on `VideoPlayer`, not a second port.** Only the player knows the
   playhead and only the player can turn the video down. An empty list switches
@@ -328,8 +329,9 @@ press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden
 - **No Compose UI tests.** Previews cover what a screen looks like; ViewModel
   tests cover what it does. Each screen is split `XScreen(viewModel)` →
   `XContent(state, callbacks…)`. The one exception is a jvm
-  `ImageComposeScene` render (`CastRemoteRenderTest`, `QueueDragGestureTest`):
-  for a crash only measuring shows, or a gesture only a pointer reaches.
+  `ImageComposeScene` render (`CastRemoteRenderTest`, `QueueDragGestureTest`,
+  `SeekBarRenderTest`): for a crash only measuring shows, a size only pixels
+  show, or a gesture only a pointer reaches.
 - **Every screen has previews, more than one**: loading, empty, failed, and a
   Vietnamese one.
 - **A decision two places must agree on becomes a named pure function with a
@@ -340,7 +342,7 @@ press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden
   `shelfCardWidth`, `asksWhoIsWatching`, `withTone`, `typed`, `caughtUp`,
   `rowEntryIndex`, `keptInPlace`, `isWaitingForBytes`, `tapJump`,
   `castPollMillis`, `castQueueOf`, `VolumeFollower`, `contentBounds`,
-  `narratesOnOpen`.
+  `narratesOnOpen`, `showsReflection`, `effectsOf`.
 - **Regression tests go red on the reported symptom first.** Test bodies for wire
   mapping are copied from the running gateway, not invented.
 - **A `jvm` target exists only to run tests.** It does not contradict "no desktop".
@@ -397,7 +399,7 @@ Everything on the external volume; `source env.sh` before working.
 ## 10. Status (v0.1.22, 2026-11-04)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
-  household's iPhone, release build via AltStore).** 505 tests, seven guards.
+  household's iPhone, release build via AltStore).** 513 tests, seven guards.
 - **Runs on the household's Chromecast with Google TV** (release build over
   `adb`): rail, shelves, the full-screen player with D-pad seeking, search with
   an on-screen keyboard and voice, the profile question. Released in v0.1.12;
@@ -410,21 +412,27 @@ Everything on the external volume; `source env.sh` before working.
   Channel, Watch (layer with drag-to-miniplayer, controls, subtitles, narration,
   storyboard scrub preview, pinch-to-fill, double-tap seek, comments, up next,
   autoplay with a queue), Playlists (create/rename/delete, save sheet), Saved,
-  History, Subscriptions, Profile, Settings (server, voice, language).
+  History, Subscriptions, Profile, Settings (server, voice, language, and a switch for blur, glass and the
+  reflection: on by default, unavailable and shown off on the TV and below
+  Android 12 — changelog 2026-11-06).
 - **Search reads YouTube only** (v0.1.21), with Home's suggestions under an
   empty or answerless query, a spinner in the field, and a result's avatar
   opening its channel; a video opened from a channel's tab has that tab as up
   next.
 - **A video that speaks Vietnamese opens with narration off** (v0.1.19): the
   language from the gateway, on the phone, the TV and the speakers.
+- **The picture is reflected in the band under it** on the phone's portrait
+  page, live, dark and blurred, the storyboard still while scrubbing; gone
+  from the first pixel of the drag; iOS and Android 12+. Built, not yet heard
+  or seen on hardware with the screen locked.
 - Background audio, the lock screen and narration have been heard on real
   phones.
 - **Known open items**: an iOS-only one-frame flicker of the watch layer during
   the drag (changelog 2026-09-21, unconfirmed fixed); `X-User-Id` attached by hand
   at each call site; defaulted flags
   on `WatchSession`; playlist and channel ViewModels accumulating in the activity
-  store; three screens without previews; the glass is flat below Android 12 (blur
-  needs API 31, lens API 33) — accepted.
+  store; three screens without previews; below Android 12 (blur needs API 31, lens
+  API 33) the effects are off and the switch is disabled — accepted.
 
 ## 11. Rules learned
 
@@ -528,6 +536,8 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
 - **A hand-added `CALayer` animates implicitly** — gesture-driven layers wrap
   frame changes in `withoutImplicitAnimation`. Symptom: the right value, late.
 - **Two `VideoSurface`s on one player steal it**; exactly one holds the surface.
+- **An interop view ignores Compose alpha and sits over earlier ones**: dispose
+  it, don't fade it. [The picture is reflected under it]
 - **Media3 `PlayerView` draws subtitles itself** — hidden; captions come from the
   Compose `SubtitleOverlay` on both platforms.
 
@@ -577,6 +587,9 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
 
 ### Player
 
+- **Every `AVPlayerLayer` on the player detaches in the background**
+  (`DetachInBackground`), or iOS pauses the video. [The picture is reflected
+  under it]
 - **Seek goes into `setMediaItem`, not between it and `prepare`.** Resume reads
   the server's `watchPositionSeconds`, never `duration × fraction`.
 - **`load` buffers; `play` is separate** on both platforms; `playWhenReady` is

@@ -121,6 +121,10 @@ import com.mytube.app.ui.settings.ProfileScreen
 import com.mytube.app.ui.settings.ServerSetupScreen
 import com.mytube.app.ui.settings.ServerSetupViewModel
 import com.mytube.app.ui.settings.SettingsScreen
+import com.mytube.app.ui.shell.LocalEffects
+import com.mytube.app.ui.shell.effectsOf
+import com.mytube.app.ui.shell.effectsSupported
+import com.mytube.app.ui.shell.on
 import com.mytube.app.ui.settings.VoiceScreen
 import com.mytube.app.ui.shell.AppShell
 import com.mytube.app.ui.shell.GlassMenu
@@ -403,14 +407,22 @@ fun App(
         language = if (stored.isEmpty()) deviceLanguage() else Language.forTag(stored)
     }
 
+    // Read with the language, before the first frame, for the same reason: the
+    // glass must not draw for a frame on a device that turned it off.
+    var wantsEffects: Boolean? by remember { mutableStateOf(null) }
+    LaunchedEffect(Unit) { wantsEffects = container.preferencesRepository.effects() }
+
     val chosen = language ?: return
+    val wanted = wantsEffects ?: return
+    val effects = effectsOf(effectsSupported, television, wanted)
 
     CompositionLocalProvider(
         LocalStrings provides chosen.strings,
+        LocalEffects provides effects,
         // The same flag, read where the glass is rather than passed to it. It is
         // one fact about the shell — whether a platform layer is drawing over
         // this scene — and the entry point is the only thing that knows it.
-        LocalNativeGlass provides nativeGlass,
+        LocalNativeGlass provides (nativeGlass && effects.on),
         LocalTelevision provides television,
         // Where focus goes back to when the player is put away — on a
         // television only; see `FocusMemory`.
@@ -946,13 +958,13 @@ fun App(
             // does not paint, and the glass shows them as holes — which is the
             // first thing the library's own guide warns about.
             //
-            // **None on a television**, decided here once: every glass falls
-            // back to its painted form when there is nothing to sample — see
-            // the decision recorded in `TvShell` — and a sheet drawn from here
-            // that forgot a per-call guard would sample on the TV's GPU.
-            // `television` cannot change while the app runs, so the call is
-            // either always made or never.
-            val backdrop: LayerBackdrop? = if (television) {
+            // **None with effects off, and always none on a television**:
+            // every glass falls back to its painted form when there is nothing
+            // to sample — see the decision recorded in `TvShell` — and a sheet
+            // drawn from here that forgot a per-call guard would sample on the
+            // TV's GPU. The switch can change while the app runs, which a
+            // conditional `remember` allows: the `if` is its own group.
+            val backdrop: LayerBackdrop? = if (!effects.on) {
                 null
             } else {
                 rememberLayerBackdrop {
@@ -997,6 +1009,11 @@ fun App(
                             voice = voice,
                             onOpenVoice = { route = Route.Voice },
                             onOpenLanguage = { route = Route.Language },
+                            effects = effects,
+                            onEffectsChange = {
+                                wantsEffects = it
+                                scope.launch { container.preferencesRepository.setEffects(it) }
+                            },
                         )
                     }
 

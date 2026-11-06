@@ -20,6 +20,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -36,11 +37,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mohamedrejeb.calf.ui.toggle.AdaptiveSwitch
 import com.mytube.app.ui.home.Space
 import com.mytube.app.ui.i18n.Language
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
+import com.mytube.app.ui.shell.Effects
 import com.mytube.app.ui.shell.ScreenTitle
+import com.mytube.app.ui.shell.on
+import com.mytube.app.ui.shell.rememberSelectionTick
 import com.mytube.app.ui.shell.pressSquish
 import com.mytube.app.ui.shell.rememberGlassPress
 import com.mytube.app.ui.shell.tabContentPadding
@@ -85,6 +90,9 @@ fun SettingsScreen(
     onOpenSubscriptions: () -> Unit,
     onOpenVoice: () -> Unit,
     onOpenLanguage: () -> Unit,
+    /** Whether blur, glass and the reflection are drawn, and whether this device can. */
+    effects: Effects,
+    onEffectsChange: (Boolean) -> Unit,
     /** The household's speech voice, or empty when the server did not answer. */
     voice: String = "",
     /** Who this device is watching as, or empty before the server has answered. */
@@ -193,12 +201,61 @@ fun SettingsScreen(
                     onClick = onOpenLanguage,
                 )
             }
+
+            item(key = "effects") {
+                val tick = rememberSelectionTick()
+                val toggle = { tick(); onEffectsChange(!effects.on) }
+                SettingRow(
+                    label = strings.settingsEffects,
+                    // Why it cannot be pressed, where it cannot.
+                    value = if (effects == Effects.Unavailable) {
+                        strings.settingsEffectsUnavailable
+                    } else {
+                        strings.settingsEffectsDetail
+                    },
+                    onClick = toggle,
+                    enabled = effects != Effects.Unavailable,
+                ) {
+                    // UIKit's switch on iOS, Material's on Android, as on the
+                    // player's sheet. Unavailable shows off, not as stored.
+                    AdaptiveSwitch(
+                        checked = effects.on,
+                        onCheckedChange = { toggle() },
+                        enabled = effects != Effects.Unavailable,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Tokens.brand,
+                            uncheckedThumbColor = Tokens.text2,
+                            uncheckedTrackColor = Tokens.surfaceHover,
+                        ),
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun SettingRow(label: String, value: String, onClick: () -> Unit) {
+    SettingRow(label, value, onClick, enabled = true) {
+        Icon(
+            imageVector = ChevronRightIcon,
+            contentDescription = null,
+            tint = Tokens.text2,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/** A row with its own trailing control; a disabled one neither presses nor answers a key. */
+@Composable
+private fun SettingRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    trailing: @Composable () -> Unit,
+) {
     // A chevron and a fill while pressed, because nothing else here says this
     // is a button. Two rows down there is a language list whose rows are also
     // tappable and look identical, so a row that opens a whole screen and a row
@@ -216,7 +273,7 @@ private fun SettingRow(label: String, value: String, onClick: () -> Unit) {
             .fillMaxWidth()
             .pressSquish(press)
             .background(if (pressed) Tokens.surfaceHover else Color.Transparent)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .clickable(enabled = enabled, interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = Space.lg, vertical = Space.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -235,12 +292,7 @@ private fun SettingRow(label: String, value: String, onClick: () -> Unit) {
             )
         }
         Spacer(Modifier.width(Space.md))
-        Icon(
-            imageVector = ChevronRightIcon,
-            contentDescription = null,
-            tint = Tokens.text2,
-            modifier = Modifier.size(20.dp),
-        )
+        trailing()
     }
 }
 
@@ -273,6 +325,8 @@ private fun SettingsPreview() {
             onOpenVoice = {},
             onOpenLanguage = {},
             onOpenSubscriptions = {},
+            effects = Effects.On,
+            onEffectsChange = {},
         )
     }
 }
@@ -291,6 +345,8 @@ private fun SettingsUnconfiguredPreview() {
             onOpenVoice = {},
             onOpenLanguage = {},
             onOpenSubscriptions = {},
+            effects = Effects.On,
+            onEffectsChange = {},
         )
     }
 }
@@ -309,8 +365,30 @@ private fun SettingsVietnamesePreview() {
                 onOpenVoice = {},
                 onOpenLanguage = {},
                 onOpenSubscriptions = {},
+                effects = Effects.Off,
+                onEffectsChange = {},
             )
         }
     }
 }
 
+
+/** A device that cannot blur: the switch shows off and cannot be pressed. */
+@Preview
+@Composable
+private fun SettingsEffectsUnavailablePreview() {
+    MytubeTheme {
+        SettingsScreen(
+            baseUrl = "http://192.168.1.42:8180",
+            language = Language.English,
+            onOpenServer = {},
+            onOpenProfile = {},
+            onOpenHistory = {},
+            onOpenVoice = {},
+            onOpenLanguage = {},
+            onOpenSubscriptions = {},
+            effects = Effects.Unavailable,
+            onEffectsChange = {},
+        )
+    }
+}

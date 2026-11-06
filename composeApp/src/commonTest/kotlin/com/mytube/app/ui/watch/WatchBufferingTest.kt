@@ -160,5 +160,7 @@ class WatchBufferingTest {
         override suspend fun setDuckLevel(level: Float) {}
         override suspend fun lastVideoId() = ""
         override suspend fun setLastVideoId(id: String) {}
+        override suspend fun effects() = true
+        override suspend fun setEffects(on: Boolean) {}
     }
 }

@@ -6465,3 +6465,102 @@ tops of "TRẤN THÀNH TOWN".
 - **No unit seam**, as with the last fault in this column: it is measuring
   order and padding. Before and after are screenshots of the same video on
   the TV.
+
+## The picture is reflected under it (2026-11-05)
+
+Asked for: on the portrait watch page, the band under the video (where the
+title starts) shows the video mirrored, dark and softly blurred, live, on iOS
+and Android phones. Then two faults from the user's iPhone with a prototype:
+the band sat over the miniplayer during the drag down, and the video paused
+when the screen locked. And the seek bar's line thinner, with the same target.
+
+- **`PictureReflection`** is a band 0.45 of the picture's height
+  (`REFLECTION_BAND`), first in the page's content box, so the title and the
+  rest of the page scroll over it. It holds `ReflectedVideo` (expect/actual),
+  the scrub still while a finger is on the bar, and a gradient over both from
+  `Tokens.bg` at `1 - REFLECTION_PEAK` to `Tokens.bg`. 0.85 at the top edge
+  was too bright, and so were 0.6 and 0.45 on the phone the next morning; it is 0.4.
+- **When it is drawn is one function**, `showsReflection`: the platform blurs,
+  a video plays, no speaker, not fullscreen, and `drag == 0f`. Each input is a
+  test, red when that input was dropped from the rule.
+- **iOS: a second `AVPlayerLayer` on the same `AVPlayer` renders the video
+  live**, and the picture's own layer keeps rendering. Measured on the
+  simulator and the iPhone. The layer is flipped (`scale(1, -1)`), framed as
+  the whole picture, and the band clips it to its bottom 45%.
+- **An interop view's hole is white where it draws nothing.** The
+  `UIKitView` sits behind the Compose canvas, so the reflection's view is
+  opaque in `Tokens.bg`.
+- **A `CAGradientLayer` mask came out empty** (`colors` set through
+  `interpretObjCPointer(CGColor)`). The fade is Compose's instead, drawn over
+  the hole, which works because Compose draws over an interop view.
+- **Blur on iOS is rasterized stages**, `rasterizationScale` 0.5, 0.5, 0.4,
+  then 0.25 (0.025 in all), each with trilinear minification and linear
+  magnification. One stage at 0.04 showed its pixels; three at 0.04 in all
+  were smooth, and the stronger blur asked for the next morning is a fourth
+  stage, not a smaller one. The
+  band's pixels changed between two screenshots 1.5s apart, so it stays
+  live. `UIVisualEffectView`, with or without a paused
+  `UIViewPropertyAnimator`, hid the reflection entirely.
+- **The band covered the miniplayer** (fault 1). Compose's `graphicsLayer {
+  alpha }` does not reach an interop view, and one inserted later is drawn
+  over the picture's own. So the page faded and the band stayed solid over the
+  shrinking video. It is not faded now: `drag == 0f` disposes it on the first
+  pixel of the drag, on both platforms, one rule. The page is gone by a sixth
+  of the journey anyway (`CONTENT_FADE_RATE`).
+- **The video paused when the screen locked** (fault 2). The picture's layer
+  already let go of the player in the background; the reflection's did not,
+  and one attached layer is enough for iOS to pause. `DetachInBackground` is
+  now the one helper both layers go through, extracted from `VideoSurface`.
+- **Android draws the recording the controls already sample**, flipped, with
+  `BlurEffect` 32dp (`REFLECTION_BLUR`, 20dp before the morning's "more blur") over a `Tokens.bg` ground. Not a
+  second `VideoSurface`, which would steal the player's surface. The
+  `rememberPictureBackdrop()` moved up to `WatchContent` so the picture's box
+  and the band read the same one.
+- **No reflection below Android 12.** `RenderEffect` blur needs API 31, and
+  unblurred the mirrored edges and captions under the title hurt its
+  legibility (`reflectionSupported`).
+- **While scrubbing, the band reflects the storyboard still** being aimed at:
+  the same `ScrubPreview`, the whole 16:9 frame flipped about its middle and
+  blurred, opaque over the live reflection. The scrub position moved up from
+  `PlayerControls` to `WatchContent` as a state object that the page passes
+  on and never reads, so a scrub recomposes only the controls and the band.
+  The controls reset it when they leave, as their own state used to.
+- **The seek line is thinner**: 2dp at rest and with the controls up (was 3),
+  4dp under a finger (was 6), a 16dp knob (was 22). The target stays 32dp.
+  `SeekBarRenderTest` draws it at density 1: two rows of line (red at 3),
+  and a tap 30dp above the line seeks where it landed (red with a 24dp
+  target).
+
+**Not yet measured with this build**: the reflection, the drag and the locked
+screen on the iPhone and an Android phone. The iOS facts above are the
+prototype's; the Android band has only been compiled.
+
+## One switch for blur, glass and the reflection (2026-11-06)
+
+Settings gains "Glass and blur", per device, **on by default**. Off turns off
+everything that samples or blurs: the sampled glass (`LocalBackdrop` is null, so
+every material falls back to the paint the television already uses), the iOS 26
+platform glass (`LocalNativeGlass` is `nativeGlass && effects.on`), Android's
+`pictureGlass`, and the reflection under the portrait player (the picture's
+recording is not made, so neither draws). The purpose is weak devices, and a
+choice.
+
+- **Three states, not two booleans**: `Effects { On, Off, Unavailable }`, decided
+  by `effectsOf(supported, television, wanted)` and provided as `LocalEffects`.
+  Unavailable shows the switch off and cannot be pressed, and its detail says
+  why ("This device cannot blur"). The stored preference is kept but ignored
+  there.
+- **Android below 12 is Unavailable.** There is no `RenderEffect` blur below
+  API 31, and the library drew sampled but unblurred glass, which reads worse
+  than paint. The television never samples. `effectsSupported` (android:
+  `SDK_INT >= S`, ios: true, jvm: false) replaces `reflectionSupported`.
+- **An absent key means on** (`display.effects`), the one preference whose
+  missing value is not false; `PreferencesEffectsTest` holds it.
+- **Read before the first frame**, with the language and behind the same gate
+  in `App`, so the glass does not draw for a frame on a device that turned it
+  off. Changing it sets the state and writes the preference at once.
+- `EffectsTest`, `PreferencesEffectsTest` and `ShowsReflectionTest` were each
+  made red by flipping their rule before they were believed.
+
+**Not yet seen on hardware**: the switch on the phone, the TV and an Android 11
+device.

@@ -41,4 +41,5 @@ object SettingsKeys {
     const val VOICE_LEVEL = "player.voiceLevel"
     const val DUCK_LEVEL = "player.duckLevel"
     const val LAST_VIDEO = "player.lastVideoId"
+    const val EFFECTS = "display.effects"
 }

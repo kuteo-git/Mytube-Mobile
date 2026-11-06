@@ -37,7 +37,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -150,6 +152,16 @@ fun PlayerControls(
      */
     storyboard: StoryboardState,
     /**
+     * Where the finger is on the bar while it is down, as a fraction, or -1.
+     *
+     * Owned by the watch screen because the whole screen answers to it: the
+     * controls step out of the way, the time being aimed at is drawn in the
+     * middle of the picture rather than in the corner where the clock lives,
+     * and the reflection under the picture shows the still. The screen passes
+     * the state and never reads it, so a scrub recomposes only what draws it.
+     */
+    scrubState: MutableFloatState,
+    /**
      * Whether the picture has been pinched out to cover the screen.
      *
      * Only ever true in fullscreen — outside it the picture is a band at the top
@@ -218,12 +230,10 @@ fun PlayerControls(
     // restarts the countdown rather than letting the controls vanish under a
     // finger that is still using them.
     var lastTouch by remember { mutableStateOf(0) }
-    // Where the finger is on the bar while it is down, as a fraction, or -1.
-    //
-    // Hoisted out of the bar because the whole screen answers to it: the
-    // controls step out of the way, and the time being aimed at is drawn in the
-    // middle of the picture rather than in the corner where the clock lives.
-    var scrub by remember { mutableStateOf(-1f) }
+    var scrub by scrubState
+    // Let go when the controls are, as the state did when it lived here: a
+    // gesture torn down mid-drag would otherwise leave the reflection on a still.
+    DisposableEffect(scrubState) { onDispose { scrubState.floatValue = -1f } }
     val scrubbing = scrub >= 0f
     // What the bar has to clear at the bottom of the screen in fullscreen. Zero
     // on a phone with hardware buttons, 34dp on one with a home indicator.
@@ -603,7 +613,7 @@ fun PlayerControls(
                 //    no `clickable`, and on iOS it crosses as
                 //    `GlassItem(interactive = false)` because a readout is not
                 //    a button — so it cannot steal the bar's target. What it
-                //    has to clear is the 3dp line that is *drawn*.
+                //    has to clear is the 2dp line that is *drawn*.
                 //  * **24 bought room at the other end.** The discs are centred
                 //    in the picture and are a fixed size while the picture's
                 //    height is `width x 9 / 16`, so on a narrow phone the gap
@@ -1090,7 +1100,7 @@ internal fun DiscButton(
  * control.
  */
 @Composable
-private fun SeekBar(
+internal fun SeekBar(
     progress: Float,
     enabled: Boolean,
     /** The controls are up, so the bar shows it can be grabbed. */
@@ -1161,7 +1171,7 @@ private fun SeekBar(
     Box(
         modifier
             .fillMaxWidth()
-            // A 3dp line is nothing to aim at. The target is 32dp with the line
+            // A 2dp line is nothing to aim at. The target is 32dp with the line
             // along its bottom edge — 24 was the number before, and on a moving
             // video with a thumb arriving at an angle it was measurably missable.
             //
@@ -1218,7 +1228,7 @@ private fun SeekBar(
             // target, which put its centre `knob/2` above the bottom while the
             // line's centre is `track/2` above it — eight points of daylight,
             // and the knob visibly floating over the bar. A Box does not clip,
-            // so a 22dp circle inside a 6dp track overflows symmetrically, which
+            // so a 16dp circle inside a 4dp track overflows symmetrically, which
             // is exactly what centring means here.
             if (knob > 0.dp) {
                 Box(
@@ -1242,7 +1252,7 @@ private fun SeekBar(
  * **row above the bar**, which keeps one margin clear of it. They were two
  * expressions and they drifted — the row subtracted [SEEK_TARGET] as well, on
  * the reading that it had to clear the bar's 32dp *touch target* rather than the
- * 3dp line that is drawn inside it, so the gap a viewer saw in fullscreen was
+ * 2dp line that is drawn inside it, so the gap a viewer saw in fullscreen was
  * 40dp against the 8dp the same row keeps windowed. Reported as the clock and
  * the zoom button sitting too far above the slider in zoom mode.
  *
@@ -1277,11 +1287,16 @@ internal fun controlRowBottom(fullscreen: Boolean, navigationInset: Dp): Dp =
  */
 private val SEEK_TARGET = 32.dp
 
-/** A hairline at rest; a line to grab when the controls are up; a bar under a finger. */
-private val TRACK_RESTING = 3.dp
-private val TRACK_EXPANDED = 3.dp
-private val TRACK_DRAGGING = 6.dp
-private val KNOB_DRAGGING = 22.dp
+/**
+ * A hairline at rest; a line to grab when the controls are up; a bar under a finger.
+ *
+ * 2dp, 4dp and a 16dp knob, down from 3, 6 and 22: asked for thinner, and the
+ * target around them is [SEEK_TARGET] whatever the line is (`SeekBarRenderTest`).
+ */
+private val TRACK_RESTING = 2.dp
+private val TRACK_EXPANDED = 2.dp
+private val TRACK_DRAGGING = 4.dp
+private val KNOB_DRAGGING = 16.dp
 
 /** How many notches the width is divided into, for the feedback. */
 private const val NOTCHES = 100

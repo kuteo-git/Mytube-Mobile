@@ -268,6 +268,9 @@ interface Strings {
     /** The Profile row in Settings, which used to be the avatar in the bar. */
     val settingsProfile: String
     val settingsLanguage: String
+    val settingsEffects: String
+    val settingsEffectsDetail: String
+    val settingsEffectsUnavailable: String
     /** The name of each language, always written in that language. */
     val languageEnglish: String
     val languageVietnamese: String
@@ -500,6 +503,9 @@ object EnglishStrings : Strings {
     override val settingsServer = "Server address"
     override val settingsProfile = "Profile"
     override val settingsLanguage = "Language"
+    override val settingsEffects = "Glass and blur"
+    override val settingsEffectsDetail = "Blur, glass and the picture's reflection"
+    override val settingsEffectsUnavailable = "This device cannot blur"
     override val languageEnglish = "English"
     override val languageVietnamese = "Tiếng Việt"
 
@@ -705,6 +711,9 @@ object VietnameseStrings : Strings {
     override val settingsServer = "Địa chỉ máy chủ"
     override val settingsProfile = "Người xem"
     override val settingsLanguage = "Ngôn ngữ"
+    override val settingsEffects = "Kính và hiệu ứng mờ"
+    override val settingsEffectsDetail = "Hiệu ứng mờ, kính và bóng phản chiếu của video"
+    override val settingsEffectsUnavailable = "Thiết bị này không hỗ trợ hiệu ứng mờ"
     // Each language is named in its own words, always. Somebody who pressed the
     // wrong row is looking at an interface they cannot read, and "English"
     // written in English is the way back out.

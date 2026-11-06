@@ -85,4 +85,16 @@ interface PreferencesRepository {
     suspend fun lastVideoId(): String
 
     suspend fun setLastVideoId(id: String)
+
+    /**
+     * Whether blur, glass and the picture's reflection are drawn.
+     *
+     * Per device like the rest: a phone that struggles to blur and a phone that
+     * does it easily want different answers. **On when nothing is stored**, the
+     * one preference here whose absent key is not "off" — a fresh install looks
+     * the way the app was designed.
+     */
+    suspend fun effects(): Boolean
+
+    suspend fun setEffects(on: Boolean)
 }
