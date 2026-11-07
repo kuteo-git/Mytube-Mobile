@@ -17,10 +17,11 @@ import com.mytube.app.ui.theme.Tokens
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 /**
  * The seek bar drawn and touched at density 1, so a pixel is a dp: the line
- * at rest is 2dp, and the 32dp target above it still takes a thumb.
+ * at rest is 2dp, and the 32dp target above it still takes a dragging thumb.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 class SeekBarRenderTest {
@@ -57,8 +58,9 @@ class SeekBarRenderTest {
         }
     }
 
+    /** Reported 2026-11-07: a tap meant for the picture landed on the bar and moved the video. */
     @Test
-    fun aTapThirtyDpAboveTheLineSeeksWhereItLanded() {
+    fun aTapOnTheBarSeeksNothing() {
         var sought: Double? = null
         val scene = scene { sought = it }
         try {
@@ -70,7 +72,30 @@ class SeekBarRenderTest {
             frames(2)
             scene.sendPointerEvent(PointerEventType.Release, at, timeMillis = t / 1_000_000)
             frames(3)
-            assertEquals(0.75, assertNotNull(sought, "a tap inside the target sought nothing"), 0.01)
+            assertNull(sought, "a tap on the bar moved the video")
+        } finally {
+            scene.close()
+        }
+    }
+
+    @Test
+    fun aDragThirtyDpAboveTheLineSeeksWhereItWasLetGo() {
+        var sought: Double? = null
+        val scene = scene { sought = it }
+        try {
+            var t = 0L
+            fun frames(n: Int) = repeat(n) { scene.render(t); t += 16_000_000L }
+            frames(3)
+            val y = height - 30f
+            scene.sendPointerEvent(PointerEventType.Press, Offset(width * 0.25f, y), timeMillis = t / 1_000_000)
+            for (x in listOf(0.35f, 0.5f, 0.65f, 0.75f)) {
+                frames(1)
+                scene.sendPointerEvent(PointerEventType.Move, Offset(width * x, y), timeMillis = t / 1_000_000)
+            }
+            frames(1)
+            scene.sendPointerEvent(PointerEventType.Release, Offset(width * 0.75f, y), timeMillis = t / 1_000_000)
+            frames(3)
+            assertEquals(0.75, assertNotNull(sought, "a drag along the bar sought nothing"), 0.01)
         } finally {
             scene.close()
         }

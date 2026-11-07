@@ -1091,7 +1091,8 @@ internal fun DiscButton(
 }
 
 /**
- * The bar, and the only thing here that takes a drag.
+ * The bar, and the only thing here that takes a drag. It takes nothing else: a
+ * tap on it is a tap on the picture.
  *
  * ## Three states, one control
  *
@@ -1199,19 +1200,13 @@ internal fun SeekBar(
             // button ended up drawn on top of the slider.
             .height(SEEK_TARGET)
             .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
-            // Tapping the bar moves there. Its own pointerInput rather than a
-            // branch inside the drag detector: the two gestures are recognised
-            // separately, and combining them means a tap has to be re-derived
-            // from a drag that never passed the slop threshold.
+            // Only a drag seeks. The target sits along the bottom of the
+            // picture, so a tap meant for the picture lands here often enough,
+            // and it moved the video. A tap passes through to the picture's own
+            // detector and shows or hides the controls instead.
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
                 // focus-guard: the phone's seek bar, dragged by a thumb. The television's moves with left and right in `TvWatchScreen`.
-                detectTapGestures { offset ->
-                    onSeekFraction((offset.x / width).coerceIn(0f, 1f).toDouble())
-                }
-            }
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
                 detectHorizontalDragGestures(
                     onDragStart = { move(it.x) },
                     onDragEnd = {
