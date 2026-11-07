@@ -342,7 +342,7 @@ press bloom is not clipped), `SubtitleGuardTest` (Media3's `SubtitleView` hidden
   `shelfCardWidth`, `asksWhoIsWatching`, `withTone`, `typed`, `caughtUp`,
   `rowEntryIndex`, `keptInPlace`, `isWaitingForBytes`, `tapJump`,
   `castPollMillis`, `castQueueOf`, `VolumeFollower`, `contentBounds`,
-  `narratesOnOpen`, `showsReflection`, `effectsOf`.
+  `narratesOnOpen`, `showsReflection`, `effectsOf`, `pictureArrival`.
 - **Regression tests go red on the reported symptom first.** Test bodies for wire
   mapping are copied from the running gateway, not invented.
 - **A `jvm` target exists only to run tests.** It does not contradict "no desktop".

@@ -96,6 +96,22 @@ import kotlin.math.min
 private const val HIDE_AFTER_MILLIS = 5_000L
 
 /**
+ * What the picture has just arrived as. The controls start hidden each time it
+ * changes: a video opened, the miniplayer expanded, fullscreen entered or left.
+ * At each of those somebody asked for the picture, and the buttons and the bar
+ * coming up over it were in the way of exactly that. A tap still brings them.
+ */
+data class PictureArrival(
+    val videoId: String,
+    val fullscreen: Boolean,
+    val expanded: Boolean,
+)
+
+/** Expanded only at rest: every frame of a drag is one arrival, not many. */
+internal fun pictureArrival(videoId: String, fullscreen: Boolean, drag: Float) =
+    PictureArrival(videoId, fullscreen, expanded = drag == 0f)
+
+/**
  * How long the controls take to come and go.
  *
  * Explicit rather than the default spring, because **`PlayerGlass.swift` runs
@@ -222,10 +238,13 @@ fun PlayerControls(
     onCast: (() -> Unit)?,
     /** A speaker is playing: the cast item is drawn lit, and pressing it asks. */
     casting: Boolean,
+    /** Hides the controls whenever it changes; see [PictureArrival]. */
+    arrival: PictureArrival,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
-    var visible by remember { mutableStateOf(true) }
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(arrival) { visible = false }
     // Bumped on every interaction. The timer keys on it, so touching anything
     // restarts the countdown rather than letting the controls vanish under a
     // finger that is still using them.

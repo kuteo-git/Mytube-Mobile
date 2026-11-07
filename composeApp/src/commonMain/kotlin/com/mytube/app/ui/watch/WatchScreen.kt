@@ -628,6 +628,7 @@ fun WatchContent(
                         narrating = state.narrating,
                         onCast = if (state.isLive) null else onCast,
                         casting = casting,
+                        arrival = pictureArrival(state.video.id, fullscreen, drag),
                     )
                     }
                     }
