@@ -418,6 +418,7 @@ class WatchViewModel(
 
     /** The poll watching the server's narration pass, cancelled when it ends. */
     private var narrationPoll: Job? = null
+    private var cueLoad: Job? = null
 
     /**
      * The load in flight, and the video it is for.
@@ -646,10 +647,13 @@ class WatchViewModel(
         // A track with no file is one the player renders — a broadcast's, which
         // lives in the manifest. There is nothing here to fetch.
         if (track.url.isEmpty()) return
-        viewModelScope.launch {
+        cueLoad?.cancel()
+        cueLoad = viewModelScope.launch {
+            // On a failure the lines already shown stay: a reread of a track
+            // the narration is still writing must not blank it.
             val cues = runCatching {
                 videos.subtitleCues(mediaBaseUrl.trimEnd('/') + track.url)
-            }.getOrDefault(emptyList())
+            }.getOrElse { return@launch }
             // Re-read rather than closing over `current`: the video may have
             // been changed, or the track switched off, while this was in
             // flight, and writing then would put one video's captions over
@@ -819,6 +823,7 @@ class WatchViewModel(
             passAskedFor = current.video.id
             var askedForTrack = false
             var hasTrack = false
+            var linesRead = -1
             while (true) {
                 val state = runCatching { narration.state(current.video.id) }.getOrNull()
                 if (state != null) {
@@ -836,6 +841,15 @@ class WatchViewModel(
                     // end, never on every poll: by the first line the server
                     // has written the track, and the second ask only covers a
                     // pass that wrote it late.
+                    // The pass rewrites the Vietnamese file after every batch
+                    // it translates, so a copy read while it ran stops where
+                    // the pass was then.
+                    if (state.done != linesRead) {
+                        linesRead = state.done
+                        (_state.value as? WatchState.Playing)?.subtitleLanguage
+                            ?.takeIf { it.isVietnamese() }
+                            ?.let(::loadCues)
+                    }
                     if (!hasTrack && state.clips.isNotEmpty() && (!askedForTrack || !state.isWorking)) {
                         askedForTrack = true
                         hasTrack = adoptTranslatedTrack(current.video.id)
@@ -1527,7 +1541,7 @@ class WatchViewModel(
      * had Vietnamese, or the screen has moved on.
      */
     private suspend fun adoptTranslatedTrack(videoId: String): Boolean {
-        fun List<SubtitleTrack>.hasVietnamese() = any { it.language.substringBefore('-') == "vi" }
+        fun List<SubtitleTrack>.hasVietnamese() = any { it.language.isVietnamese() }
         val current = _state.value as? WatchState.Playing ?: return true
         if (current.video.id != videoId || current.isLive || current.video.subtitles.hasVietnamese()) return true
         val fresh = runCatching { videos.video(videoId) }.getOrNull() ?: return false
@@ -1562,3 +1576,6 @@ class WatchViewModel(
         else -> WatchState.Failed(error.message ?: "could not play this")
     }
 }
+
+/** Vietnamese, whoever wrote it: `vi`, or the machine's `vi-x-mt`. */
+private fun String.isVietnamese() = substringBefore('-') == "vi"

@@ -5,10 +5,11 @@ import com.mytube.app.domain.model.Channel
 import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.model.NarrationClip
 import com.mytube.app.domain.model.NarrationStatus
+import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.NarrationRepository
-import com.mytube.app.ui.cast.Prefs
+import com.mytube.app.domain.repository.PreferencesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -56,9 +57,31 @@ class WatchTranslatedTrackTest {
         assertEquals(silent.asked, narrated.asked, "asked for the video again though it had a Vietnamese track")
     }
 
+    /**
+     * Reported 2026-11-07: Vietnamese chosen on a new video showed a while, then
+     * nothing, until English and back. The server rewrites the file after every
+     * batch it translates, and the lines were read once, when it was chosen.
+     */
+    @Test
+    fun `a Vietnamese track chosen while it is written shows the lines written after`() = runTest(dispatcher) {
+        val pass = TranslatesInBatches()
+        val library = Library { pass.polls > 0 }.apply { written = pass::written }
+        val model = open(library, pass, Prefs(narration = true, subtitles = "vi-x-mt"))
+
+        val shown = playing(model)
+        assertEquals("vi-x-mt", shown.subtitleLanguage, "the remembered Vietnamese was not chosen")
+        assertEquals(pass.written(), shown.subtitleCues.map { it.text }, "the lines translated after it was chosen are missing")
+    }
+
     private fun playing(model: WatchViewModel) = model.state.value as WatchState.Playing
 
-    private fun TestScope.open(videos: Library, passes: NarrationRepository): WatchViewModel {
+    private fun Prefs(narration: Boolean) = Prefs(narration, subtitles = "")
+
+    private fun TestScope.open(
+        videos: Library,
+        passes: NarrationRepository,
+        preferences: Prefs = Prefs(narration = true),
+    ): WatchViewModel {
         val model = WatchViewModel(
             videoId = "first",
             startAtBeginning = true,
@@ -69,7 +92,7 @@ class WatchTranslatedTrackTest {
             streams = PlayableStreams,
             storyboards = NoStoryboards,
             narration = passes,
-            preferences = Prefs(narration = true),
+            preferences = preferences,
             openedFrom = emptyList(),
             maxHeight = PHONE_MAX_HEIGHT,
             playerFactory = SilentPlayers(),
@@ -95,9 +118,36 @@ class WatchTranslatedTrackTest {
         }
     }
 
+    /** Translates a batch on each of its first polls, then finishes. */
+    private class TranslatesInBatches : NarrationRepository {
+        private val batches = listOf("Xin chào.", "Hôm nay trời đẹp.", "Tạm biệt.")
+        var polls = 0
+        fun written() = batches.take(polls.coerceAtMost(batches.size))
+        override suspend fun start(videoId: String, fromSeconds: Double) {}
+        override suspend fun stop(videoId: String) {}
+        override suspend fun state(videoId: String): Narration {
+            polls++
+            val clips = written().mapIndexed { i, line ->
+                NarrationClip(i * 20.0, i * 20.0 + 2.0, "/media/$videoId/narration-tts/$i.mp3", line)
+            }
+            return Narration(
+                status = if (polls < batches.size) NarrationStatus.Running else NarrationStatus.Done,
+                done = clips.size, total = batches.size, clips = clips,
+            )
+        }
+    }
+
+    private class Prefs(narration: Boolean, private val subtitles: String) : PreferencesRepository by com.mytube.app.ui.cast.Prefs(narration) {
+        override suspend fun subtitleLanguage() = subtitles
+    }
+
     /** English captions, and the machine translation once [translated] says it is written. */
     private class Library(private val translated: () -> Boolean) : StubVideoRepository() {
         var asked = 0
+        var written: () -> List<String> = { emptyList() }
+
+        override suspend fun subtitleCues(url: String) =
+            if (url.endsWith(".vi-mt.vtt")) written().mapIndexed { i, line -> SubtitleCue(i * 20.0, i * 20.0 + 2.0, line) } else emptyList()
 
         override suspend fun video(id: String): Video {
             asked++
