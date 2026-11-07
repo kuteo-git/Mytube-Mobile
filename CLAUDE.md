@@ -564,9 +564,19 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
 - **Zero size never dismisses**; drag thresholds are fractions plus a velocity.
 - **Back is one handler in `App`**, ordered outward; disabled (not empty) when
   nothing is left so the app can close. Local handlers only for non-navigation
-  state (an open sheet). `Route.depth` sets slide direction; a page reached from a
-  page is depth 2. `openChannel`, `collapseWatch` are the only ways to do those
-  acts.
+  state (an open sheet). The slide's direction is the act's (`navigate` forward,
+  `goBack` back), not the pages' depth. `openChannel`, `collapseWatch` are the
+  only ways to do those acts.
+- **Back returns to the place somebody was on**, never a fixed page: every page
+  opens through `navigate`, which pushes a `Place` (route, tab, the video
+  expanded over it) on the `BackStack`, and every back is `goBack`. A page
+  opened over the expanded video slides over it (`overWatch`), and back slides
+  off it. [Back returns to the place somebody was on; Pages slide over the
+  video]
+- **Seek a transition from one queue**: the edge swipe's moves and release go
+  through one channel, handled in order. [Pages slide over the video]
+- **`zIndex` orders siblings only**: put it on the node beside what it must
+  cover, not on a Box that holds both. [Pages slide over the video]
 
 ### Layout arithmetic
 

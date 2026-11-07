@@ -6640,3 +6640,140 @@ takes only the tracks (`adoptTranslatedTrack`, the same care as
 Checked on the simulator: an English video opened with EN only, narration
 switched on, and at 2/50 lines the menu offered VI; picked, the picture
 carried the Vietnamese line.
+
+## The seek bar takes a drag, not a tap (2026-11-07)
+
+Reported: a tap meant for the picture now and then moved the video. The bar's
+32dp target runs along the bottom of the picture, and a tap anywhere inside it
+sought there. `SeekBarRenderTest` was red on it, a tap 30dp above the line
+seeking to 0.75.
+
+- **Only a drag seeks.** The tap detector on the bar is gone. A tap on the bar
+  now reaches the picture's own detector, so it shows or hides the controls,
+  which is what a tap anywhere else on the picture does.
+- **The target keeps its size.** A drag still starts anywhere in the 32dp, so
+  grabbing the bar is as easy as before. A drag needs the touch slop first,
+  which is what makes it a decision a stray tap cannot make.
+
+## The Vietnamese track keeps up with the pass writing it (2026-11-07)
+
+Reported: Vietnamese chosen on a new video showed for a while, then nothing,
+until English and back. The server rewrites `*.vi-mt.vtt` after every batch it
+translates (`narration_manifest.go`, atomically), and `loadCues` read the file
+once, when the track was chosen, so the screen kept the lines translated by
+then. `WatchTranslatedTrackTest` was red on it: three lines written, one shown.
+
+- **The poll that hands narration clips to the player rereads a Vietnamese
+  track** whenever the pass reports more lines done. Other tracks are static
+  files and are not reread.
+- **The last read wins** (`cueLoad` is cancelled by the next), and **a failed
+  reread keeps the lines already shown** rather than blanking them.
+- Checked on the simulator with an English video never narrated before:
+  Vietnamese came on with 3 lines in the file, the last ending at 0:16; at
+  1:24 the picture carried the line for 1:24.
+- Not covered: a pass left running with the narration switch off is not
+  polled, so its track is reread only on the next choice of it.
+
+## Back from a channel opened on the watch screen goes back to the video (2026-11-07)
+
+Reported: the watch screen, the channel's avatar, back, and Home. Opening a
+channel there puts the video down on the miniplayer, and `channelFrom` held
+only the page under the video, so back led to that page with the video still
+put away. Reproduced on the simulator from Search: back landed on Search.
+
+- **The origin remembers the video it was opened over** (`ChannelOrigin`,
+  `watched`, "" from a page). `leaveChannel` is back for both the arrow and the
+  system, and expands that video again if it is still the one playing.
+- **A video opened from the channel since is not brought back up**: back has
+  already put it down once, and expanding it again would be a loop.
+- Autoplay that moved on while the channel was open counts as another video.
+- Checked on the simulator: Home, a video, its avatar, back, and the watch
+  screen expanded with the video still playing.
+
+## Back returns to the place somebody was on (2026-11-07)
+
+Asked for as a rule after the channel fix above: back always goes to the
+previous page, not only from a channel. There was no history. One `route`
+variable, and back guessed where to go with a rule per page: a channel went to
+one remembered origin, a playlist or the saved shelf to the Playlists tab,
+everything else to Home. Watch history opened from Settings went back to Home,
+and a page opened over the watch screen put the video away for good.
+
+- **`BackStack` of `Place`s** (`BackStack.kt`): the route, the tab under it, and
+  the video expanded over it. `navigate` pushes where somebody is and puts an
+  expanded video down so the page shows; `goBack` pops, restores the route and
+  the tab, and expands that video again if it is still the one playing. Every
+  arrow, the iOS edge swipe, the system back and a finished setup go through
+  `goBack`. A profile switch or the profile question starts over.
+- **This replaces the channel fix above** (`channelFrom`, `ChannelOrigin`,
+  `channelOrigin` are gone). The old one-level origin existed so Channel →
+  video → the same channel did not loop; a stack walks out of that one step at
+  a time instead.
+- **Tabs are not pages.** Switching tab pushes nothing; back from a tab other
+  than Home still goes to Home's tab.
+- Transitions still read `Route.depth`, so back between two pages of equal
+  depth (a channel to a channel) slides the forward way. Not fixed.
+- Checked on the simulator: the watch screen, its channel, back, and the video
+  expanded again; Settings, Watch history, a channel, back to Watch history,
+  back to Settings (it went to Home before).
+
+## The edge swipe carries the page with the finger (2026-11-07)
+
+Asked for with a recording of iOS Settings: the page follows the finger from
+the left edge, the page under it slides in beneath, and letting go short of
+the line springs it back. `edgeBack` was a trigger only, fired when the finger
+lifted; its own comment named this as the next change, in `AnimatedContent`.
+
+- **The route transition is a `SeekableTransitionState`.** `edgeBack` reports
+  how far across the finger is, and `App` seeks the transition toward the top
+  of the `BackStack` by that fraction, so the page under is composed and drawn
+  arriving. Past a quarter of the width the release goes back and the
+  transition runs on from where the finger left it; short of it, it animates
+  back to the page that was showing.
+- **Linear under the finger**, `FastOutSlowInEasing` otherwise: eased, the
+  page stood somewhere other than under the finger.
+- **Going back, the page on top is drawn on top** (`targetContentZIndex = -1`
+  for the arriving page) **and neither page fades.** The default draws the
+  arriving page above, which held the page underneath over the one being
+  dragged, and the two fades together read as a grey wash.
+- **A page on the phone paints its own ground** (`Tokens.bg`), as the
+  television's already did: held half off, a transparent page showed the one
+  under it through itself.
+- Checked on the simulator: Watch history held at half the width shows
+  Settings beneath with Watch history whole on top; released there, Settings;
+  a short swipe stays on Watch history.
+
+## Pages slide over the video, and the edge swipe lets go (2026-11-07)
+
+Three faults from the first evening of the back stack, with two recordings.
+
+- **Channel, a video, the channel's avatar did nothing.** `navigate` returned
+  when the page asked for was the page already open, and here it was, under
+  the expanded video. It now keeps the place and puts the video down, and back
+  expands it again.
+- **The edge swipe stuck a few points off the edge**, the page under it
+  showing, for good (the recording held it 4s). The moves seeked the
+  transition from one coroutine and the release animated it back from
+  another; a move that landed after the release had started stopped it where
+  it was. Moves and release now go through one `Channel<EdgeSwipe>` and are
+  handled in order, a run of moves reduced to its latest. On the simulator,
+  held at 85pt the page moved (80,819 px of the left strip changed) and after
+  release the strip matched the page at rest to the pixel, every time.
+- **Home showed while a channel opened from the watch screen, and the video
+  rose from the bottom on the way back.** The video was put down in one frame
+  and the transition ran between the pages under it. Now, while a page slides
+  on or off the expanded video, the pages are drawn above the watch layer
+  (`overWatch`, `zIndex` on the transition's node) and the page under the video
+  (`coverRoute`) is not drawn: the video stands in for it, as the view under a
+  pushed one does on iOS. The video is put down once the page covers it, and on
+  the way back it is expanded under the page first, without its rise.
+  Recorded at 55fps on the simulator: nine frames of the channel sliding over
+  the video, and nine of it sliding off; no Home in either.
+- **`zIndex` was first put on the wrong Box**: the one that holds the watch
+  layer too, so it ordered nothing. Found by matching braces after
+  `animateTo` was measured running its full 300ms while the screen jumped.
+- **The slide direction is the act's**: `navigate` forward, `goBack` back,
+  instead of comparing `Route.depth`, which slid back between two channels
+  the forward way.
+- **The phone's pages slide without fading**, as on iOS. The television keeps
+  its fade.

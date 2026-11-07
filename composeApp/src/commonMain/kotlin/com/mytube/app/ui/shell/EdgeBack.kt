@@ -1,6 +1,8 @@
 package com.mytube.app.ui.shell
 
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -27,7 +29,7 @@ private val EDGE_WIDTH = 20.dp
 private const val COMMIT_FRACTION = 0.25f
 
 /**
- * Swipe from the left edge to go back.
+ * Swipe from the left edge to go back, with the page following the finger.
  *
  * ## Why this exists
  *
@@ -37,27 +39,22 @@ private const val COMMIT_FRACTION = 0.25f
  * by a tap and leavable only by aiming at a 48dp arrow in the corner, on a phone
  * held in one hand.
  *
- * ## Why it is not the platform's predictive back
+ * ## How the page follows
  *
- * Compose Multiplatform has no shared predictive-back API, and wiring Android's
- * to this while iOS gets something hand-rolled would be two gestures that feel
- * different on the two devices in the same house. The route transition already
- * draws the movement; this decides when it starts.
- *
- * ## What it deliberately does not do
- *
- * It does not drag the screen along under the finger. That needs the *outgoing*
- * page to be composed at the same time, which the route transition arranges only
- * once the gesture has committed. What is here is the trigger; making it follow
- * the finger is a change to `AnimatedContent`, not to this file, and is worth
- * doing separately rather than half-doing here.
+ * [onDrag] reports how far across the screen the finger is, 0..1, and the
+ * caller seeks the route transition to it, so the page under is drawn sliding
+ * in as the one on top leaves, as iOS does. [onRelease] says whether the drag
+ * went far enough to go back; when it did not, the caller springs the page back.
  */
-fun Modifier.edgeBack(onBack: () -> Unit): Modifier = composed {
+fun Modifier.edgeBack(onDrag: (Float) -> Unit, onRelease: (commit: Boolean) -> Unit): Modifier = composed {
     val density = LocalDensity.current
     val edge = with(density) { EDGE_WIDTH.toPx() }
+    // Read through state, so a recomposition mid-drag does not restart the
+    // detector and drop the gesture under the finger.
+    val drag by rememberUpdatedState(onDrag)
+    val release by rememberUpdatedState(onRelease)
 
-    pointerInput(onBack) {
-        val commit = size.width * COMMIT_FRACTION
+    pointerInput(Unit) {
         var travelled = 0f
         var fromEdge = false
 
@@ -71,17 +68,17 @@ fun Modifier.edgeBack(onBack: () -> Unit): Modifier = composed {
                 travelled = 0f
             },
             onDragEnd = {
-                if (fromEdge && travelled >= commit) onBack()
+                if (fromEdge) release(travelled >= size.width * COMMIT_FRACTION)
                 fromEdge = false
-                travelled = 0f
             },
             onDragCancel = {
+                if (fromEdge) release(false)
                 fromEdge = false
-                travelled = 0f
             },
             onHorizontalDrag = { change, delta ->
                 if (!fromEdge) return@detectHorizontalDragGestures
-                travelled += delta
+                travelled = (travelled + delta).coerceAtLeast(0f)
+                drag((travelled / size.width).coerceIn(0f, 1f))
                 // Consumed only for a gesture that began at the edge, so a
                 // horizontal scroll anywhere else keeps working.
                 change.consume()
