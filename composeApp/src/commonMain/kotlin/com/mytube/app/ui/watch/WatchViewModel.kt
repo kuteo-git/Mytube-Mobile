@@ -817,6 +817,8 @@ class WatchViewModel(
             runCatching { narration.start(current.video.id, from) }
                 .onFailure { return@launch }
             passAskedFor = current.video.id
+            var askedForTrack = false
+            var hasTrack = false
             while (true) {
                 val state = runCatching { narration.state(current.video.id) }.getOrNull()
                 if (state != null) {
@@ -829,6 +831,14 @@ class WatchViewModel(
                     // video that could already be speaking.
                     if (_state.value.let { it is WatchState.Playing && it.narrating }) {
                         player.narrate(state.clips)
+                    }
+                    // Asked when the first lines arrive and once more at the
+                    // end, never on every poll: by the first line the server
+                    // has written the track, and the second ask only covers a
+                    // pass that wrote it late.
+                    if (!hasTrack && state.clips.isNotEmpty() && (!askedForTrack || !state.isWorking)) {
+                        askedForTrack = true
+                        hasTrack = adoptTranslatedTrack(current.video.id)
                     }
                     if (!state.isWorking) return@launch
                 }
@@ -1503,6 +1513,30 @@ class WatchViewModel(
             applyRememberedTrack()
             return
         }
+    }
+
+    /**
+     * Take the Vietnamese track the narration pass has just written.
+     *
+     * The server writes it during the first narration of a video, after the
+     * list read when the video opened, so without this it was offered only the
+     * next time the video was opened. Only the tracks are taken, as in
+     * [awaitSubtitles], so nothing drawn optimistically is put back.
+     *
+     * True when nothing is left to ask: the track is here, the video already
+     * had Vietnamese, or the screen has moved on.
+     */
+    private suspend fun adoptTranslatedTrack(videoId: String): Boolean {
+        fun List<SubtitleTrack>.hasVietnamese() = any { it.language.substringBefore('-') == "vi" }
+        val current = _state.value as? WatchState.Playing ?: return true
+        if (current.video.id != videoId || current.isLive || current.video.subtitles.hasVietnamese()) return true
+        val fresh = runCatching { videos.video(videoId) }.getOrNull() ?: return false
+        if (!fresh.subtitles.hasVietnamese()) return false
+        val settled = _state.value as? WatchState.Playing ?: return true
+        if (settled.video.id != videoId) return true
+        _state.value = settled.copy(video = settled.video.copy(subtitles = fresh.subtitles))
+        applyRememberedTrack()
+        return true
     }
 
     /**

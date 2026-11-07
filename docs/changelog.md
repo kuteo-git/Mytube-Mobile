@@ -6612,3 +6612,31 @@ hand was never affected; on the phone it released the screen as it should.
 - Verified on the simulator: the short played to its end, then
   `keep=false`, `idleTimerDisabled=false`. Not yet seen at the end of a video
   on the phone.
+
+## The picture arrives without its controls; the translation arrives while it is made (2026-11-07)
+
+**The controls start hidden whenever the picture arrives.** Asked for from the
+phone: opening a video from Home or Missed, tapping the miniplayer to expand
+it, and pressing the zoom button each brought the buttons and the seek bar up
+over the picture, when what had just been asked for was the picture. The
+controls were `remember { true }`, and the watch layer stays composed under the
+miniplayer, so their state outlived every one of those moments. They now start
+hidden, and hide again whenever `pictureArrival(videoId, fullscreen, drag)`
+changes: another video, fullscreen entered or left, or the drag come to rest
+at the top. Mid-drag values are one arrival, not many. A tap brings them as
+before; a paused video arriving is a still frame until tapped. The television
+already opened its player with the controls hidden (`TvWatchScreen`) and is
+unchanged. Checked on the iPhone 16e simulator: 2.5s after opening a video
+from Home, 2.5s after the zoom button, and 2s after expanding a playing
+miniplayer, the picture alone; a tap on it brings the controls.
+
+**The Vietnamese track is offered during the first narration of a video.** The
+server writes it (`*.vi-mt.vtt`, server commit 4efbe61) while that narration
+runs, after the list read when the video opened, so the menu offered it only
+the next time the video was opened. The narration poll asks for the video's
+tracks again when the first lines arrive and once more when the pass ends, and
+takes only the tracks (`adoptTranslatedTrack`, the same care as
+`awaitSubtitles`). A video that already has Vietnamese is not asked again.
+Checked on the simulator: an English video opened with EN only, narration
+switched on, and at 2/50 lines the menu offered VI; picked, the picture
+carried the Vietnamese line.
