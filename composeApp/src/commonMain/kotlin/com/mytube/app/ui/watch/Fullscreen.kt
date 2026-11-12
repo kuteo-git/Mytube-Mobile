@@ -17,4 +17,20 @@ import androidx.compose.runtime.Composable
  * disposed while fullscreen cannot leave the phone stuck sideways.
  */
 @Composable
-expect fun ApplyFullscreen(enabled: Boolean)
+expect fun ApplyFullscreen(mode: Fullscreen)
+
+/**
+ * How the picture fills the screen.
+ *
+ * [Portrait] is reached by pulling the page under the picture down: the phone
+ * stays upright and the video sits in the middle of a black screen, the way
+ * YouTube's own does. [Landscape] is the zoom button's, which turns the phone.
+ */
+enum class Fullscreen {
+    Off,
+    Portrait,
+    Landscape,
+    ;
+
+    val on: Boolean get() = this != Off
+}

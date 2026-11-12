@@ -6777,3 +6777,85 @@ Three faults from the first evening of the back stack, with two recordings.
   the forward way.
 - **The phone's pages slide without fading**, as on iOS. The television keeps
   its fade.
+
+## Pulling the page down puts the video in upright fullscreen (2026-11-12)
+
+Asked for with a screen recording of YouTube: a drag on the picture still
+collapses to the miniplayer, and a pull down on the page under it carries the
+picture to the middle of a black screen. The owner chose upright over turning
+the phone, and sent YouTube's upright menu as the reference.
+
+- **`Fullscreen { Off, Portrait, Landscape }` replaces the boolean.** The zoom
+  button still turns the phone (`Landscape`). The pull lands in `Portrait`. On
+  Android that hides the bars and keeps portrait. On iOS nothing is asked of
+  the window, and the top row clears the status bar.
+- **The pull is the page's leftover scroll** (`FullscreenPull`, a
+  `NestedScrollConnection` on the content). A finger in the comments scrolls
+  them, and only what is left at the top pulls. Past 35% of the way, or a
+  downward fling over 1000dp/s, commits. An upward move gives the pull back
+  before the list scrolls. The page moves by `graphicsLayer` only, so the pull
+  costs no layout. Measured on the simulator: the picture lands 306pt from the
+  top against 312pt for a centred 16:9 frame on an iPhone 16e.
+- **Leaving is the pull backwards.** A swipe down of 64dp, the shrink button,
+  the chevron, or Back on Android lay the page out again with the picture
+  still in the middle, then carry it up. Back used to collapse a fullscreen
+  video straight into the miniplayer (QA, Android). It now leaves fullscreen
+  first, through a local `BackHandler`, the way a sheet's does.
+- **Upright gets a row along the bottom**: like, dislike, save and share in
+  the player's glass (`PortraitActions`, the `actions` slot). The seek bar and
+  the clock row stand on it (`bottomClear`). Pinch to fill is sideways only,
+  since upright it would crop a 16:9 frame to its middle.
+- **The save sheet opened under the controls on iOS** (QA). The platform glass
+  is drawn above every Compose pixel, and only the cast sheets switched it off.
+  `App.kt` now switches it off while the save sheet is open too. Measured on
+  the simulator: the sheet covers the bottom half clean.
+- Unit tests: 33 in `PullToFullscreenTest`, each class with a mutation seen
+  red. QA ran 34 cases on the simulator and the emulator. Not run: pinch in
+  landscape (no two-finger tool), a failed video, a running cast.
+- **Same day, from the phone: dragging back up did nothing.** YouTube's
+  upright fullscreen follows a slow drag up back to the page. The swipe was
+  read on the fullscreen picture's own node, and it took only downward moves,
+  so a drag up was consumed and dropped. A drag back up could not have been
+  read there at all: its first move lays the page out again and removes that
+  node, which cancels any gesture on it. It is now read on the screen's root
+  (`fullscreenDrag`). Up follows the finger (`dragBy`) and lets go by the
+  pull's own rule read the other way (`returnCommits`). Down still leaves at
+  64dp. Loop: `idb ui swipe` up from the middle, then look for the
+  Comments label. It was red three runs out of three before the change and
+  green three out of three after. A recording shows the page following the
+  finger over 16 frames.
+- **Upright drops the title pill and keeps the reflection** (asked from the
+  phone). The picture keeps the page's 16:9 box in the middle, because the
+  reflection is a recording of that box. Recorded whole, the band would mirror
+  the black under the picture.
+- **The upright reflection ended in an edge** (reported with a screenshot from
+  the phone). The band fades into `Tokens.bg`, `#0F0F0F`, which is the page's
+  ground. Upright fullscreen's ground is `#000`. Measured on the simulator, the
+  band's last rows sat at 15.3 against 0.0 under them. `PictureReflection` now
+  takes the `ground` it fades into: black upright, `Tokens.bg` on the page.
+  After the change the step is 0.3, and the band falls from 22 to 0 over its
+  height. Loop: row means of a simulator screenshot at the band's end. There is
+  no unit seam for a colour on a screen.
+- **The picture froze as the pull let go** (reported from the phone, under
+  half a second, then the reflection appeared). `VideoSurface` was called from
+  two branches, upright and not, so the switch into upright fullscreen
+  disposed one surface and built another, with a new `AVPlayerLayer` that
+  held the picture still until its first frame. Turning the reflection off did
+  not remove it (140, 50, 115 ms), which ruled out the reflection's second
+  layer. One surface now serves every layout, changed by its box's modifier
+  only. Measured on the simulator from a screen recording, as the longest run
+  of recorded frames where the picture changed by less than 0.2: 115 to 181 ms
+  before, 54 to 78 ms after in 5 of 5 runs, against 21 ms in steady playback.
+  The drag back up keeps the same surface too. There is no unit seam for a
+  frame held on screen; the loop is the recording.
+- **The reflection was missing through the pull** (reported from the phone,
+  the band arriving about a second after the picture). The page's band was
+  hidden from the pull's first pixel, and upright fullscreen built a second
+  one after letting go. One band now lives in the picture's outer box, under
+  the 16:9 picture centred in it: on the page that box is the picture and
+  moves with the pull, upright it is the screen. Its ground goes from
+  `Tokens.bg` to black with the pull, read while drawing. `showsReflection`
+  takes the `Fullscreen` mode and answers no only sideways (tested). Measured
+  on the simulator as the longest time the rows under the centred picture
+  stayed dark after the pull started: 439 ms before, 0 ms after in 4 of 4
+  runs. The picture's longest still run fell to 20 to 52 ms in the same runs.

@@ -10,7 +10,7 @@ class ShowsReflectionTest {
         effects: Boolean = true,
         playing: Boolean = true,
         casting: Boolean = false,
-        fullscreen: Boolean = false,
+        fullscreen: Fullscreen = Fullscreen.Off,
         drag: Float = 0f,
     ) = showsReflection(effects, playing, casting, fullscreen, drag)
 
@@ -35,8 +35,14 @@ class ShowsReflectionTest {
     }
 
     @Test
-    fun noReflectionInFullscreen() {
-        assertFalse(shows(fullscreen = true))
+    fun noReflectionSideways() {
+        assertFalse(shows(fullscreen = Fullscreen.Landscape))
+    }
+
+    /** The pull carries the band down under the picture, and upright fullscreen keeps it. */
+    @Test
+    fun uprightFullscreenIsReflected() {
+        assertTrue(shows(fullscreen = Fullscreen.Portrait))
     }
 
     /** iOS cannot fade an interop view, so it goes on the first pixel of the drag or it covers the miniplayer. */

@@ -23,8 +23,8 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -32,25 +32,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -74,14 +84,15 @@ import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.shell.LocalEffects
-import com.mytube.app.ui.shell.on
 import com.mytube.app.ui.shell.LocalGlassVisible
 import com.mytube.app.ui.shell.LocalPictureBackdrop
 import com.mytube.app.ui.shell.WatchSkeleton
+import com.mytube.app.ui.shell.on
 import com.mytube.app.ui.shell.pressable
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.theme.Tokens
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
@@ -202,6 +213,7 @@ fun WatchScreen(
     )
 }
 
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun WatchContent(
     state: WatchState,
@@ -237,7 +249,35 @@ fun WatchContent(
     // Today, so the rail's "New" badge can be decided without a clock inside a
     // pure function. Read once per composition rather than per row.
     val today = remember { todayISO() }
-    var fullscreen by remember { mutableStateOf(false) }
+    var fullscreen by remember { mutableStateOf(Fullscreen.Off) }
+    val scope = rememberCoroutineScope()
+    // A pull starts only over a video playing here: a speaker's song has no
+    // picture to carry, and a page still loading has nothing to carry it to.
+    val pullEnabled by rememberUpdatedState(state is WatchState.Playing && player != null && cast == null)
+    val flingPx = with(LocalDensity.current) { PULL_FLING.toPx() }
+    val pull = remember(flingPx) {
+        FullscreenPull(enabled = { pullEnabled }, flingVelocity = flingPx) { commit ->
+            scope.launch {
+                settle(commit)
+                if (commit) {
+                    fullscreen = Fullscreen.Portrait
+                    reset()
+                }
+            }
+        }
+    }
+    // Read in composition only for when a pull starts and ends; every frame in
+    // between is read in drawing, where it costs no recomposition.
+    val pulling by remember { derivedStateOf { pull.offset > 0f } }
+    // Leaving upright fullscreen is the pull played backwards: the page is laid
+    // out again with the picture still in the middle, and carried back up.
+    val leaveFullscreen: () -> Unit = {
+        if (fullscreen == Fullscreen.Portrait) {
+            pull.atCentre()
+            scope.launch { pull.settle(commit = false) }
+        }
+        fullscreen = Fullscreen.Off
+    }
     // Whether the picture has been pinched out to cover the whole screen.
     //
     // A fact about this sitting rather than a device preference. The three that
@@ -253,7 +293,7 @@ fun WatchContent(
     // resetting at each is the shape of fault this charter has paid for
     // repeatedly: the second one forgets. Keyed on the state itself, so
     // whatever turns fullscreen off, this follows.
-    LaunchedEffect(fullscreen) { if (!fullscreen) zoomedToFill = false }
+    LaunchedEffect(fullscreen) { if (fullscreen != Fullscreen.Landscape) zoomedToFill = false }
     var settingsOpen by remember { mutableStateOf(false) }
     val videoId = (state as? WatchState.Playing)?.video?.id.orEmpty()
     // Where the finger is on the seek bar, or -1: written by the controls,
@@ -335,6 +375,9 @@ fun WatchContent(
     val miniThumbLeftPx = with(density) { MINI_THUMB_LEFT.toPx() }
     val miniThumbFraction =
         if (pictureBoxWidth > 0f) (miniThumbWidthPx / pictureBoxWidth).coerceIn(0f, 1f) else 0.3f
+    var screenHeight by remember { mutableStateOf(0f) }
+    val statusTop = WindowInsets.statusBars.getTop(density).toFloat()
+    SideEffect { pull.distance = pullDistance(screenHeight, pictureBoxWidth * 9f / 16f, statusTop) }
 
     val openShare = rememberShare()
     // The id, not the state: a lambda that captured the state was a new one on
@@ -344,9 +387,16 @@ fun WatchContent(
         if (shareId.isNotEmpty()) openShare("https://www.youtube.com/watch?v=$shareId")
     }
 
+    // Read by the root's drag, which outlives every recomposition of this screen.
+    val fullscreenNow by rememberUpdatedState(fullscreen)
+    val leaveNow by rememberUpdatedState(leaveFullscreen)
+
     // Told the platform as state, not as an event: a screen disposed while
     // fullscreen must not leave the phone sideways with no system bars.
     ApplyFullscreen(fullscreen)
+    // Back leaves fullscreen before it leaves the video, as the chevron does.
+    // Local, the way a sheet's is: fullscreen is a state of this screen, not a place.
+    BackHandler(fullscreen.on) { leaveFullscreen() }
 
     // A video nobody is touching is still being watched.
     //
@@ -373,7 +423,32 @@ fun WatchContent(
     // over the picture even in fullscreen, wherever it happened to be written.
     // In the scene it has to be a sibling of the whole page and drawn last, or
     // it opens underneath the thing it belongs to.
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .onSizeChanged { screenHeight = it.height.toFloat() }
+            // Upright, a drag up brings the page back under the finger and a
+            // swipe down leaves, as on YouTube. See `fullscreenDrag`.
+            .fullscreenDrag(
+                active = { fullscreenNow == Fullscreen.Portrait },
+                onLeave = { leaveNow() },
+                onReturnStart = {
+                    pull.atCentre()
+                    fullscreen = Fullscreen.Off
+                },
+                onReturnDrag = { pull.dragBy(it) },
+                onReturnEnd = { velocity ->
+                    val home = returnCommits(pull.progress, velocity, flingPx)
+                    scope.launch {
+                        pull.settle(commit = !home)
+                        if (!home) {
+                            fullscreen = Fullscreen.Portrait
+                            pull.reset()
+                        }
+                    }
+                },
+            ),
+    ) {
     Column(
         Modifier
             .fillMaxSize()
@@ -392,11 +467,14 @@ fun WatchContent(
             // reason the glass now does, and the fade moved with the ground.
             // Fullscreen keeps a solid one: there is no tab to show through,
             // and the picture fills the screen anyway.
-            .background(if (fullscreen) Tokens.bg else Color.Transparent),
+            .background(if (fullscreen.on) Tokens.bg else Color.Transparent)
+            // The screen goes black under the picture as it is pulled to the
+            // middle, so letting go lands on the fullscreen's own ground.
+            .drawBehind { drawRect(Color.Black.copy(alpha = pull.progress)) },
     ) {
         // No status-bar gap in fullscreen — there is no status bar, and the gap
         // would be a black band where the picture should be.
-        if (!fullscreen) {
+        if (!fullscreen.on) {
             Spacer(
                 Modifier
                     .fillMaxWidth()
@@ -421,17 +499,18 @@ fun WatchContent(
         // transform, and it moves the whole thing without re-laying anything out
         // on the frames where that would be felt.
         Box(
-            if (fullscreen) {
+            if (fullscreen.on) {
                 Modifier.fillMaxSize().background(Color.Black)
             } else {
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
                     .onSizeChanged { pictureBoxWidth = it.width.toFloat() }
+                    .graphicsLayer { translationY = pull.offset }
             },
         ) {
         Box(
-            if (fullscreen) {
+            if (fullscreen.on) {
                 Modifier
                     .fillMaxSize()
                     .background(Color.Black)
@@ -442,7 +521,9 @@ fun WatchContent(
                     // the innermost node outward, so consuming here is what
                     // stops the collapse drag reading the same fingers.
                     .pinchToFill(
-                        enabled = true,
+                        // Sideways only: upright, filling the screen would crop
+                        // a 16:9 picture to a sliver of its middle.
+                        enabled = fullscreen == Fullscreen.Landscape,
                         filled = zoomedToFill,
                         onFilled = { zoomedToFill = it },
                     )
@@ -530,11 +611,33 @@ fun WatchContent(
                     // Filling the screen there is a thing somebody asks for and
                     // expects to keep, so it is its own state and its own
                     // gesture. See `pinchToFill`.
-                    Box(Modifier.fillMaxSize().then(recordsPicture)) {
+                    //
+                    // Upright, the picture keeps the page's 16:9 box, in the
+                    // middle, with the reflection under it. The box rather
+                    // than the screen, because the reflection is a recording
+                    // of the box: recorded whole, the band would mirror the
+                    // black under the picture.
+                    //
+                    // One surface for every layout, changed by its modifier
+                    // only. Called from two branches it was two surfaces, and
+                    // the pull's switch built a new view and player layer
+                    // that held the picture still until its first frame.
+                    val upright = fullscreen == Fullscreen.Portrait
+                    Box(
+                        if (upright) {
+                            Modifier.align(Alignment.Center).fillMaxWidth().aspectRatio(16f / 9f)
+                        } else {
+                            Modifier.fillMaxSize()
+                        }.then(recordsPicture),
+                    ) {
                         VideoSurface(
                             player,
                             Modifier.fillMaxSize(),
-                            fill = if (fullscreen) zoomedToFill else drag > 0f,
+                            fill = when (fullscreen) {
+                                Fullscreen.Portrait -> false
+                                Fullscreen.Landscape -> zoomedToFill
+                                Fullscreen.Off -> drag > 0f
+                            },
                         )
                     }
 
@@ -559,14 +662,14 @@ fun WatchContent(
                     // app's over this screen switches the platform's glass off
                     // too, or iOS 26 draws it over the sheet.
                     CompositionLocalProvider(
-                        LocalGlassVisible provides (LocalGlassVisible.current && drag == 0f),
+                        LocalGlassVisible provides (LocalGlassVisible.current && drag == 0f && !pulling),
                         LocalPictureBackdrop provides picture,
                     ) {
                     Box(
                         Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                alpha = (1f - drag * OVERLAY_FADE_RATE)
+                                alpha = (1f - maxOf(drag, pull.progress) * OVERLAY_FADE_RATE)
                                     .coerceAtLeast(0f)
                             },
                         contentAlignment = Alignment.Center,
@@ -597,13 +700,14 @@ fun WatchContent(
                     ) else PlayerControls(
                         playback = state.playback,
                         isLive = state.isLive,
-                        fullscreen = fullscreen,
+                        fullscreen = fullscreen.on,
                         storyboard = state.storyboard,
                         scrubState = scrub,
                         zoomedToFill = zoomedToFill,
                         mediaBaseUrl = mediaBaseUrl,
                         title = state.video.title,
                         channel = state.video.channel.name,
+                        titled = fullscreen == Fullscreen.Landscape,
                         onPlayPause = onPlayPause,
                         onSeek = onSeek,
                         onSkip = onSkip,
@@ -611,8 +715,10 @@ fun WatchContent(
                         // than the video. Somebody who filled the screen wants
                         // out of *that* first, and taking the video away instead
                         // is the reading nobody intends.
-                        onBack = { if (fullscreen) fullscreen = false else onBack() },
-                        onToggleFullscreen = { fullscreen = !fullscreen },
+                        onBack = { if (fullscreen.on) leaveFullscreen() else onBack() },
+                        onToggleFullscreen = {
+                            if (fullscreen.on) leaveFullscreen() else fullscreen = Fullscreen.Landscape
+                        },
                         onOpenSettings = { settingsOpen = !settingsOpen },
                         settingsOpen = settingsOpen,
                         onPlayNext = onPlayNext,
@@ -628,7 +734,20 @@ fun WatchContent(
                         narrating = state.narrating,
                         onCast = if (state.isLive) null else onCast,
                         casting = casting,
-                        arrival = pictureArrival(state.video.id, fullscreen, drag),
+                        arrival = pictureArrival(state.video.id, fullscreen.on, drag),
+                        actions = if (fullscreen == Fullscreen.Portrait) {
+                            { touched ->
+                                PortraitActions(
+                                    video = state.video,
+                                    onReact = onReact,
+                                    onToggleSaved = onToggleSaved,
+                                    onShare = share,
+                                    touched = touched,
+                                )
+                            }
+                        } else {
+                            null
+                        },
                     )
                     }
                     }
@@ -651,6 +770,30 @@ fun WatchContent(
             }
         }
 
+        // The band under the picture, in the picture's outer box rather than
+        // on the page: that box moves with the pull and the page fades, and
+        // one call here is one band through the pull and upright fullscreen.
+        // Two calls, one on the page and one upright, hid it for the pull and
+        // built a new one after letting go, a second late on the phone.
+        // Before the page in the column, so the title still scrolls over it.
+        if (cast == null && state is WatchState.Playing && player != null &&
+            showsReflection(LocalEffects.current.on, playing = true, casting = false, fullscreen, drag)
+        ) {
+            PictureReflection(
+                player = player,
+                picture = picture,
+                scrub = scrub,
+                storyboard = state.storyboard,
+                durationSeconds = state.playback.durationSeconds,
+                mediaBaseUrl = mediaBaseUrl,
+                ground = {
+                    if (fullscreen == Fullscreen.Portrait) Color.Black
+                    else lerp(Tokens.bg, Color.Black, pull.progress)
+                },
+                modifier = Modifier.underCentredPicture(),
+            )
+        }
+
         // The title and the channel used to travel with the picture here — a
         // row whose left edge tracked the shrinking thumbnail's right edge all
         // the way down. It is gone: the miniplayer's own bar is now drawn from
@@ -661,7 +804,7 @@ fun WatchContent(
 
         }
 
-        if (fullscreen) return@Column
+        if (fullscreen.on) return@Column
 
         // Everything under the picture fades out through the drag, and faster
         // than the drag itself.
@@ -671,9 +814,12 @@ fun WatchContent(
         // the video was printed across its own title. The page has to be gone by
         // the time the picture reaches it, not when the gesture ends.
         Box(
-            Modifier.graphicsLayer {
-                alpha = (1f - drag * CONTENT_FADE_RATE).coerceAtLeast(0f)
-            },
+            Modifier
+                .graphicsLayer {
+                    translationY = pull.offset
+                    alpha = (1f - drag * CONTENT_FADE_RATE).coerceAtLeast(0f) * (1f - pull.progress)
+                }
+                .nestedScroll(pull.connection),
         ) {
         // A speaker is playing and this video's page is still on its way, or
         // could not come: the speaker's controls and queue do not wait for it.
@@ -733,18 +879,6 @@ fun WatchContent(
                 val railCollapsed = state.railCollapsed
                 val loadingUpNext = state.loadingUpNext
                 val railChannelOnly = state.railChannelOnly
-                // First, so the title and the rest of the page scroll over it.
-                if (showsReflection(LocalEffects.current.on, player != null, cast != null, fullscreen, drag)) {
-                    PictureReflection(
-                        player = player!!,
-                        picture = picture,
-                        scrub = scrub,
-                        storyboard = state.storyboard,
-                        durationSeconds = state.playback.durationSeconds,
-                        mediaBaseUrl = mediaBaseUrl,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f / REFLECTION_BAND),
-                    )
-                }
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     state = listState,
@@ -1193,3 +1327,17 @@ private fun WatchLoadingBelowPreview() {
     )
 }
 
+
+/**
+ * The reflection's band, full width, placed directly under a 16:9 picture
+ * centred in the same box. On the page that box is the picture, so the band
+ * hangs below it; upright, it is the screen.
+ */
+private fun Modifier.underCentredPicture(): Modifier = layout { measurable, constraints ->
+    val width = constraints.maxWidth
+    val pictureHeight = width * 9 / 16
+    val band = measurable.measure(Constraints.fixed(width, (pictureHeight * REFLECTION_BAND).toInt()))
+    layout(width, constraints.maxHeight) {
+        band.place(0, (constraints.maxHeight + pictureHeight) / 2)
+    }
+}

@@ -12,4 +12,4 @@ import androidx.compose.runtime.Composable
  * the compiler.
  */
 @Composable
-actual fun ApplyFullscreen(enabled: Boolean) = Unit
+actual fun ApplyFullscreen(mode: Fullscreen) = Unit

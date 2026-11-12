@@ -1,6 +1,5 @@
 package com.mytube.app.ui.watch
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -13,13 +12,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.mytube.app.domain.model.StoryboardState
 import com.mytube.app.domain.repository.VideoPlayer
-import com.mytube.app.ui.theme.Tokens
 
 /** The band's height as a fraction of the picture's. */
 internal const val REFLECTION_BAND = 0.45f
@@ -40,14 +40,17 @@ internal val REFLECTION_BLUR = 32.dp
  * which sits over the shrinking picture's own interop view, so it is disposed
  * rather than faded. The page under it is gone by a sixth of the journey anyway
  * (`CONTENT_FADE_RATE`).
+ *
+ * Kept through the pull and in upright fullscreen, where the picture keeps its
+ * 16:9 box and the band travels under it; only sideways is there no room.
  */
 internal fun showsReflection(
     effects: Boolean,
     playing: Boolean,
     casting: Boolean,
-    fullscreen: Boolean,
+    fullscreen: Fullscreen,
     drag: Float,
-): Boolean = effects && playing && !casting && !fullscreen && drag == 0f
+): Boolean = effects && playing && !casting && fullscreen != Fullscreen.Landscape && drag == 0f
 
 /**
  * The picture mirrored in the band under it, dark and blurred, live.
@@ -65,6 +68,12 @@ internal fun PictureReflection(
     storyboard: StoryboardState,
     durationSeconds: Double,
     mediaBaseUrl: String,
+    /**
+     * What the band fades into: the page's ground, or upright fullscreen's
+     * black. Faded into the wrong one, it ends in an edge 15 levels high.
+     * Read while drawing, so a pull that darkens the ground redraws only this.
+     */
+    ground: () -> Color,
     modifier: Modifier,
 ) {
     Box(modifier.clipToBounds()) {
@@ -93,11 +102,10 @@ internal fun PictureReflection(
         Spacer(
             Modifier
                 .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Tokens.bg.copy(alpha = 1f - REFLECTION_PEAK), Tokens.bg),
-                    ),
-                ),
+                .drawBehind {
+                    val g = ground()
+                    drawRect(Brush.verticalGradient(listOf(g.copy(alpha = 1f - REFLECTION_PEAK), g)))
+                },
         )
     }
 }

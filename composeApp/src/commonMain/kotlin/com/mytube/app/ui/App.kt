@@ -2043,7 +2043,10 @@ fun App(
                         onDragProgress = { dragProgress = it },
                     ) {
                         CompositionLocalProvider(
-                            LocalGlassVisible provides (LocalGlassVisible.current && !castCovering),
+                            // The save sheet too: in fullscreen it opens over the
+                            // controls, and on iOS 26 their platform glass is
+                            // drawn above every Compose pixel, the sheet's included.
+                            LocalGlassVisible provides (LocalGlassVisible.current && !castCovering && !sheetOpen),
                         ) {
                             WatchScreen(
                                 viewModel = watch,

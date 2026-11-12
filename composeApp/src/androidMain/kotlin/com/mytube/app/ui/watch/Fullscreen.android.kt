@@ -11,15 +11,20 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
 @Composable
-actual fun ApplyFullscreen(enabled: Boolean) {
+actual fun ApplyFullscreen(mode: Fullscreen) {
     val activity = LocalContext.current.findActivity() ?: return
 
-    DisposableEffect(enabled) {
+    DisposableEffect(mode) {
+        val enabled = mode.on
         val window = activity.window
         val controller = WindowInsetsControllerCompat(window, window.decorView)
 
         if (enabled) {
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            activity.requestedOrientation = if (mode == Fullscreen.Landscape) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
             controller.hide(WindowInsetsCompat.Type.systemBars())
             // A swipe brings the bars back for a moment and they leave again.
             // The alternative hides them until the next touch anywhere, which

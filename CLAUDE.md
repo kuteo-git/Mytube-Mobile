@@ -411,6 +411,7 @@ Everything on the external volume; `source env.sh` before working.
 - Built: Home with chips (incl. Live and Missed), Search (YouTube only),
   Channel, Watch (layer with drag-to-miniplayer, controls, subtitles, narration,
   storyboard scrub preview, pinch-to-fill, double-tap seek, comments, up next,
+  a pull on the page into upright fullscreen,
   autoplay with a queue), Playlists (create/rename/delete, save sheet), Saved,
   History, Subscriptions, Profile, Settings (server, voice, language, and a switch for blur, glass and the
   reflection: on by default, unavailable and shown off on the TV and below
@@ -422,7 +423,7 @@ Everything on the external volume; `source env.sh` before working.
 - **A video that speaks Vietnamese opens with narration off** (v0.1.19): the
   language from the gateway, on the phone, the TV and the speakers.
 - **The picture is reflected in the band under it** on the phone's portrait
-  page, live, dark and blurred, the storyboard still while scrubbing; gone
+  page and through the pull into upright fullscreen, live, dark and blurred, the storyboard still while scrubbing; gone
   from the first pixel of the drag; iOS and Android 12+. Built, not yet heard
   or seen on hardware with the screen locked.
 - Background audio, the lock screen and narration have been heard on real

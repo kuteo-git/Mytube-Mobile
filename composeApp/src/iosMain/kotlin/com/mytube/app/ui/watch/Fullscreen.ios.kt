@@ -41,7 +41,8 @@ import platform.UIKit.setNeedsUpdateOfSupportedInterfaceOrientations
  */
 @OptIn(ExperimentalForeignApi::class)
 @Composable
-actual fun ApplyFullscreen(enabled: Boolean) {
+actual fun ApplyFullscreen(mode: Fullscreen) {
+    val enabled = mode == Fullscreen.Landscape
     DisposableEffect(enabled) {
         apply(enabled)
         onDispose {

@@ -204,6 +204,11 @@ fun PlayerControls(
      */
     title: String,
     channel: String,
+    /**
+     * Whether [title] and [channel] are drawn: sideways only. Upright, the
+     * owner asked for the picture with nothing over its top but the controls.
+     */
+    titled: Boolean,
     onPlayPause: () -> Unit,
     onSeek: (Double) -> Unit,
     onSkip: (Double) -> Unit,
@@ -240,6 +245,13 @@ fun PlayerControls(
     casting: Boolean,
     /** Hides the controls whenever it changes; see [PictureArrival]. */
     arrival: PictureArrival,
+    /**
+     * A row along the bottom of the screen, under the seek bar, or null for none.
+     * Upright fullscreen's like, dislike, save and share: the page that holds
+     * them is out of sight there. Handed the timer's reset, so a press keeps the
+     * controls up like any other.
+     */
+    actions: (@Composable (touched: () -> Unit) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val strings = LocalStrings.current
@@ -259,6 +271,16 @@ fun PlayerControls(
     val navigationInset = WindowInsets.navigationBars
         .asPaddingValues()
         .calculateBottomPadding()
+    // What the seek bar and the row over it stand on: the navigation inset, and
+    // the actions row when there is one.
+    val bottomClear = navigationInset + if (actions != null) ACTIONS_ROW_HEIGHT + Space.sm else 0.dp
+    // Upright, iOS keeps its status bar over the picture; the top row clears
+    // it. Turned sideways, and on Android where fullscreen hides the bar, this is 0.
+    val topClear = if (fullscreen) {
+        WindowInsets.safeDrawing.only(WindowInsetsSides.Top).asPaddingValues().calculateTopPadding()
+    } else {
+        0.dp
+    }
 
     // And what everything has to clear at the *sides*.
     //
@@ -424,7 +446,7 @@ fun PlayerControls(
                         .padding(
                             start = Space.xs + safeStart,
                             end = Space.xs + safeEnd,
-                            top = Space.xs,
+                            top = Space.xs + topClear,
                             bottom = Space.xs,
                         ),
                     verticalAlignment = Alignment.CenterVertically,
@@ -447,7 +469,7 @@ fun PlayerControls(
                             )
                         }
                     }
-                    if (fullscreen) {
+                    if (titled) {
                         // `weight` on the text rather than on a Spacer, so a long
                         // title is truncated instead of pushing the cluster on the
                         // right off the edge of a landscape phone.
@@ -663,7 +685,7 @@ fun PlayerControls(
                         .padding(
                             start = Space.sm + safeStart,
                             end = Space.sm + safeEnd,
-                            bottom = controlRowBottom(fullscreen, navigationInset),
+                            bottom = controlRowBottom(fullscreen, bottomClear),
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -766,6 +788,18 @@ fun PlayerControls(
                         }
                     }
                 }
+
+                if (actions != null) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = Space.sm + safeStart, bottom = navigationInset + Space.sm)
+                            .height(ACTIONS_ROW_HEIGHT),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        actions { lastTouch++ }
+                    }
+                }
             }
         }
         }
@@ -822,7 +856,7 @@ fun PlayerControls(
                         Modifier.padding(
                             start = Space.lg + safeStart,
                             end = Space.lg + safeEnd,
-                            bottom = seekLineFromBottom(navigationInset),
+                            bottom = seekLineFromBottom(bottomClear),
                         )
                     } else {
                         Modifier
@@ -884,7 +918,7 @@ fun PlayerControls(
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = controlRowBottom(fullscreen, navigationInset))
+                    .padding(bottom = controlRowBottom(fullscreen, bottomClear))
                     .clip(RoundedCornerShape(percent = 50))
                     .background(Color.Black.copy(alpha = 0.72f))
                     .padding(horizontal = Space.lg, vertical = Space.sm),
@@ -1311,6 +1345,9 @@ private val TRACK_RESTING = 2.dp
 private val TRACK_EXPANDED = 2.dp
 private val TRACK_DRAGGING = 4.dp
 private val KNOB_DRAGGING = 16.dp
+
+/** The upright fullscreen's actions row: a 48dp control in its pane. */
+internal val ACTIONS_ROW_HEIGHT = 48.dp
 
 /** How many notches the width is divided into, for the feedback. */
 private const val NOTCHES = 100
