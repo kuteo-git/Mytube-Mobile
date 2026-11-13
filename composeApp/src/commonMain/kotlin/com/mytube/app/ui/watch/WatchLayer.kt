@@ -14,10 +14,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import com.mytube.app.ui.shell.LocalBackdrop
-import com.mytube.app.ui.shell.PageBackdrop
 import kotlin.time.TimeSource
 import kotlinx.coroutines.launch
 
@@ -137,38 +137,10 @@ fun WatchLayer(
             // instead lets the tab underneath come through while the picture
             // stays solid all the way down.
             //
-            // # It used to be glass, and that was the bug
-            //
-            // The ground was a `hazeEffect` whose blur ran *down* from 28dp to
-            // zero across the gesture, so the feed was uncovered out of focus
-            // and came sharp as the finger reached the bar. The intent was that
-            // the video stays the thing being looked at; what it actually
-            // produced, and what was reported, is a screen where **nothing
-            // arrives** — no miniplayer appears, the layer underneath merely
-            // stops being blurry, and the bar materialises at the end. Reading
-            // it beside the web app makes the difference plain: there the feed
-            // is sharp from the first pixel and the video visibly shrinks *into*
-            // a bar that is already there.
-            //
-            // So the bar is drawn from the start, by `App.kt` — the only place
-            // that knows where it lands.
-            //
-            // # And the glass came back, because the fault was never the glass
-            //
-            // What broke the gesture was a blur that **changed**: 28dp of it at
-            // rest, running down to nothing as the finger fell, so the feed
-            // sharpened instead of the video arriving. A blur that does not
-            // move has none of that in it. The page sits on the same material
-            // the miniplayer is made of — it samples the same recording, from
-            // the same place outside it — so the tab underneath shows through
-            // softly, and what thins across the drag is only the tint.
-            //
-            // `TINT_GLASS`, which is the miniplayer's own tone, because that
-            // is what was asked for: the same material as the bar the video
-            // collapses into. `TINT_MODAL` was tried first on the argument that
-            // this is a page somebody stops at and reads rather than an edge
-            // content passes under — and at 0.95 nothing shows through it at
-            // all, which is a solid page with an expensive way of being black.
+            // The ground is black, solid at rest. It was glass sampling the
+            // tab underneath, and the reflection band under the picture fades
+            // into one colour: over a bright feed the glass came out lighter
+            // than the band's end, which drew an edge across the page.
             .pointerInput(height, pictureHeight) {
                 // focus-guard: the drag into the miniplayer, which exists only on a phone. The television's player is `TvWatchScreen`.
                 detectVerticalDragGestures(
@@ -204,15 +176,10 @@ fun WatchLayer(
     ) {
         // Drawn first, so it is the ground and not a film over the page.
         //
-        // Its alpha is the drag's, for the reason the paint's was: the layer
-        // itself must stay solid or the picture travelling into the bar fades
-        // out before it arrives — which was reported as the player
-        // disappearing instead of shrinking.
-        PageBackdrop(
-            modifier = Modifier.matchParentSize(),
-            backdrop = LocalBackdrop.current,
-            alpha = { 1f - progress },
-        )
+        // Its alpha is the drag's: the layer itself must stay solid or the
+        // picture travelling into the bar fades out before it arrives, which
+        // was reported as the player disappearing instead of shrinking.
+        Box(Modifier.matchParentSize().drawBehind { drawRect(Color.Black, alpha = 1f - progress) })
 
         CompositionLocalProvider(
             LocalDragProgress provides progress,

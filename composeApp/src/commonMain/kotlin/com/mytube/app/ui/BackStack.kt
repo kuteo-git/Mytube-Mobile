@@ -28,3 +28,15 @@ internal sealed interface EdgeSwipe {
     data class Move(val fraction: Float) : EdgeSwipe
     data class Release(val commit: Boolean) : EdgeSwipe
 }
+
+/**
+ * Whether the app's Back is offered at all.
+ *
+ * Not over the expanded video where back is a swipe from the left edge. On
+ * iOS, Compose turns an enabled back handler into a pan from that edge which
+ * cancels every touch starting there, and the seek bar starts there: measured
+ * on the phone, four drags from its start were cancelled as they began. The
+ * video still collapses by its own drag down and its chevron.
+ */
+internal fun offersBack(watchExpanded: Boolean, somewhereToGo: Boolean, edgeSwipeIsBack: Boolean): Boolean =
+    if (watchExpanded) !edgeSwipeIsBack else somewhereToGo

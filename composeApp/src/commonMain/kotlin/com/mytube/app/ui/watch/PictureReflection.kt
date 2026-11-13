@@ -1,5 +1,6 @@
 package com.mytube.app.ui.watch
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -12,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -24,7 +24,7 @@ import com.mytube.app.domain.repository.VideoPlayer
 /** The band's height as a fraction of the picture's. */
 internal const val REFLECTION_BAND = 0.45f
 
-/** How strong the reflection is at its top edge; it fades to the page's ground at the bottom. 0.85, 0.6 and 0.45 were too bright. */
+/** How strong the reflection is at its top edge; it fades to black at the bottom. 0.85, 0.6 and 0.45 were too bright. */
 internal const val REFLECTION_PEAK = 0.4f
 
 /** The blur on Android and on the scrub still. iOS blurs by rasterizing small (`PictureReflection.ios.kt`). */
@@ -68,12 +68,6 @@ internal fun PictureReflection(
     storyboard: StoryboardState,
     durationSeconds: Double,
     mediaBaseUrl: String,
-    /**
-     * What the band fades into: the page's ground, or upright fullscreen's
-     * black. Faded into the wrong one, it ends in an edge 15 levels high.
-     * Read while drawing, so a pull that darkens the ground redraws only this.
-     */
-    ground: () -> Color,
     modifier: Modifier,
 ) {
     Box(modifier.clipToBounds()) {
@@ -102,10 +96,12 @@ internal fun PictureReflection(
         Spacer(
             Modifier
                 .matchParentSize()
-                .drawBehind {
-                    val g = ground()
-                    drawRect(Brush.verticalGradient(listOf(g.copy(alpha = 1f - REFLECTION_PEAK), g)))
-                },
+                .background(
+                    // Into the watch page's ground, which is black on the page
+                    // and in fullscreen: into anything else, the band ends in
+                    // an edge.
+                    Brush.verticalGradient(listOf(Color.Black.copy(alpha = 1f - REFLECTION_PEAK), Color.Black)),
+                ),
         )
     }
 }

@@ -86,3 +86,6 @@ fun Modifier.edgeBack(onDrag: (Float) -> Unit, onRelease: (commit: Boolean) -> U
         )
     }
 }
+
+/** Whether the platform's back is a swipe from the left edge, as Compose makes it on iOS. See `offersBack`. */
+expect val edgeSwipeIsBack: Boolean

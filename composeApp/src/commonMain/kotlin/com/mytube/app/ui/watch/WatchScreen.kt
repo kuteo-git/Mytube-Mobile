@@ -48,10 +48,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -82,6 +80,7 @@ import com.mytube.app.ui.home.imageModel
 import com.mytube.app.ui.home.todayISO
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
+import com.mytube.app.ui.shell.edgeSwipeIsBack
 import com.mytube.app.ui.shell.GlassButton
 import com.mytube.app.ui.shell.LocalEffects
 import com.mytube.app.ui.shell.LocalGlassVisible
@@ -396,7 +395,7 @@ fun WatchContent(
     ApplyFullscreen(fullscreen)
     // Back leaves fullscreen before it leaves the video, as the chevron does.
     // Local, the way a sheet's is: fullscreen is a state of this screen, not a place.
-    BackHandler(fullscreen.on) { leaveFullscreen() }
+    BackHandler(fullscreen.on && !edgeSwipeIsBack) { leaveFullscreen() }
 
     // A video nobody is touching is still being watched.
     //
@@ -452,25 +451,8 @@ fun WatchContent(
     Column(
         Modifier
             .fillMaxSize()
-            .layerBackdrop(sheetBackdrop)
-            // The page has no ground of its own, outside fullscreen.
-            //
-            // `WatchLayer` draws one for it, and it is glass — the same
-            // material and the same tint the miniplayer is made of, sampling
-            // the same recording — so the tab underneath shows through softly
-            // instead of the page being a flat dark rectangle. A `Tokens.bg`
-            // here is opaque and is drawn *over* that, which is exactly what
-            // it was: the glass was built, installed, and invisible, because
-            // this line covered every pixel of it.
-            //
-            // It used to fade with the drag (`alpha = 1f - drag`) for the same
-            // reason the glass now does, and the fade moved with the ground.
-            // Fullscreen keeps a solid one: there is no tab to show through,
-            // and the picture fills the screen anyway.
-            .background(if (fullscreen.on) Tokens.bg else Color.Transparent)
-            // The screen goes black under the picture as it is pulled to the
-            // middle, so letting go lands on the fullscreen's own ground.
-            .drawBehind { drawRect(Color.Black.copy(alpha = pull.progress)) },
+            // No ground of its own: `WatchLayer` draws the page's, black.
+            .layerBackdrop(sheetBackdrop),
     ) {
         // No status-bar gap in fullscreen — there is no status bar, and the gap
         // would be a black band where the picture should be.
@@ -786,10 +768,6 @@ fun WatchContent(
                 storyboard = state.storyboard,
                 durationSeconds = state.playback.durationSeconds,
                 mediaBaseUrl = mediaBaseUrl,
-                ground = {
-                    if (fullscreen == Fullscreen.Portrait) Color.Black
-                    else lerp(Tokens.bg, Color.Black, pull.progress)
-                },
                 modifier = Modifier.underCentredPicture(),
             )
         }

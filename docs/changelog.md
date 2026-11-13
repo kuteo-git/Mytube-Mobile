@@ -6859,3 +6859,47 @@ the phone, and sent YouTube's upright menu as the reference.
   on the simulator as the longest time the rows under the centred picture
   stayed dark after the pull started: 439 ms before, 0 ms after in 4 of 4
   runs. The picture's longest still run fell to 20 to 52 ms in the same runs.
+
+## The watch page's ground is black (2026-11-13)
+
+Reported from the phone with a screenshot: on the portrait page the
+reflection band ended in an edge, where upright fullscreen's faded out. The
+page's ground was glass sampling the tab underneath (`PageBackdrop`), and the
+band faded into `Tokens.bg`. Over a bright feed the glass came out lighter
+than the band's end. Measured on the reported screenshot: the band's last
+rows at 15.4, the glass under them at 19.9. The simulator's feed happened to
+be darker and measured 0.1, so it could not show the fault.
+
+- **The page's ground is solid black** (asked for on the same report), drawn by
+  `WatchLayer` and faded by the drag to the miniplayer as the glass was.
+  `PageBackdrop` had no other caller and is deleted, and so is the black the
+  pull drew under the page, which the ground now is.
+- **The band fades into black everywhere**, so `PictureReflection` lost its
+  `ground` parameter.
+- Measured on the simulator in the margin beside the title: the band falls
+  from 65 to 0 and meets a ground of 0, a step of 0.4 to 0.6 in 3 of 3 runs.
+  The drag to the miniplayer still uncovers the feed, seen in a recording.
+
+## The seek bar takes a drag from the screen's left edge on iOS (2026-11-13)
+
+Reported from the phone: on a new hour-long video the seek bar could not be
+dragged to the middle. Not reproduced on the simulator, which seeked from
+every start point tried, nor on the server, whose playlists were whole VOD
+lists with `ENDLIST`. Logged on the phone instead: four drags starting 6 to
+21pt from the left edge each reached `dragStart` and were cancelled at once;
+one starting at 66pt was not. A new video's progress dot sits in that strip.
+
+- **Cause.** Compose on iOS turns an enabled back handler into a pan from the
+  left edge (`UIKitBackGestureRecognizer`, read in the 1.11 klib) that cancels
+  every touch starting there. `App`'s Back was enabled whenever the video was
+  expanded, to collapse it. 1.11 has no setting for that edge
+  (`enableBackGesture` does not compile; `endEdgePanGestureBehavior` is the
+  other edge).
+- **Fix.** `offersBack`: over the expanded video no Back is offered where back
+  is an edge swipe (`edgeSwipeIsBack`, iOS only), and the upright fullscreen
+  handler follows. The video still collapses by its drag down and its chevron;
+  Android's Back is unchanged. `OffersBackTest` was red first.
+- Measured on the phone after: six drags, four of them starting 4 to 8pt from
+  the edge, every one reaching `dragStart` and none cancelled.
+- Not covered: the simulator's synthesised touches do not reach the edge
+  recognizer, so no simulator loop can show this.

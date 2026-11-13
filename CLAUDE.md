@@ -528,8 +528,9 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   [The watch page redrew sixty times a second…]
 - **Liquid glass is mostly not blur**: blur 8dp, lens with depth and chromatic
   aberration; refraction height ≤ smallest corner radius. One `GLASS_BLUR`, one
-  `TINT_GLASS`; modal and page grounds use `TINT_MODAL`. A full-screen ground has
-  no rim (`drawPlainBackdrop`).
+  `TINT_GLASS`; modal grounds use `TINT_MODAL`. The watch page's ground is
+  solid black, not glass: the reflection band fades into one known colour.
+  [The watch page's ground is black]
 - **The backdrop records `drawRect(Tokens.bg)` first**, or gaps show as holes.
 - **Panes that share an edge share height, tint, margin and radius** (`Size.topBar`,
   `GLASS_MARGIN`, `Size.miniGap`, concentric radii). Eight units between two
@@ -574,6 +575,11 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   opened over the expanded video slides over it (`overWatch`), and back slides
   off it. [Back returns to the place somebody was on; Pages slide over the
   video]
+- **On iOS an enabled Back is a pan from the left edge** that cancels every
+  touch starting there, so nothing that is dragged from that edge (the seek
+  bar) may sit under an enabled back handler (`offersBack`). The simulator's
+  touches never reach it; measure on the phone. [The seek bar takes a drag
+  from the screen's left edge on iOS]
 - **Seek a transition from one queue**: the edge swipe's moves and release go
   through one channel, handled in order. [Pages slide over the video]
 - **`zIndex` orders siblings only**: put it on the node beside what it must

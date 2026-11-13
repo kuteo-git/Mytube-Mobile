@@ -7,7 +7,6 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,7 +16,6 @@ import com.kyant.backdrop.BackdropEffectScope
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.drawPlainBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
@@ -260,86 +258,6 @@ fun GlassBackdrop(
  * how the next one to pin something forgets.
  */
 val LocalBackdrop = compositionLocalOf<LayerBackdrop?> { null }
-
-/**
- * The same sample with **no edge at all** — a blur and a tint, nothing else.
- *
- * # A page is not a pane
- *
- * [GlassBackdrop] is built for something that floats: a bar, a capsule, a
- * sheet. The lens and the highlight are what make those read as a *piece* of
- * glass — light bending at the rim is how an eye is told where the material
- * stops. A full-screen ground has no rim to bend at, so the same effects draw
- * a bright line up both sides of the screen and a refracted band across the
- * top and bottom, which reads as a frame somebody put around the page.
- * Reported exactly that way: *"màn watch cho nó blur thôi, ko có viền đc ko"*.
- *
- * So this is `drawPlainBackdrop` — the library's own answer for a sample with
- * no shape furniture on it — carrying [GLASS_BLUR] and the tint and nothing
- * else. `vibrancy` stays: it is not an edge, it is what stops a blurred
- * thumbnail going grey, and the page underneath is the feed.
- *
- * It is also cheaper by a whole `RuntimeShader`, which matters here for a
- * reason the panes do not have: this one is the width and height of the
- * screen and it is redrawn on every frame of the drag.
- *
- * # The tone is the sheet's, and there is no third number any more
- *
- * There was a `TINT_PAGE` at 0.86 for a day. It is gone: what was asked for is
- * *"tăng cái tint lên hay gì đó cho màn watch như cái bottomsheet, tao muốn
- * thấy mờ mờ như bottonsheet"* — the page should read like the sheet, and the
- * sheet's tone is [TINT_MODAL]. A number named after the same look as another
- * number, differing by four hundredths, is two places for one decision.
- *
- * It is worth saying why 0.95 is *more* see-through here than 0.90 sounded:
- * the sheet reads as glass because of what is behind it, not because of its
- * tint. It floats over the watch page, which is nearly black, so its own rows
- * win easily and the shapes underneath still show. This ground floats over the
- * *feed*, whose thumbnails are bright — and at 0.90 the two competed, which is
- * a muddier picture than a darker one.
- */
-@Composable
-fun PageBackdrop(
-    modifier: Modifier = Modifier,
-    backdrop: Backdrop?,
-    tint: Float = TINT_MODAL,
-    /**
-     * How solid the ground is, read at **draw** time.
-     *
-     * A lambda, and it goes to the library's own `layerBlock` rather than into
-     * a `Modifier.graphicsLayer` wrapped around this — which is what it was.
-     * That arrangement is an offscreen alpha layer with a node inside it that
-     * samples *another* layer, and one frame in which the whole watch layer is
-     * absent is the symptom it is suspected of. `layerBlock` is the same alpha
-     * applied by the node that is already drawing, so there is one layer here
-     * instead of two.
-     *
-     * Read at draw time also means the fade costs a redraw rather than a
-     * recomposition, which is the reason every other lambda this library takes
-     * is shaped this way.
-     */
-    alpha: () -> Float = { 1f },
-) {
-    if (backdrop != null) {
-        Box(
-            modifier.drawPlainBackdrop(
-                backdrop = backdrop,
-                shape = { RoundedCornerShape(0.dp) },
-                effects = {
-                    vibrancy()
-                    blur(GLASS_BLUR.toPx())
-                },
-                layerBlock = { this.alpha = alpha() },
-                onDrawSurface = { drawRect(Tokens.bg.copy(alpha = tint)) },
-            ),
-        )
-        return
-    }
-
-    // No recording — a Preview, or any screen outside the shell. The page keeps
-    // its own colour rather than becoming a hole.
-    Box(modifier.graphicsLayer { this.alpha = alpha() }.background(Tokens.bg))
-}
 
 /**
  * How much of the app's own colour sits over the blur, everywhere.

@@ -149,6 +149,7 @@ import com.mytube.app.ui.shell.NativeGlassRegistry
 import com.mytube.app.ui.shell.Tab
 import com.mytube.app.ui.shell.dismissMenuOnOutsidePress
 import com.mytube.app.ui.shell.edgeBack
+import com.mytube.app.ui.shell.edgeSwipeIsBack
 import com.mytube.app.ui.shell.TabPress
 import com.mytube.app.ui.shell.barTravel
 import com.mytube.app.ui.shell.miniPlayerBottomInset
@@ -989,10 +990,14 @@ fun App(
             // condition here must have a branch below — enabling the handler
             // with nothing to do swallows the gesture, which traps the app open.
             // Measured: it did, for one build.
-            val backable = watching?.minimised == false ||
-                history.places.isNotEmpty() ||
-                (route !is Route.Home && route !is Route.WhoIsWatching) ||
-                tab != Tab.Home
+            val backable = offersBack(
+                watchExpanded = watching?.minimised == false && !television,
+                somewhereToGo = watching?.minimised == false ||
+                    history.places.isNotEmpty() ||
+                    (route !is Route.Home && route !is Route.WhoIsWatching) ||
+                    tab != Tab.Home,
+                edgeSwipeIsBack = edgeSwipeIsBack,
+            )
             // The glass over the picture, pushed to the same platform layer
                 // that draws the tab bar.
                 //
