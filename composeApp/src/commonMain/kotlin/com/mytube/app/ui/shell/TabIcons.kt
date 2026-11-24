@@ -13,23 +13,54 @@ import androidx.compose.ui.graphics.vector.ImageVector
  */
 internal fun tabIcon(tab: Tab): ImageVector = when (tab) {
     Tab.Home -> HomeIcon
+    Tab.History -> HistoryTabIcon
     Tab.Playlists -> PlaylistsTabIcon
     Tab.Settings -> SettingsIcon
 }
 
 /**
- * Three lines and a play triangle, stroked like its neighbours.
+ * A clock with a counter-clockwise arrow over it — the "recents" mark, as
+ * YouTube and iOS both draw Watch History (`clock.arrow.circlepath`). The arrow
+ * at the top says *back in time*, which a bare clock does not.
+ */
+private val HistoryTabIcon: ImageVector by lazy {
+    stroke("History") {
+        // The dial.
+        moveTo(12f, 6.5f)
+        curveTo(15f, 6.5f, 17.5f, 9f, 17.5f, 12f)
+        curveTo(17.5f, 15f, 15f, 17.5f, 12f, 17.5f)
+        curveTo(9f, 17.5f, 6.5f, 15f, 6.5f, 12f)
+        // The hands.
+        moveTo(12f, 9f); lineTo(12f, 12f); lineTo(14f, 13.5f)
+        // The counter-clockwise arrow closing the open top-left of the dial.
+        moveTo(6.5f, 12f); curveTo(6.5f, 9f, 9f, 6.5f, 12f, 6.5f)
+        moveTo(4.2f, 8.5f); lineTo(6.5f, 9.2f); lineTo(7.2f, 6.9f)
+    }
+}
+
+/**
+ * Lines with a music note (`music.note.list`), stroked like its neighbours.
  *
- * Not `PlaylistIcon` from `ui/playlist`: that one is filled, drawn for a badge
- * over a picture, and a filled glyph beside two stroked ones is the third icon
- * fault this app has had — the tab bar reads as one set or as none.
+ * This is the preview target's face only; the phone draws the SF Symbol (iOS)
+ * or its rendered PNG (Android). It is kept as the same mark so a preview reads
+ * like the device. Not `PlaylistIcon` from `ui/playlist`: that one is filled,
+ * drawn for a badge over a picture, and a filled glyph beside stroked ones is
+ * the third icon fault this app has had — the tab bar reads as one set or none.
  */
 private val PlaylistsTabIcon: ImageVector by lazy {
     stroke("Playlists") {
-        moveTo(3f, 6f); lineTo(16f, 6f)
-        moveTo(3f, 11f); lineTo(16f, 11f)
-        moveTo(3f, 16f); lineTo(11f, 16f)
-        moveTo(15f, 14f); lineTo(21f, 17.5f); lineTo(15f, 21f); close()
+        // The list.
+        moveTo(3f, 7f); lineTo(12f, 7f)
+        moveTo(3f, 12f); lineTo(12f, 12f)
+        moveTo(3f, 17f); lineTo(9f, 17f)
+        // The note: a stem with a flag, and a head at its foot.
+        moveTo(16f, 16f); lineTo(16f, 6f); lineTo(20f, 8f)
+        moveTo(16f, 16f)
+        curveTo(16f, 17.1f, 15.1f, 18f, 14f, 18f)
+        curveTo(12.9f, 18f, 12f, 17.1f, 12f, 16f)
+        curveTo(12f, 14.9f, 12.9f, 14f, 14f, 14f)
+        curveTo(15.1f, 14f, 16f, 14.9f, 16f, 16f)
+        close()
     }
 }
 
@@ -77,6 +108,7 @@ private val SettingsIcon: ImageVector by lazy {
 /** A tab's name, for both shells' labels — the phone's bar and the television's rail. */
 fun tabLabel(tab: Tab, strings: Strings): String = when (tab) {
     Tab.Home -> strings.navHome
+    Tab.History -> strings.historyTitle
     Tab.Playlists -> strings.playlists
     Tab.Settings -> strings.navSettings
 }

@@ -41,7 +41,10 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -76,14 +79,18 @@ import com.mytube.app.domain.model.DEFAULT_VOICE_LEVEL
 import com.mytube.app.domain.model.Profile
 import com.mytube.app.ui.channel.ChannelScreen
 import com.mytube.app.ui.channel.ChannelViewModel
+import com.mytube.app.ui.channel.PlaylistVideosScreen
+import com.mytube.app.ui.channel.PlaylistVideosViewModel
 import com.mytube.app.ui.history.HistoryScreen
 import com.mytube.app.ui.history.HistoryViewModel
 import com.mytube.app.ui.home.Chip
 import com.mytube.app.ui.home.ChipRow
+import com.mytube.app.ui.home.HomeChips
 import com.mytube.app.ui.home.HomeScreen
-import com.mytube.app.ui.home.HomeState
 import com.mytube.app.ui.home.HomeViewModel
 import com.mytube.app.ui.home.Size
+import com.mytube.app.ui.more.ChartScreen
+import com.mytube.app.ui.more.MoreContent
 import com.mytube.app.ui.shell.LocalGlassVisible
 import com.mytube.app.ui.cast.CastNotice
 import com.mytube.app.domain.model.CastDevice
@@ -211,13 +218,29 @@ internal sealed interface Route {
     /** The channels this household follows, reached from Settings. */
     data object Subscriptions : Route
     data class Playlist(val playlistId: String) : Route
-    data object History : Route
     data object Profile : Route
     /** The Vietnamese voice's levels and name, opened from Settings. */
     data object Voice : Route
     /** Which language the app reads in, opened from Settings. */
     data object Language : Route
     data class Channel(val channelId: String) : Route
+    /**
+     * One of a channel's own playlists, opened from its Playlists tab.
+     *
+     * The title travels so the page draws its header at once rather than after
+     * the first page lands; the server sends it too, and the two agree.
+     */
+    data class ChannelPlaylist(
+        val channelId: String,
+        val playlistId: String,
+        val title: String,
+    ) : Route
+    /** The News & Politics feed, reached from the More page (a chip page). */
+    data object News : Route
+    /** On-air broadcasts, a feed reached from the More page (a chip page). */
+    data object Live : Route
+    /** Charts, not built yet, reached from the More page (a chip page). */
+    data object Chart : Route
 }
 
 /**
@@ -339,9 +362,14 @@ private fun depth(route: Route): Int = when (route) {
      * listed it.
      */
     is Route.Channel -> 2
-    // Opened from Settings, beside Saved and for the same reason it is there:
-    // a shelf this device keeps, not somewhere you move between while browsing.
-    is Route.History, is Route.Profile -> 1
+    // Three: reached from a channel's Playlists tab, which is itself at two.
+    // Leaving it for the channel must slide back, so it sits one deeper.
+    is Route.ChannelPlaylist -> 3
+    // One: News, Live and Charts open over Home from the More page (itself a
+    // chip page of Home, not a route), so they slide back onto Home.
+    is Route.News, is Route.Live, is Route.Chart -> 1
+    // Opened from Settings.
+    is Route.Profile -> 1
     // Opened from Settings, which is a tab — so one level in, the same as the
     // saved shelf beside them in that menu.
     is Route.Voice, is Route.Language -> 1
@@ -472,6 +500,16 @@ fun App(
             // screen dies with it, which is why every trip to another tab and
             // back put the feed at the top again.
             val tabScroll = Tab.entries.associateWith { rememberLazyListState() }
+            // Home is a horizontal pager over the fixed chip row (More is its
+            // last page, like YouTube's), so its state and one scroll position
+            // per chip are owned here for the same reason the tab scrolls are: a
+            // page swiped away is disposed, and a state remembered inside it would
+            // reset to the top. Opens on Missed, the leftmost chip, which is the
+            // household's catch-up feed and the one they asked to land on.
+            val homePager = rememberPagerState(initialPage = HomeChips.row.indexOf(Chip.Missed).coerceAtLeast(0)) {
+                HomeChips.row.size
+            }
+            val homeFeedScroll = remember { HomeChips.row.associate { it.key to LazyListState() } }
             // The subscriptions page's scroll, for the tabs' reason: it is a
             // route, so it is not composed while anything else is, and a state
             // remembered inside it would die there.
@@ -488,7 +526,17 @@ fun App(
             //
             // 220ms: inside the 150–300ms band where motion reads as movement
             // rather than as a delay.
-            val bars = rememberBarsVisible(tabScroll.getValue(tab))
+            // On Home the list that scrolls is the current chip's page, not a
+            // per-tab list; elsewhere it is the tab's own. `rememberBarsVisible`
+            // re-keys on the state it is handed, so a swipe to another chip hands
+            // it that page's scroll.
+            val bars = rememberBarsVisible(
+                if (route is Route.Home && tab == Tab.Home) {
+                    homeFeedScroll.getValue(HomeChips.row[homePager.currentPage].key)
+                } else {
+                    tabScroll.getValue(tab)
+                },
+            )
             val barsShowing = bars.showing
 
             /**
@@ -740,6 +788,16 @@ fun App(
             }
             LifecycleEventEffect(Lifecycle.Event.ON_STOP) { cast.setForeground(false) }
             LifecycleEventEffect(Lifecycle.Event.ON_START) { cast.setForeground(true) }
+            // Home opens on Missed every time the app is brought up, not wherever
+            // the pager was last left. The `initialPage` alone is not enough,
+            // because `rememberPagerState` restores its saved page across a
+            // relaunch and overrides it, so the catch-up feed is asked for again
+            // here. `requestScrollToPage` rather than a suspend scroll: it is
+            // instant and works before the pager has been laid out, which is the
+            // case the moment the app comes up.
+            LifecycleEventEffect(Lifecycle.Event.ON_START) {
+                homePager.requestScrollToPage(HomeChips.row.indexOf(Chip.Missed).coerceAtLeast(0))
+            }
             // The television player's half of back: takes away what is over the
             // picture and says whether there was anything. See `TvWatchContent`.
             var tvWatchBackStep: () -> Boolean by remember { mutableStateOf({ false }) }
@@ -1095,13 +1153,26 @@ fun App(
                             edits = playlistEdits,
                         )
                     }
+                    val historyTab: @Composable () -> Unit = {
+                        HistoryScreen(
+                            viewModel = viewModel(key = "history-$baseUrl-$profileId") {
+                                HistoryViewModel(container.videoRepository)
+                            },
+                            mediaBaseUrl = baseUrl,
+                            listState = tabScroll.getValue(Tab.History),
+                            onOpenSettings = { navigate(Route.Setup) },
+                            onOpenVideo = { openVideo(it) },
+                            onOpenChannel = openChannel,
+                            onSaveToPlaylist = { openSaveSheet(saveTargetOf(it)) },
+                            // A tab, so no back arrow — see `HistoryScreen`.
+                        )
+                    }
                     val settingsTab: @Composable () -> Unit = {
                         SettingsScreen(
                             baseUrl = baseUrl,
                             language = chosen,
                             onOpenServer = { navigate(Route.Setup) },
                             onOpenProfile = { navigate(Route.Profile) },
-                            onOpenHistory = { navigate(Route.History) },
                             onOpenSubscriptions = { navigate(Route.Subscriptions) },
                             profileName = currentProfile?.name.orEmpty(),
                             voice = voice,
@@ -1143,6 +1214,13 @@ fun App(
                                     },
                                 )
 
+                                // The watch-history shelf. Its own grid on the
+                                // TV (see `HistoryScreen`), inside the overscan
+                                // margin like the two tabs below it.
+                                Tab.History -> Box(Modifier.padding(end = TV_SAFE_HORIZONTAL)) {
+                                    historyTab()
+                                }
+
                                 // The overscan margin on the right, which the
                                 // shelves do without: the playlists tab's add
                                 // button sat flush against the screen's edge on
@@ -1157,32 +1235,35 @@ fun App(
                             }
                         }
                     } else {
-                    // Hoisted out of the HomeScreen call so the shell can draw
-                    // this tab's chips inside the top bar. Same key, same
-                    // lifetime — `viewModel()` returns the one instance either
-                    // way, so nothing about the feed changed by moving where it
-                    // is asked for.
-                    val home = viewModel(key = "home-$baseUrl-$profileId") {
-                        HomeViewModel(container.videoRepository)
-                    }
-                    val homeState by home.state.collectAsStateWithLifecycle()
-
                     AppShell(
                         current = tab,
                         barsHidden = barsHidden,
                         topHidden = topHidden,
                         collapse = collapse,
                         // Only the Home tab has anything to pin under the bar.
-                        // The others pass nothing and the bar is its ordinary
-                        // height, which is why the shell measures it rather than
-                        // assuming.
+                        // The chip row is a fixed set now, so it is always known
+                        // and does not wait on the feed; the selected chip is
+                        // whichever page the pager rests on, and tapping any chip
+                        // — More included, it is the last page — scrolls to it.
                         underTopBar = {
-                            val ready = homeState as? HomeState.Ready
-                            if (tab == Tab.Home && ready != null) {
+                            if (tab == Tab.Home) {
                                 ChipRow(
-                                    chips = ready.chips,
-                                    selected = ready.selected,
-                                    onSelect = home::select,
+                                    chips = HomeChips.row,
+                                    selected = HomeChips.row[homePager.currentPage],
+                                    onSelect = { chip ->
+                                        val index = HomeChips.row.indexOf(chip)
+                                        if (index >= 0) scope.launch {
+                                            if (index == homePager.currentPage) {
+                                                // Already on it: a second press
+                                                // lifts the feed to the top, the
+                                                // same as pressing the tab you are
+                                                // on.
+                                                homeFeedScroll.getValue(chip.key).animateScrollToItem(0)
+                                            } else {
+                                                homePager.animateScrollToPage(index)
+                                            }
+                                        }
+                                    },
                                     modifier = Modifier.padding(bottom = Space.md),
                                 )
                             }
@@ -1206,7 +1287,14 @@ fun App(
                                 // that, and one gesture must not mean two
                                 // things.
                                 TabPress.ScrollToTop -> scope.launch {
-                                    tabScroll.getValue(picked).animateScrollToItem(0)
+                                    // On Home the list to lift is the current
+                                    // chip's page, not a per-tab list.
+                                    if (picked == Tab.Home) {
+                                        homeFeedScroll.getValue(HomeChips.row[homePager.currentPage].key)
+                                            .animateScrollToItem(0)
+                                    } else {
+                                        tabScroll.getValue(picked).animateScrollToItem(0)
+                                    }
                                 }
 
                                 TabPress.Switch -> Unit
@@ -1216,17 +1304,50 @@ fun App(
                         onSearch = { navigate(Route.Search) },
                     ) {
                             when (tab) {
-                                Tab.Home -> HomeScreen(
-                                    listState = tabScroll.getValue(Tab.Home),
-                                    viewModel = home,
-                                    mediaBaseUrl = baseUrl,
-                                    onOpenSettings = { tab = Tab.Settings },
-                                    onOpenVideo = { openVideo(it) },
-                                    onOpenChannel = openChannel,
-                                    onSaveToPlaylist = {
-                                        openSaveSheet(saveTargetOf(it))
-                                    },
-                                )
+                                // A horizontal pager over the fixed chip feeds:
+                                // swipe between them, or tap a chip above. Each
+                                // page is one chip's feed, with its own ViewModel
+                                // and its own hoisted scroll, so a page swiped
+                                // away and back is where it was left. The
+                                // neighbours are not held composed, so a chip's
+                                // feed is not fetched until it is first reached.
+                                Tab.Home -> HorizontalPager(
+                                    state = homePager,
+                                    modifier = Modifier.fillMaxSize(),
+                                    beyondViewportPageCount = 0,
+                                ) { page ->
+                                    val chip = HomeChips.row[page]
+                                    if (chip == Chip.More) {
+                                        // The last page is the More menu, not a
+                                        // feed; its rows open their own pages.
+                                        MoreContent(
+                                            listState = homeFeedScroll.getValue(chip.key),
+                                            onOpenNews = { navigate(Route.News) },
+                                            onOpenLive = { navigate(Route.Live) },
+                                            onOpenCharts = { navigate(Route.Chart) },
+                                        )
+                                    } else {
+                                        val feed = viewModel(key = "home-${chip.key}-$baseUrl-$profileId") {
+                                            HomeViewModel(container.videoRepository, chip)
+                                        }
+                                        HomeScreen(
+                                            listState = homeFeedScroll.getValue(chip.key),
+                                            viewModel = feed,
+                                            mediaBaseUrl = baseUrl,
+                                            onOpenVideo = { openVideo(it) },
+                                            onOpenChannel = openChannel,
+                                            onOpenServer = { navigate(Route.Setup) },
+                                            onSaveToPlaylist = {
+                                                openSaveSheet(saveTargetOf(it))
+                                            },
+                                        )
+                                    }
+                                }
+
+                                // The watch-history shelf, a tab again — the one
+                                // the household opens most after Home. No back
+                                // arrow: a tab is reached from nowhere.
+                                Tab.History -> historyTab()
 
                                 // Collections are a tab now, where subscriptions
                                 // used to be. Both are lists somebody scans for
@@ -1298,24 +1419,32 @@ fun App(
                         .focusProperties { onEnter = { if (tvPlayerUp) cancelFocusChange() } }
                         .focusGroup(),
                     transitionSpec = {
-                        // From what was done, not from the pages: back between two
-                        // pages of one depth slid the way forward does.
-                        val forward = !goingBack
-                        // Linear under a finger, so the page stays where the
-                        // finger is rather than where an easing curve puts it.
-                        val easing = if (swipingBack) LinearEasing else FastOutSlowInEasing
-                        val spec = tween<IntOffset>(ROUTE_MILLIS, easing = easing)
-                        // Slides only, as on iOS: every page paints its own
-                        // ground, and faded, two pages under a finger read as one
-                        // grey wash. The television keeps its fade.
-                        val enter = slideInHorizontally(spec) { width -> if (forward) width else -width / 4 } +
-                            if (television) fadeIn(tween(ROUTE_MILLIS)) else EnterTransition.None
-                        val exit = slideOutHorizontally(spec) { width -> if (forward) -width / 4 else width } +
-                            if (television) fadeOut(tween(ROUTE_MILLIS)) else ExitTransition.None
-                        // The page arriving is drawn on top by default; going
-                        // back it is the one underneath, uncovered as the page
-                        // on top slides away.
-                        (enter togetherWith exit).apply { if (!forward) targetContentZIndex = -1f }
+                        // Search is a fade, not a slide: it is a mode you flip
+                        // into from the bar rather than a page pushed onto a
+                        // stack, and a push/pop read as travel it is not. Asked
+                        // for. Both directions cross-fade over ROUTE_MILLIS.
+                        if (targetState is Route.Search || initialState is Route.Search) {
+                            fadeIn(tween(ROUTE_MILLIS)) togetherWith fadeOut(tween(ROUTE_MILLIS))
+                        } else {
+                            // From what was done, not from the pages: back between
+                            // two pages of one depth slid the way forward does.
+                            val forward = !goingBack
+                            // Linear under a finger, so the page stays where the
+                            // finger is rather than where an easing curve puts it.
+                            val easing = if (swipingBack) LinearEasing else FastOutSlowInEasing
+                            val spec = tween<IntOffset>(ROUTE_MILLIS, easing = easing)
+                            // Slides only, as on iOS: every page paints its own
+                            // ground, and faded, two pages under a finger read as
+                            // one grey wash. The television keeps its fade.
+                            val enter = slideInHorizontally(spec) { width -> if (forward) width else -width / 4 } +
+                                if (television) fadeIn(tween(ROUTE_MILLIS)) else EnterTransition.None
+                            val exit = slideOutHorizontally(spec) { width -> if (forward) -width / 4 else width } +
+                                if (television) fadeOut(tween(ROUTE_MILLIS)) else ExitTransition.None
+                            // The page arriving is drawn on top by default; going
+                            // back it is the one underneath, uncovered as the page
+                            // on top slides away.
+                            (enter togetherWith exit).apply { if (!forward) targetContentZIndex = -1f }
+                        }
                     },
                 ) { current ->
                 // Only the page arriving records. Every page shares one
@@ -1433,20 +1562,6 @@ fun App(
                         onBack = { goBack() },
                     )
 
-                    is Route.History -> HistoryScreen(
-                        viewModel = viewModel(key = "history-$baseUrl-$profileId") {
-                            HistoryViewModel(container.videoRepository)
-                        },
-                        mediaBaseUrl = baseUrl,
-                        onBack = { goBack() },
-                        onOpenSettings = { navigate(Route.Setup) },
-                        onOpenVideo = { openVideo(it) },
-                        onOpenChannel = openChannel,
-                        onSaveToPlaylist = {
-                            openSaveSheet(saveTargetOf(it))
-                        },
-                    )
-
                     is Route.Profile -> {
                         // Asked again on arrival rather than trusting the fetch
                         // at launch.
@@ -1537,6 +1652,40 @@ fun App(
                     onOpenChannel = openChannel,
                 )
 
+                // The pages the More chip page points at. News and Live are
+                // ordinary feeds with a back arrow, so they reuse the home feed
+                // screen in its standalone shape; Charts is a placeholder until
+                // the feature itself lands.
+                is Route.News -> HomeScreen(
+                    viewModel = viewModel(key = "news-$baseUrl-$profileId") {
+                        HomeViewModel(container.videoRepository, HomeChips.news)
+                    },
+                    mediaBaseUrl = baseUrl,
+                    listState = rememberLazyListState(),
+                    onOpenVideo = { openVideo(it) },
+                    onOpenChannel = openChannel,
+                    onOpenServer = { navigate(Route.Setup) },
+                    onBack = { goBack() },
+                    title = LocalStrings.current.newsTitle,
+                    onSaveToPlaylist = { openSaveSheet(saveTargetOf(it)) },
+                )
+
+                is Route.Live -> HomeScreen(
+                    viewModel = viewModel(key = "live-$baseUrl-$profileId") {
+                        HomeViewModel(container.videoRepository, Chip.Live)
+                    },
+                    mediaBaseUrl = baseUrl,
+                    listState = rememberLazyListState(),
+                    onOpenVideo = { openVideo(it) },
+                    onOpenChannel = openChannel,
+                    onOpenServer = { navigate(Route.Setup) },
+                    onBack = { goBack() },
+                    title = LocalStrings.current.liveTitle,
+                    onSaveToPlaylist = { openSaveSheet(saveTargetOf(it)) },
+                )
+
+                is Route.Chart -> ChartScreen(onBack = { goBack() })
+
                 // A keyboard on the page beside the results, on a television —
                 // see `TvSearchScreen`. The same ViewModel either way.
                 is Route.Search -> {
@@ -1570,6 +1719,27 @@ fun App(
                         onOpenSettings = { navigate(Route.Setup) },
                         // The channel's own order comes with the video, so next
                         // stays inside the list that was being read.
+                        onOpenVideo = { id, queue -> openVideo(id, queue) },
+                        onSaveToPlaylist = {
+                            openSaveSheet(saveTargetOf(it))
+                        },
+                        onOpenPlaylist = { playlist ->
+                            navigate(Route.ChannelPlaylist(current.channelId, playlist.id, playlist.title))
+                        },
+                    )
+
+                    is Route.ChannelPlaylist -> PlaylistVideosScreen(
+                        viewModel = viewModel(key = "channel-playlist-${current.playlistId}") {
+                            PlaylistVideosViewModel(
+                                current.channelId,
+                                current.playlistId,
+                                current.title,
+                                container.videoRepository,
+                            )
+                        },
+                        mediaBaseUrl = baseUrl,
+                        onBack = { goBack() },
+                        onOpenSettings = { navigate(Route.Setup) },
                         onOpenVideo = { id, queue -> openVideo(id, queue) },
                         onSaveToPlaylist = {
                             openSaveSheet(saveTargetOf(it))
@@ -1646,10 +1816,12 @@ fun App(
             // carrying on across them is the whole point of holding the session
             // above the routes.
             val browsing = route is Route.Home || route is Route.Search ||
-                route is Route.Channel || route is Route.Saved ||
+                route is Route.Channel || route is Route.ChannelPlaylist ||
+                route is Route.News || route is Route.Live || route is Route.Chart ||
+                route is Route.Saved ||
                 route is Route.Subscriptions || route is Route.Playlist ||
                 route is Route.Voice || route is Route.Language ||
-                route is Route.History || route is Route.Profile
+                route is Route.Profile
 
             // The ViewModel is held whenever something is playing; `browsing`
             // only decides whether it is *drawn*. Both lived under one `if`, so
@@ -1814,6 +1986,24 @@ fun App(
                 // here.
                 LaunchedEffect(session.videoId) {
                     watch.advanceTo(session.videoId, session.startAtBeginning)
+                }
+
+                // A collapsed video that plays to its end closes itself.
+                //
+                // Reported: a finished video left its miniplayer resting on the
+                // bar with nothing left to play — a dead capsule that only the X
+                // cleared. Autoplay with a rail advances instead (see
+                // `advanceIfFinished`), so this only ever fires when the end is
+                // genuinely the end: autoplay off, or the queue run out. Collapsed
+                // only, so the end of an expanded video keeps the watch layer up
+                // with its up-next, where the end is a choice to make, not a bar in
+                // the way.
+                LaunchedEffect(watch, session.minimised) {
+                    if (!session.minimised) return@LaunchedEffect
+                    watch.state
+                        .map { (it as? WatchState.Playing)?.playback?.hasEnded == true }
+                        .distinctUntilChanged()
+                        .collect { if (it) closeWatch() }
                 }
 
                 // Settings is a tab, so the sliders can be moved while this is

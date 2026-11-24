@@ -1,6 +1,7 @@
 package com.mytube.app.domain.repository
 
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.ChannelPlaylist
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.Playlist
 import com.mytube.app.domain.model.Reaction
@@ -218,6 +219,32 @@ interface VideoRepository {
     ): ChannelPage
 
     /**
+     * A page of the playlists a channel published.
+     *
+     * From **YouTube**, not the catalogue, for [channelPage]'s reason: a scan
+     * brings in a channel's videos, never its playlists. These are not the
+     * household's [playlists] — they are read only, and opened through
+     * [playlistVideos].
+     */
+    suspend fun channelPlaylists(
+        channelId: String,
+        pageToken: String = "",
+    ): ChannelPlaylistsPage
+
+    /**
+     * A page of the videos inside one of a channel's playlists.
+     *
+     * The channel is named so the page can slide over the one it was opened
+     * from; only [playlistId] decides what is read. A playlist mixes channels,
+     * so each video carries its own uploader rather than the page's channel.
+     */
+    suspend fun playlistVideos(
+        channelId: String,
+        playlistId: String,
+        pageToken: String = "",
+    ): PlaylistVideosPage
+
+    /**
      * The member's playlists.
      *
      * A non-empty [videoId] also answers *which of them already hold that
@@ -297,6 +324,36 @@ data class ChannelPage(
     val nextPageToken: String,
 ) {
     val hasMore: Boolean get() = nextPageToken.isNotEmpty()
+}
+
+/**
+ * A page of a channel's own playlists.
+ *
+ * Its own type rather than reusing a video page: these are lists, not videos,
+ * and the card that draws one wants a title, a cover and a count, nothing a
+ * [Video] has.
+ */
+data class ChannelPlaylistsPage(
+    val playlists: List<ChannelPlaylist>,
+    val nextPageToken: String,
+) {
+    val hasMore: Boolean get() = nextPageToken.isNotEmpty()
+}
+
+/**
+ * A page of the videos inside one playlist, with the playlist's own title.
+ *
+ * The title rides with the videos for [ChannelPage]'s reason: a header drawn
+ * from a second request would arrive after the list it belongs to. Empty on a
+ * continuation page, which carries no header.
+ */
+data class PlaylistVideosPage(
+    val title: String,
+    val videos: List<Video>,
+    val nextPageToken: String,
+) {
+    val hasMore: Boolean get() = nextPageToken.isNotEmpty()
+    val hasTitle: Boolean get() = title.isNotEmpty()
 }
 
 /**

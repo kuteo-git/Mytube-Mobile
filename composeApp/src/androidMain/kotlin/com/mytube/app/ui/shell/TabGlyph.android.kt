@@ -44,8 +44,10 @@ actual fun TabGlyph(tab: Tab, selected: Boolean, tint: Color, modifier: Modifier
 /** The filled pair on the tab you are on, hollow on the others — iOS's pairing. */
 private fun Tab.drawable(selected: Boolean): Int = when (this) {
     Tab.Home -> if (selected) R.drawable.ic_tab_house_fill else R.drawable.ic_tab_house
-    // `list.triangle` has no filled pair in the set, so this one is marked by
-    // the colour and the pill alone.
-    Tab.Playlists -> R.drawable.ic_tab_list_triangle
+    // `clock.arrow.circlepath` has no filled pair, so the colour and the pill
+    // mark it, as `list.triangle` is marked.
+    Tab.History -> R.drawable.ic_tab_clock_arrow
+    // `music.note.list` has no filled pair, so the colour and the pill mark it.
+    Tab.Playlists -> R.drawable.ic_tab_music_note_list
     Tab.Settings -> if (selected) R.drawable.ic_tab_gearshape_fill else R.drawable.ic_tab_gearshape
 }

@@ -11,12 +11,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,7 +53,27 @@ fun ChipRow(
     // the same generator the system's own pickers use.
     val tick = rememberSelectionTick()
 
+    // The row follows the selection. Swiping the pager moves the lit chip, and a
+    // lit chip off the right edge is one nobody can see they are on — so the row
+    // scrolls to centre it (or as near as its ends allow). Centred rather than
+    // left-aligned so the chips either side stay in reach, the way YouTube's own
+    // row rests.
+    val rowState = rememberLazyListState()
+    val selectedIndex = chips.indexOf(selected)
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex < 0) return@LaunchedEffect
+        val info = rowState.layoutInfo
+        val item = info.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
+        if (item == null) {
+            rowState.animateScrollToItem(selectedIndex)
+        } else {
+            val viewportCentre = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            rowState.animateScrollBy(item.offset + item.size / 2f - viewportCentre)
+        }
+    }
+
     LazyRow(
+        state = rowState,
         modifier = modifier,
         // Vertical room for the bloom, not decoration.
         //
@@ -98,7 +121,8 @@ fun ChipRow(
                         Chip.All -> strings.chipAll
                         Chip.Missed -> strings.chipMissed
                         Chip.Live -> strings.chipLive
-                        is Chip.Category -> chip.topic.name
+                        Chip.More -> strings.chipMore
+                        is Chip.Category -> chip.label
                     },
                     color = if (isSelected) Tokens.invertText else Tokens.text,
                     fontSize = 14.sp,

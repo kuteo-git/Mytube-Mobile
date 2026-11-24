@@ -4,6 +4,8 @@ import com.mytube.app.data.remote.dto.CastDeviceDto
 import com.mytube.app.data.remote.dto.CastHandbackDto
 import com.mytube.app.data.remote.dto.CastSessionDto
 import com.mytube.app.data.remote.dto.ChannelDetailDto
+import com.mytube.app.data.remote.dto.ChannelPlaylistVideosDto
+import com.mytube.app.data.remote.dto.ChannelPlaylistsDto
 import com.mytube.app.data.remote.dto.ChannelVideosDto
 import com.mytube.app.data.remote.dto.ChannelsDto
 import com.mytube.app.data.remote.dto.DiscoverDto
@@ -256,6 +258,30 @@ class GatewayDataSource(private val client: HttpClient) {
         // "" as a continuation.
         if (token.isNotBlank()) parameter("pageToken", token)
     }.orThrow().body()
+
+    /** A page of the playlists a channel published. */
+    suspend fun channelPlaylists(
+        baseUrl: String,
+        userId: String,
+        channelId: String,
+        token: String,
+    ): ChannelPlaylistsDto = client.get("${baseUrl.trimEnd('/')}/api/channels/$channelId/playlists") {
+        identify(userId)
+        if (token.isNotBlank()) parameter("pageToken", token)
+    }.orThrow().body()
+
+    /** A page of the videos inside one of a channel's playlists. */
+    suspend fun channelPlaylistVideos(
+        baseUrl: String,
+        userId: String,
+        channelId: String,
+        playlistId: String,
+        token: String,
+    ): ChannelPlaylistVideosDto =
+        client.get("${baseUrl.trimEnd('/')}/api/channels/$channelId/playlists/$playlistId/videos") {
+            identify(userId)
+            if (token.isNotBlank()) parameter("pageToken", token)
+        }.orThrow().body()
 
     /**
      * The voice the speech service is asked for.

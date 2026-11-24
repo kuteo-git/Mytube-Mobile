@@ -297,7 +297,14 @@ private fun PlaylistsTitle(strings: Strings, onStartCreating: () -> Unit) {
  * subscriptions tab settles the same way.
  */
 @Composable
-private fun PlaylistRow(
+/**
+ * A playlist as a list row: a stacked thumbnail, a title, and a line of detail.
+ *
+ * Shared with the channel page's Playlists tab ([ChannelPlaylistsColumn]) — a
+ * playlist reads as a playlist the same way wherever it is listed, so the row
+ * that says so lives in one place.
+ */
+internal fun PlaylistRow(
     title: String,
     detail: String,
     thumbnailPath: String,

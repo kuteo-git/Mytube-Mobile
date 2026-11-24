@@ -1,6 +1,7 @@
 package com.mytube.app.data.remote.dto
 
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.ChannelPlaylist
 import com.mytube.app.domain.model.Comment
 import com.mytube.app.domain.model.SubtitleTrack
 import com.mytube.app.domain.model.Narration
@@ -344,6 +345,49 @@ fun ExternalVideoDto.toDomain(): Video = Video(
     thumbnailPath = thumbnailUrl,
     sourceUrl = sourceUrl,
     inLibrary = inLibrary,
+)
+
+/**
+ * `GET /api/channels/{id}/playlists` — one playlist a channel published.
+ *
+ * Read only and from upstream, so it carries only what a card needs. A count the
+ * server did not state is zero, which the card renders as "no count".
+ */
+@Serializable
+data class ChannelPlaylistDto(
+    val id: String = "",
+    val title: String = "",
+    val thumbnailUrl: String = "",
+    val videoCount: Int = 0,
+)
+
+@Serializable
+data class ChannelPlaylistsDto(
+    val playlists: List<ChannelPlaylistDto> = emptyList(),
+    val nextPageToken: String = "",
+)
+
+fun ChannelPlaylistDto.toDomain(): ChannelPlaylist = ChannelPlaylist(
+    id = id,
+    title = title,
+    thumbnailUrl = thumbnailUrl,
+    videoCount = videoCount,
+)
+
+/**
+ * `GET /api/channels/{id}/playlists/{playlistId}/videos` — a playlist's videos.
+ *
+ * The videos are [ExternalVideoDto], the same upstream row search and the
+ * channel's uploads use, because a playlist mixes channels and each row carries
+ * its own uploader — exactly what [ExternalVideoDto.toDomain] keeps and
+ * [ChannelVideoDto] drops. The title is the playlist's own, empty on a
+ * continuation page.
+ */
+@Serializable
+data class ChannelPlaylistVideosDto(
+    val title: String = "",
+    val videos: List<ExternalVideoDto> = emptyList(),
+    val nextPageToken: String = "",
 )
 
 /** The gateway's answer to "make a row for this so the player can open it". */

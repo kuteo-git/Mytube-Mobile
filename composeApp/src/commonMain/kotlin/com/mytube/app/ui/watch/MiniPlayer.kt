@@ -7,7 +7,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import com.mytube.app.domain.repository.VideoPlayer
 import com.mytube.app.ui.home.Size
@@ -45,19 +45,15 @@ import com.mytube.app.ui.shell.rememberLandingKnock
 import com.mytube.app.ui.theme.Tokens
 
 /**
- * The bar's height, which is what the picture inside it is sized from.
+ * The capsule's height, which is what the picture inside it is sized from.
  *
- * `Size.topBar` rather than a number of its own, because this capsule rests
- * directly on the tab bar's capsule and the two are read as one set. It was
- * 64dp against that bar's 56, and eight units of difference between two panes
- * sharing an edge is the seam the charter has already recorded twice — once
- * between these same two bars, in tint rather than in height.
- *
- * Taking the constant rather than writing 56 is the same rule: the charter
- * records the web app learning four separate times that a bar's height belongs
- * in exactly one place.
+ * `Size.miniBar` rather than a number of its own: the household asked for a
+ * player nine tenths of the bar it rests on, and that ratio lives in one place
+ * ([Size.miniBar]) so this capsule and the room every list reserves for it
+ * ([Size.miniPlayer]) cannot disagree. The charter records the web app learning
+ * four separate times that a bar's height belongs in exactly one place.
  */
-private val MINI_HEIGHT = Size.topBar
+private val MINI_HEIGHT = Size.miniBar
 
 /** The shell's margin, so this pane lines up with the two bars. */
 val MINI_SIDE_MARGIN = GLASS_MARGIN
@@ -261,6 +257,15 @@ fun MiniBar(
     // the tab bar and the chips use, where the press changes which of several
     // things is chosen. There is nothing being chosen here.
     val knock = rememberLandingKnock()
+
+    // The capsule is 85% of the bar at rest, but grows to the bar's full height
+    // as it collapses into the row between the tab circle and the search circle —
+    // a capsule shorter than the two circles flanking it read as a fault, not a
+    // lighter pane (reported on the collapsed bar). At rest ([Size.miniBar]) it is
+    // the shorter capsule the household asked for; the window and the progress
+    // inset follow it.
+    val capsuleHeight = lerp(MINI_HEIGHT, Size.topBar, collapse)
+
     Box(
         modifier
             .fillMaxWidth()
@@ -292,7 +297,7 @@ fun MiniBar(
     Column(Modifier.fillMaxWidth()) {
 
         Row(
-            Modifier.fillMaxWidth().height(MINI_HEIGHT).padding(end = BAR_ROW_END),
+            Modifier.fillMaxWidth().height(capsuleHeight).padding(end = BAR_ROW_END),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // A round window, not a 16:9 slot.
@@ -321,13 +326,18 @@ fun MiniBar(
             Column(
                 Modifier
                     .weight(1f)
-                    .padding(horizontal = Space.md),
+                    // Tighter on the right than the left: the title sits close to
+                    // the pause button, the same small gap the two buttons keep
+                    // between them, rather than a whole `Space.md` of air.
+                    .padding(start = Space.md, end = Space.xs),
             ) {
                 Text(
                     text = title,
                     color = Tokens.text,
                     fontSize = 13.sp,
-                    lineHeight = 17.sp,
+                    // Tight leading so the subtitle sits just under the title, not
+                    // a line's worth of air below it.
+                    lineHeight = 15.sp,
                     fontWeight = FontWeight.Medium,
                     // One line each. Two would fit and would make the bar a
                     // block of text over a picture the size of a stamp; what is
@@ -346,11 +356,11 @@ fun MiniBar(
                     // worth following is the one that names the video.
                     modifier = Modifier.basicMarquee(),
                 )
-                Spacer(Modifier.height(2.dp))
                 Text(
                     text = channel,
                     color = Tokens.text2,
                     fontSize = 12.sp,
+                    lineHeight = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -407,16 +417,24 @@ fun MiniBar(
         // capsule no height. `Size.miniPlayer` is what the app reserves for this
         // bar and what the drag aims at; a line that added to it would move the
         // landing without anything saying so.
+        // Only the red played-so-far, no grey track behind it: the household
+        // asked for the track gone (*"bỏ cái thanh gray timer… chừa màu đỏ
+        // thôi"*). A readout, so an empty remainder is just the capsule, not a
+        // rail waiting to be dragged.
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = MINI_HEIGHT / 2)
-                .height(MINI_PROGRESS_HEIGHT)
-                .clip(RoundedCornerShape(percent = 50))
-                .background(Tokens.line),
+                .padding(horizontal = capsuleHeight / 2)
+                .height(MINI_PROGRESS_HEIGHT),
         ) {
-            Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(Tokens.brand))
+            Box(
+                Modifier
+                    .fillMaxWidth(progress)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(Tokens.brand),
+            )
         }
     }
 }
@@ -431,9 +449,10 @@ fun MiniBar(
  *
  * Not below 1dp. That is one pixel on a phone that has not had a 1x screen in
  * fifteen years, and it is the point where a red line over a bright thumbnail
- * stops being visible at all.
+ * stops being visible at all — which is exactly where the household asked it to
+ * go (*"thanh duration nhìn còn hơi to, cho nó nhỏ nữa"*).
  */
-private val MINI_PROGRESS_HEIGHT = 1.5.dp
+private val MINI_PROGRESS_HEIGHT = 1.dp
 
 /**
  * The capsule's outline.
@@ -463,10 +482,14 @@ private val MINI_SHAPE = GLASS_SHAPE
  *
  * Narrower, not shorter: the row has width to spare and 48dp of *height* is
  * what makes a near miss unlikely in the direction a thumb actually strays.
- * 44dp is the platform's own floor, and it is still wider than the 40dp window
- * opposite it.
+ *
+ * Narrowed again to 36 at the household's word — the two glyphs sat too far
+ * apart (*"khoảng cách 2 button nhìn xa vậy, cho nó sát lại chút"*). A 22dp glyph
+ * in 36dp leaves 7dp of air each side, so the gap between the pause and the close
+ * glyph is 14dp rather than 22. Under the 44dp target floor now, but the 48dp of
+ * *height* carries the hit, which is the axis a thumb strays on.
  */
-private val BAR_BUTTON_WIDTH = 44.dp
+private val BAR_BUTTON_WIDTH = 36.dp
 
 /** And the height, which stays what it was. */
 private val BAR_BUTTON_HEIGHT = 48.dp

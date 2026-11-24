@@ -42,10 +42,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.lerp as lerpColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -75,13 +73,15 @@ import kotlin.math.roundToInt
  * Settings"* — and gives the rule that decides which of them survive here:
  * *"what earns a place there is what you move between while browsing."*
  *
- * History does not. It is a list this device keeps, opened when somebody wants
- * to find one video again, and it now sits beside Saved in Settings for that
- * reason. Three is also what the bar has room for: the search capsule beside
- * them takes a tab's width, and a fourth tab in what was left truncated every
- * label.
+ * Home, History, Playlists and Settings, in that order, with Search beside them.
+ * History earned its place back at the household's word: it is the shelf they
+ * reach for most after Home, so paying for it with a tab rather than a dig
+ * through Settings is the trade they asked for. Four fit now where three did
+ * before, because the bar went icon-only (Facebook's, not Apple Music's): with
+ * no label under each glyph there is nothing left to truncate, and the search
+ * capsule sits as a fifth cell the way Facebook's does.
  */
-enum class Tab { Home, Playlists, Settings }
+enum class Tab { Home, History, Playlists, Settings }
 
 @Composable
 fun AppShell(
@@ -392,11 +392,12 @@ private fun BottomBar(
         val circle = Size.topBar
         val gap = Space.sm
         // Whole, the capsule takes everything the search button leaves; narrowed,
-        // it is a circle. One item's share is a third of the whole, which is what
-        // lets the selected glyph stay where it was while the others leave.
+        // it is a circle. One item's share is the whole split by the tab count,
+        // which is what lets the selected glyph stay where it was while the
+        // others leave.
         val tabsWhole = total - circle - gap
         val tabsWidth = lerp(tabsWhole, circle, collapse)
-        val itemWhole = tabsWhole / 3
+        val itemWhole = tabsWhole / Tab.entries.size
 
         Row(
             Modifier.fillMaxWidth().height(Size.topBar),
@@ -622,7 +623,6 @@ private fun BottomBar(
                             lit = (
                                 min(litTo, index + 1f) - max(litFrom, index.toFloat())
                                 ).coerceIn(0f, 1f),
-                            collapse = collapse,
                             // The selected tab keeps a circle's worth of room and
                             // the others give theirs up. The three widths sum to
                             // the capsule's at both ends, so nothing is squashed
@@ -684,7 +684,8 @@ private fun BottomBar(
                     imageVector = SearchIcon,
                     contentDescription = searchLabel,
                     tint = Tokens.text2,
-                    modifier = Modifier.size(24.dp),
+                    // The same larger glyph the tabs wear now.
+                    modifier = Modifier.size(28.dp),
                 )
             }
         }
@@ -712,8 +713,6 @@ private fun TabItem(
      * gap a person using TalkBack or VoiceOver had.
      */
     isSelected: Boolean,
-    /** How far the bar has narrowed — see [BottomBar]'s `collapse`. */
-    collapse: Float,
     /** The share of the capsule this item has at this point in the movement. */
     width: Dp,
     onClick: () -> Unit,
@@ -804,56 +803,12 @@ private fun TabItem(
             //
             // Lerped rather than switched, so it crosses with the pill.
             tint = lerpColor(Tokens.text2, Tokens.brand, lit),
-            modifier = Modifier.size(24.dp),
+            // Icon-only and larger, Facebook's bar rather than Apple Music's:
+            // no label under the glyph, so the bar is shorter and the glyph fills
+            // it. The name still reaches a screen reader through the semantics
+            // `contentDescription` above; it is only the drawn word that goes.
+            modifier = Modifier.size(28.dp),
         )
-        // The word leaves before the room does, and it takes its height with it.
-        //
-        // Fading alone was not enough: an invisible label still occupies its
-        // line, so the column stayed 37dp of icon-plus-word inside a 56dp
-        // circle and the glyph sat about 6dp above the middle of it. Measured,
-        // and reported as the icon not being centred.
-        //
-        // Squared for the fade, because a label dimming in step with the width
-        // is still legible at half a letter wide — which reads as text being
-        // cut off rather than as a bar closing.
-        Spacer(Modifier.height(2.dp * (1f - collapse)))
-        Box(
-            Modifier
-                // Measured, not guessed.
-                //
-                // This was a constant once — 10dp, on the reasoning that a 10sp
-                // face with `lineHeight = 10.sp` lays out in 10sp of box. It
-                // does not: the line box carries the descenders too, so the `y`
-                // of "Playlists" and the `g` of "Settings" were sliced off. It
-                // read as "Plavlists" and "Settinas", which is exactly what a
-                // clip a few pixels short looks like.
-                //
-                // So the child is measured as it wants to be and only its
-                // *reported* height is scaled. At rest that is its own height,
-                // and there is no number left here to be wrong.
-                .layout { measurable, constraints ->
-                    val placeable = measurable.measure(constraints)
-                    val height = (placeable.height * (1f - collapse)).roundToInt()
-                    layout(placeable.width, height) { placeable.place(0, 0) }
-                }
-                .clipToBounds(),
-        ) {
-        Text(
-            modifier = Modifier.alpha((1f - collapse) * (1f - collapse)),
-            text = label,
-            color = lerpColor(Tokens.text2, Tokens.brand, lit),
-            fontSize = 10.sp,
-            // Tight, and that is what fixes the gap.
-            //
-            // A `Text` with no line height carries the font's own leading — for
-            // 10sp that is about 14sp, with more of the slack under the glyphs
-            // than over them. The column is centred in the bar, so the *box* was
-            // centred while the ink sat high in it, and the bar looked as though
-            // it had less padding above than below. Reported exactly that way.
-            lineHeight = 10.sp,
-            fontWeight = if (lit > 0.5f) FontWeight.Medium else FontWeight.Normal,
-        )
-        }
     }
 }
 

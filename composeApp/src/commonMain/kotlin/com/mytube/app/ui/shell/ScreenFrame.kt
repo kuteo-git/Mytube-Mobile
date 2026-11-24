@@ -143,8 +143,32 @@ fun BoxScope.DetailBack(onBack: () -> Unit, label: String) {
 
 /** The status inset plus the row [DetailBack]'s arrow sits in. */
 @Composable
-private fun detailTopChrome(): Dp =
+fun detailTopChrome(): Dp =
     WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + Size.topBar
+
+/**
+ * The bottom half of [detailContentPadding], for a detail list whose top chrome
+ * is drawn above it rather than reserved by padding — the channel page's two
+ * lists, which sit under a header and a tab strip, so a top inset here would be
+ * the gap below the strip reported on 2026-11-24.
+ */
+@Composable
+fun detailListBottomPadding(): PaddingValues = PaddingValues(
+    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+        (if (LocalMiniPlayerShowing.current) Size.miniPlayer else 0.dp) + Space.md,
+)
+
+/**
+ * A list inside a [CollapsingTabPager]: its top is the collapsing inset
+ * ([LocalCollapsingTopInset]) that clears the header and strip and shrinks with
+ * them, its bottom the usual detail inset. A page outside such a pager reads a
+ * zero top inset, so this is just the bottom there.
+ */
+@Composable
+fun collapsingListPadding(): PaddingValues = PaddingValues(
+    top = LocalCollapsingTopInset.current,
+    bottom = detailListBottomPadding().calculateBottomPadding(),
+)
 
 /**
  * Whatever chrome a screen has at the top, whichever kind of screen it is.

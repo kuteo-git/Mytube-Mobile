@@ -9,8 +9,10 @@ import com.mytube.app.domain.model.SubtitleCue
 import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.ChannelPage
+import com.mytube.app.domain.repository.ChannelPlaylistsPage
 import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.repository.PlaylistPage
+import com.mytube.app.domain.repository.PlaylistVideosPage
 import com.mytube.app.domain.repository.VideoRepository
 
 /**
@@ -51,6 +53,10 @@ open class StubVideoRepository : VideoRepository {
     override suspend fun setNotInterested(videoId: String) {}
     override suspend fun channelPage(channelId: String, sortToken: String, pageToken: String): ChannelPage =
         notStubbed("channelPage")
+    override suspend fun channelPlaylists(channelId: String, pageToken: String) =
+        ChannelPlaylistsPage(emptyList(), "")
+    override suspend fun playlistVideos(channelId: String, playlistId: String, pageToken: String): PlaylistVideosPage =
+        notStubbed("playlistVideos")
     override suspend fun playlists(videoId: String) = emptyList<Playlist>()
     override suspend fun playlist(playlistId: String, pageToken: String): PlaylistPage = notStubbed("playlist")
     override suspend fun createPlaylist(title: String): Playlist = notStubbed("createPlaylist")

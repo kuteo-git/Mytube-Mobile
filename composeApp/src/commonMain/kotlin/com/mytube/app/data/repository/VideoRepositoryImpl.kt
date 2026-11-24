@@ -15,6 +15,8 @@ import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.FeedPage
 import com.mytube.app.domain.model.Narration
 import com.mytube.app.domain.repository.ChannelPage
+import com.mytube.app.domain.repository.ChannelPlaylistsPage
+import com.mytube.app.domain.repository.PlaylistVideosPage
 import com.mytube.app.domain.repository.NarrationRepository
 import com.mytube.app.domain.repository.ServerRepository
 import com.mytube.app.domain.repository.PlaylistPage
@@ -210,6 +212,36 @@ class VideoRepositoryImpl(
             videoCount = detail.videoCount,
             videos = page.videos.map { it.toDomain(channel) },
             sortOptions = page.sortOptions.map { SortOption(it.label, it.token) },
+            nextPageToken = page.nextPageToken,
+        )
+    }
+
+    override suspend fun channelPlaylists(
+        channelId: String,
+        pageToken: String,
+    ): ChannelPlaylistsPage {
+        val page = gateway.channelPlaylists(
+            server.requireBaseUrl(), server.profileId(), channelId, pageToken,
+        )
+        return ChannelPlaylistsPage(
+            playlists = page.playlists.map { it.toDomain() },
+            nextPageToken = page.nextPageToken,
+        )
+    }
+
+    override suspend fun playlistVideos(
+        channelId: String,
+        playlistId: String,
+        pageToken: String,
+    ): PlaylistVideosPage {
+        val page = gateway.channelPlaylistVideos(
+            server.requireBaseUrl(), server.profileId(), channelId, playlistId, pageToken,
+        )
+        return PlaylistVideosPage(
+            title = page.title,
+            // Each row carries its own uploader, so it maps itself rather than
+            // being handed the page's channel the way a channel's uploads are.
+            videos = page.videos.map { it.toDomain() },
             nextPageToken = page.nextPageToken,
         )
     }

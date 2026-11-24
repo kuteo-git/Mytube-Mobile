@@ -6903,3 +6903,314 @@ one starting at 66pt was not. A new video's progress dot sits in that strip.
   the edge, every one reaching `dragStart` and none cancelled.
 - Not covered: the simulator's synthesised touches do not reach the edge
   recognizer, so no simulator loop can show this.
+
+## A channel's page has a Playlists tab (2026-11-23)
+
+A channel showed only its uploads. YouTube gives a channel two faces — its
+videos and the playlists it published — and the second was missing. The page
+now carries a two-tab row under the header: **Videos** and **Playlists**.
+Opening a playlist lists its videos, and playing one keeps the playlist as the
+up-next, the same promise the uploads tab makes.
+
+Server first, as the charter's §5 requires — there was nothing to call. The
+gateway (`/Volumes/Data2/git/Youtube`) grew two routes,
+`GET /api/channels/{id}/playlists` and
+`GET /api/channels/{id}/playlists/{playlistId}/videos`, over two new ingest
+RPCs, `ListChannelPlaylists` and `ListPlaylistVideos`, read from InnerTube's
+browse API the same undocumented way the uploads are.
+
+- **The playlists tab is the browse API's Playlists tab**, selected by its own
+  `params` blob beside the uploads tab's. Proven against the live API before a
+  line of the stack was built: MKBHD's channel returns fifteen playlist cards,
+  each with an id, a title, a cover and an "N videos" badge.
+- **Opening a playlist reuses the uploads parser.** A playlist's videos arrive
+  as the same lockups a channel's uploads do, so `PlaylistVideos` shares
+  `collectChannelPage` and adds only the playlist's own title, read from the
+  page header. The one new shape is the playlist card itself.
+- **A playlist mixes channels, so each video keeps its own uploader.** The
+  lockup carries the uploader's name as the metadata part that is neither a
+  view count nor a date — a channel's own Videos tab drops it, a playlist keeps
+  it. `parseLockup` now captures it, and the app maps a playlist's rows through
+  `ExternalVideoDto` (which keeps the per-row channel) rather than handing every
+  row the page's channel. Showing the owning channel's avatar on a video from
+  another creator would be a lie on screen.
+- **The tab is lazy and loads apart from the videos.** Nothing is fetched until
+  the Playlists tab is first opened, and a playlists fetch that fails leaves the
+  videos tab exactly as it was. Each tab keeps its own scroll, so returning to
+  the videos lands where they were being read.
+- **No Playlists tab on the television.** Browsing a channel's playlists is a
+  phone act, and a focusable tab row in the TV grid's heading is a focus problem
+  of its own; the set's channel page stays uploads-only, as it was.
+- **Verified by layer, not yet end to end.** The server's InnerTube parsing has
+  Go tests off live-captured fixtures, the gateway routes have handler tests,
+  and the app has DTO-mapping tests (bodies matching the gateway's wire tags),
+  ViewModel tests for the lazy tab, paging and open-a-row flows, and previews
+  for every state. The whole chain has not run against a deployed gateway yet:
+  the household's gateway must be rebuilt with these two repos' changes first.
+
+## Home is a fixed chip pager, with News, Live and Charts behind More (2026-11-24)
+
+The home chip row stopped being the server's topic list and became a fixed,
+curated set the household asked for: **Missed · All · Gaming · Music · More**, in
+that order. The feeds are a horizontal pager now — swipe between them, or tap a
+chip — rather than a row that swaps the list in place.
+
+- **The chips are fixed, not built from `topics()`.** `HomeChips.row` names them
+  in code; the server's topic list no longer decides what the row shows. Each
+  feed chip filters the catalogue by a category the `feed` endpoint reads from
+  its `topic` param — Gaming and Music are YouTube categories the ingested videos
+  carry, so the chip shows the catalogue's videos of that category rather than
+  needing its own `topics.yaml` source.
+- **The chip row follows the selection.** Swiping the pager moves the lit chip,
+  and `ChipRow` scrolls to centre it so a chip off the right edge is never the
+  one you are silently on. It opens on All, not the leftmost chip (Missed), so
+  the app lands on its main feed.
+- **`More` is a page of the pager, like YouTube's own More tab.** It is the last
+  chip and the last page — swipe to it or tap the chip, and the chip row's
+  selected "More" says where you are — not a button that leaves Home. Its page
+  (`MoreContent`) is a short menu, each row an outlined icon and a label like
+  YouTube's More tab: **News · Live · Charts**, in that order. News moved off the
+  chip row to here (it is the "News & Politics" category); Live moved here off
+  the row too — a place you visit, not a filter you keep switching to; Charts is
+  the one new subject, a placeholder (`ChartScreen`) until the feature lands. Each
+  row opens its own full page with a back arrow.
+- **Search fades rather than slides.** It is a mode you flip into from the bar,
+  not a page pushed onto the back stack, so the route transition cross-fades it
+  in and out (`transitionSpec` special-cases `Route.Search`) where every other
+  page slides.
+- **One feed per page, one holder per feed.** `HomeViewModel` shrank to a
+  single-chip feed holder — the fixed row means nothing decides which chips
+  exist, so it only loads, pages and refreshes its own feed — and the pager makes
+  one per page, keyed by chip. Each page keeps its own scroll, hoisted in
+  `App.kt` so a page swiped away and back is where it was left, and the
+  neighbours are not held composed (`beyondViewportPageCount = 0`), so a chip's
+  feed is not fetched until it is first reached. The pager opens on All, not the
+  leftmost chip, so the app still lands on its main feed.
+- **Continue watching is gone from the phone's Home.** The rail and its
+  `markWatched` are removed (`ContinueWatchingRail` deleted), and
+  `HomeViewModel` no longer asks history. The television keeps its own
+  catch-up shelf, which is a different design and untouched.
+- **News and Live reuse the feed screen in a standalone shape.** `HomeScreen`
+  grew an optional `onBack`/`title`: with them it is a page with a back arrow and
+  the detail padding (no chip row), without them it is a pager page. One feed
+  renderer, two chromes — the same tab-vs-page duality `PlaylistsScreen` uses.
+- **The bar hides on scroll against the current chip's list.**
+  `rememberBarsVisible` re-keys on the state it is handed, so a swipe to another
+  chip hands it that page's scroll; pressing the Home tab lifts the current
+  chip's feed to the top.
+- **Verified** on the iPhone 16e simulator against the household's gateway: the
+  chip order and default (All), swiping All→Gaming, the More page as a swipeable
+  pager page with its News/Live/Charts icons, the News feed (real "News &
+  Politics" videos), the Live page's empty state (no broadcast on air), the
+  Charts placeholder, and Search opening by fade. `jvmTest` (581 tests, every
+  guard), Android and iOS compile all green. `HomeViewModelTest` was
+  rewritten for the single-chip holder.
+
+## The bottom bar is Facebook's: icon-only and compact (2026-11-24)
+
+Asked for against a screenshot of Facebook's bar: *"chỉnh lại nhỏ như tabbar
+của facebook. Mini player cũng nhỏ bằng, search cũng thế. Chú ý ko show text,
+chỉ mỗi icon, icon cũng to như facebook"*.
+
+- **No labels, bigger glyphs.** The word under each tab is gone — only the icon
+  now, drawn at 28dp rather than 24. The name still reaches a screen reader
+  through each tab's semantics `contentDescription`; it is only the drawn word
+  that left, so the tab's accessibility is unchanged. `TabItem` dropped the
+  label `Box`, the collapse-driven fade and the measured-height clip that fitted
+  it; the glyph is the whole of the cell.
+- **Shorter, and the miniplayer and search with it.** `Size.topBar` went 56 → 52,
+  and because the miniplayer's height and the search button's size both read
+  that one number, all three shrank together and stay equal — which is what the
+  ask ("mini player cũng nhỏ bằng, search cũng thế") means. The search icon took
+  the tabs' 28dp too.
+- **Verified** on the iPhone 16e simulator: the bar is icon-only with Home ·
+  Playlists · Settings · Search, the selected tab's pill and brand tint still
+  travel, and the miniplayer rests a shorter capsule above a shorter bar.
+  `jvmTest` (581 tests, every guard), Android and iOS compile all green.
+
+## Tapping the lit chip lifts its feed, and Home reopens on its default chip (2026-11-24)
+
+Two small corrections on top of the chip pager, asked for after a round on the
+phone: *"tap vào selected chip thì cho nó auto scroll up"* and *"Bug: default
+selected chip là Missed thay vì All"*.
+
+- **Tapping the chip you are already on lifts that feed to the top.** `ChipRow`'s
+  select already moved the pager to the tapped chip; now when the tapped chip is
+  the current page it scrolls that page's feed to item 0 instead (the scroll
+  states are the ones hoisted in `App.kt`), the same "the current tab picked
+  again goes to its top" the Home tab and the TV rail already do. Verified on the
+  iPhone 16e simulator: the Music feed scrolled mid-list, tapping the lit Music
+  chip returned it to its first card.
+- **Home reopens on its default chip, not whatever page was saved.** The pager's
+  state is `rememberSaveable`, so a relaunch restored the page the app was closed
+  on. A `LifecycleEventEffect` on `ON_START` now requests the default chip on
+  every foreground, so the app always lands on the same feed. The default was
+  first set to All here and then, the same day, moved to **Missed** at the
+  household's word (*"Hiện khi start app thì nó focus vào All, tao muốn nó focus
+  và Missed"*) — the catch-up feed is the one they want to open on. Verified: a
+  cold launch and a return from background both open on Missed.
+- `jvmTest` (581 tests, every guard), Android and iOS compile all green.
+
+## The channel header collapses, and a repeated playlist row no longer crashes (2026-11-24)
+
+Three reports off the phone: the channel page opened with *"wrong layout, nó có
+top spacing chỗ pager"*, a request for the header to collapse the way YouTube's
+does, and a crash — *"Bấm 102 productions channel > chọn 1st playlist, scroll
+xuống thì crash app, tao nghi do table id trùng nên crash"*.
+
+- **The gap under the tab strip is gone.** The channel's two lists sit under a
+  fixed header and the tab strip, yet each still added `detailContentPadding()`'s
+  top inset (the status bar plus a `Size.topBar`), so a band of empty page stood
+  between the strip and the first sort chip. They take `detailListBottomPadding()`
+  now — the bottom half only — because the top chrome above them is drawn, not
+  reserved by padding.
+- **The header collapses, and the tab strip pins.** `CollapsingTabPager` (a new
+  shell component) carries the avatar, name and subscribe button as a measured,
+  collapsible block over the pager. A `NestedScrollConnection` spends the list's
+  upward scroll on collapsing that block first, consuming it so the list holds
+  still until the header is gone, then lets the feed scroll; the tab strip stops
+  under the back-arrow row, where Home's chip row sits, and pins there. Scrolling
+  back down, the list returns to its own top before the header comes back.
+  - **The pager fills the screen, which is what the first build got wrong.** That
+    build laid the stack out a header taller than the screen and translated it
+    with a `graphicsLayer`, so the pager's list, sized from a mismeasured
+    constraint, stopped short of the bottom — reported as *"mất khúc dưới khi
+    scroll"*, a black band under the feed once the header collapsed. The pager
+    is now a plain full-screen `HorizontalPager`, so its lists always reach the
+    bottom; the header is drawn over them and the list's top padding is
+    `LocalCollapsingTopInset`, which shrinks by the collapse so the content
+    rises with the header. Only that inset moves during a collapse, so a deep
+    scroll does not recompose.
+  - A solid band the page's own colour is drawn over the top chrome and under the
+    strip, so the header slides out of sight behind it, not across the status
+    bar's clock. One shared header over the pager, not a copy per tab, so a swipe
+    between Videos and Playlists keeps the same collapse. Verified on the iPhone
+    16e simulator: the header slides away, the strip pins, the feed fills to the
+    bottom, and a scroll back down restores the header.
+- **A playlist that lists the same video twice no longer SIGABRTs.** Appended
+  pages already dedup through `appendNew`, but the **first** page did not, and a
+  YouTube playlist genuinely lists the same video more than once (besides the
+  offset-paging overlap `appendNew` documents). A `LazyColumn` keyed on the id
+  throws out of `subcompose` on the repeat, which reaches the phone as `SIGABRT`
+  — exactly the crash reported, on scroll, when the duplicate second row came
+  into view. The first page now goes through `distinctById`, the same guarantee
+  `appendNew` gives a later page, in both `PlaylistVideosViewModel` and
+  `ChannelViewModel` (the channel's own uploads had the same latent hole).
+  Covered by a regression test: a playlist page of `[v1, v2, v1]` keeps `[v1,
+  v2]`.
+- `jvmTest` (582 tests, every guard), Android and iOS compile all green.
+
+## The channel tab strip reads right, and Watch History is a tab again (2026-11-24)
+
+A round of reports off the phone on the channel tab strip, then two features: the
+watch-history shelf back on the bottom bar, and a smaller miniplayer.
+
+- **The Videos tab is a title, not a count noun; the underline is the brand
+  red.** The strip reused `strings.videos` — the lower-case word a card prints
+  after a number ("56 videos") — so the tab read "videos". It has its own
+  `videosTab` string now ("Videos" / "Video"), Title-cased and translated beside
+  the already-fine Playlists. The selected underline went from `Tokens.text`
+  (white) to `Tokens.brand`, the app's one accent, which the chip row and the tab
+  bar already wear.
+- **Watch History is the second tab, between Home and Playlists.** It had been
+  demoted to a Settings row; the household reaches for it most after Home, so it
+  is a tab again (`Tab { Home, History, Playlists, Settings }`). Its glyph is the
+  "recents" clock with a counter-clockwise arrow — iOS's `clock.arrow.circlepath`
+  as an SF Symbol, the matching PNG rendered for Android, and a stroked twin for
+  the preview target. `HistoryScreen` gained the Playlists dual shape: a non-null
+  `onBack` makes it a page with the back arrow, null (the tab) draws a
+  `ScreenTitle` and tab chrome with the scroll hoisted in `App.kt`. The
+  `Route.History`, its Settings row and its back-stack entry are gone, since
+  nothing opens it as a route any more.
+- **A fourth tab needed the width split by the tab count, not by three.**
+  `itemWhole` was `tabsWhole / 3`, so the fourth tab was laid out past the
+  capsule's right edge and clipped away — Settings vanished on the first build.
+  It is `tabsWhole / Tab.entries.size` now. The bar had room for four all along:
+  icon-only, there are no labels left to truncate.
+- **The miniplayer is nine tenths of the bar.** Asked for against the equal-size
+  bar from the last round: *"mini player cho nó nhỏ bằng 90% của cái tabbar"*.
+  `Size.miniBar = topBar * 0.9` is the capsule's height now, and `Size.miniPlayer`
+  (the room every list reserves) is that plus the air gap. The two bars do not
+  share an edge — `Size.miniGap` sits between them — so a shorter capsule reads
+  as a lighter pane resting on the bar, not a seam.
+- **Verified** on the iPhone 16e simulator: the four tabs (Home · History ·
+  Playlists · Settings) with Search beside them, the clock glyph and the "Watch
+  history" title on its tab, the red Videos underline on a channel, and the
+  miniplayer resting a shorter capsule above the bar. `jvmTest` (582 tests, every
+  guard), Android and iOS compile all green.
+
+## The Playlists glyph, and the miniplayer tightened (2026-11-24)
+
+Four small polish asks off the phone, on the bottom bar and the miniplayer.
+
+- **The Playlists tab is a music note over a list** (`music.note.list`), picked
+  from a sheet of SF Symbol candidates rendered for the household. It replaces
+  `list.triangle`, which read as plain and queue-like. The symbol on iOS, its
+  rendered PNG for Android, and a matching stroked twin for the preview target;
+  the old `ic_tab_list_triangle` PNG is deleted.
+- **The miniplayer is 85% of the bar, down from 90%** (`Size.miniBar =
+  topBar * 0.85`), and the air under it is 4dp, down from 6 (`Size.miniGap`), so
+  it sits a little shorter and a little closer to the tab bar — both asked for by
+  eye (*"chiều cao nó còn hơi cao… khoảng cách nó với tabbar nhỏ lại chút xíu"*).
+- **Its two buttons sit closer.** `BAR_BUTTON_WIDTH` went 44 → 36, so a 22dp
+  glyph keeps 7dp of air each side and the gap between the pause and the close
+  glyph is 14dp rather than 22 (*"khoảng cách 2 button nhìn xa vậy"*). The title
+  gives up its right-hand `Space.md` for a `Space.xs`, so it sits as close to the
+  pause button as the two buttons sit to each other. Under the 44dp target floor
+  now, but the 48dp of button height carries the hit on the axis a thumb strays.
+- **The progress line is thinner, 1dp from 1.5** (*"thanh duration nhìn còn hơi
+  to"*), still a readout on the capsule's bottom edge, inset by the corner radius
+  so it rides the straight part of the pill.
+- **Verified** on the iPhone 16e simulator: the music-note Playlists glyph in the
+  bar, the shorter miniplayer resting closer to the bar with its buttons and
+  title drawn tight. `jvmTest` (582 tests, every guard), Android and iOS compile
+  all green.
+
+## The collapsed miniplayer matches the circles, its track goes, and a refresh lifts the feed (2026-11-24)
+
+Three off the phone: the miniplayer looked wrong collapsed, its progress track was
+noise, and a pull-to-refresh left the feed where it was pulled.
+
+- **Collapsed, the miniplayer is the bar's full height again.** At rest it is the
+  85% capsule the household asked for, but when the bar collapses it slides into
+  the row *between* the tab circle and the search circle, both a full
+  `Size.topBar` tall — and a capsule shorter than the two circles flanking it
+  read as a fault (reported with a screenshot). The height is
+  `lerp(Size.miniBar, Size.topBar, collapse)` now: the short capsule at rest, the
+  circles' height once inline. The round window and the progress inset follow it;
+  the drag-landing constants stay `miniBar`-based, since the drag only ever lands
+  on the resting bar.
+- **The grey track is gone; only the red remains** (*"bỏ cái thanh gray timer…
+  chừa màu đỏ thôi"*). The progress was a `Tokens.line` rail with a `Tokens.brand`
+  fill; it is just the red played-so-far now, rounded, on the capsule's bottom
+  edge. A readout, so an empty remainder is the capsule itself, not a rail that
+  looks draggable.
+- **A finished pull-to-refresh returns the feed to the top** (`HomeScreen`). The
+  refresh keeps `Ready` on screen, so the list held its place while the videos
+  under it changed — reported on Missed, where a refresh that changed the feed
+  left the reader stranded mid-list. A `LaunchedEffect` on the `true → false`
+  edge of the refreshing flag — which only a deliberate pull raises, never the
+  Failed-state retry, which goes through `Loading` — scrolls to item 0.
+- **Verified** on the iPhone 16e simulator: the collapsed miniplayer level with
+  the circles, its progress a bare red line, and a pull on Missed fetching a
+  changed feed ("The Floor Above" in place of the Riemann video) and landing at
+  the top. `jvmTest` (582 tests, every guard), Android and iOS compile all green.
+
+## A finished miniplayer hides, and the pull-to-top no longer animates (2026-11-24)
+
+Two follow-ups from watching the previous round on the phone.
+
+- **The pull-to-refresh jump to the top is instant, not animated.** The fix a
+  round earlier called `animateScrollToItem(0)`; on the Missed feed, where a
+  refresh swaps the list, the long animated scroll back up through the new rows
+  read as the feed lurching on its own. `scrollToItem(0)` jumps instead — the
+  reader is at the top the instant the refresh finishes, with no travel to watch.
+- **A collapsed video that plays to its end closes the miniplayer.** Autoplay
+  with a rail advances to the next video (`advanceIfFinished`); when the end is
+  genuinely the end — autoplay off, or the queue run out — the capsule used to
+  sit on the bar playing nothing, cleared only by its X. A `LaunchedEffect` on
+  the minimised session now watches `playback.hasEnded` and calls `closeWatch()`.
+  Collapsed only: the end of an *expanded* video keeps the watch layer up with
+  its up-next, where stopping is a choice to make rather than a bar in the way.
+- **Verified**: `jvmTest` (582 tests, every guard), Android and iOS compile all
+  green.

@@ -51,8 +51,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.ChannelPlaylist
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.SortOption
+import com.mytube.app.ui.playlist.PlaylistRow
+import com.mytube.app.ui.playlist.PlaylistIcon
 import com.mytube.app.ui.watch.QueueItem
 import com.mytube.app.ui.watch.asQueueItem
 import com.mytube.app.ui.home.Space
@@ -62,11 +65,14 @@ import com.mytube.app.ui.home.formatCount
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.VietnameseStrings
 import com.mytube.app.ui.shell.glassSource
+import com.mytube.app.ui.shell.CollapsingTabPager
+import com.mytube.app.ui.shell.rememberTabPagerState
 import com.mytube.app.ui.shell.EmptyState
 import com.mytube.app.ui.shell.FeedSkeleton
 import com.mytube.app.ui.shell.TabScaffold
 import com.mytube.app.ui.shell.DetailBack
-import com.mytube.app.ui.shell.detailContentPadding
+import com.mytube.app.ui.shell.collapsingListPadding
+import com.mytube.app.ui.shell.detailTopChrome
 import com.mytube.app.ui.theme.MytubeTheme
 import com.mytube.app.ui.shell.glassControl
 import com.mytube.app.ui.theme.Tokens
@@ -93,10 +99,14 @@ fun ChannelScreen(
     onOpenVideo: (String, List<QueueItem>) -> Unit,
     /** Opens the sheet asking which collections this belongs in. See `App.kt`. */
     onSaveToPlaylist: (Video) -> Unit,
+    /** Open one of the channel's playlists: its id and its title for the header. */
+    onOpenPlaylist: (ChannelPlaylist) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val opening by viewModel.opening.collectAsStateWithLifecycle()
     val openFailed by viewModel.openFailed.collectAsStateWithLifecycle()
+    val tab by viewModel.tab.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
 
     ChannelContent(
         state = state,
@@ -105,6 +115,8 @@ fun ChannelScreen(
         onOpenSettings = onOpenSettings,
         opening = opening,
         openFailed = openFailed,
+        tab = tab,
+        playlistsState = playlists,
         // The row is written into the catalogue first when it has no entry — see
         // [ChannelViewModel.openVideo]. The screen only says where to go next.
         onOpenVideo = { video, queue -> viewModel.openVideo(video, queue, onOpenVideo) },
@@ -113,6 +125,10 @@ fun ChannelScreen(
         onToggleSubscribed = viewModel::toggleSubscribed,
         onLoadMore = viewModel::loadMore,
         onSaveVideo = onSaveToPlaylist,
+        onSelectTab = viewModel::selectTab,
+        onOpenPlaylist = onOpenPlaylist,
+        onLoadMorePlaylists = viewModel::loadMorePlaylists,
+        onRetryPlaylists = viewModel::retryPlaylists,
     )
 }
 
@@ -126,12 +142,18 @@ fun ChannelContent(
     opening: String = "",
     /** The last attempt came back with no id. */
     openFailed: Boolean = false,
+    tab: ChannelTab = ChannelTab.Videos,
+    playlistsState: PlaylistsState = PlaylistsState.Idle,
     onOpenVideo: (Video, List<QueueItem>) -> Unit,
     onRetry: () -> Unit,
     onSelectSort: (SortOption) -> Unit,
     onToggleSubscribed: () -> Unit,
     onLoadMore: () -> Unit,
     onSaveVideo: (Video) -> Unit = {},
+    onSelectTab: (ChannelTab) -> Unit = {},
+    onOpenPlaylist: (ChannelPlaylist) -> Unit = {},
+    onLoadMorePlaylists: () -> Unit = {},
+    onRetryPlaylists: () -> Unit = {},
 ) {
     val strings = LocalStrings.current
 
@@ -151,17 +173,6 @@ fun ChannelContent(
         onRetry = onRetry,
     ) {
         val ready = state as? ChannelState.Ready ?: return@TabScaffold
-        val listState = rememberLazyListState()
-
-        val atEnd by remember {
-            derivedStateOf {
-                val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                last >= ready.videos.lastIndex - 3
-            }
-        }
-        LaunchedEffect(listState) {
-            snapshotFlow { atEnd }.collect { if (it) onLoadMore() }
-        }
 
         // The ids in the order shown, computed once per page rather than per
         // card: it is the same list for every row, and rebuilding it inside
@@ -171,6 +182,10 @@ fun ChannelContent(
         // A grid of Home's cards on a television, as the other pages of
         // videos are — see `TvGrid`. The same header, sorts, skeleton and
         // next-page rule; the cards are what change.
+        //
+        // No Playlists tab on the television: browsing a channel's playlists is
+        // a phone act, and a focusable tab row in the grid's heading is a focus
+        // problem of its own, left for when the set needs it.
         if (LocalTelevision.current) {
             val gridState = rememberLazyGridState()
             val gridAtEnd by remember {
@@ -230,81 +245,48 @@ fun ChannelContent(
             return@TabScaffold
         }
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                ,
-            contentPadding = detailContentPadding(),
-        ) {
-            item(key = "header") {
+        // The phone draws the header, then a two-tab strip over a pager the two
+        // lists swipe between. The header collapses as the list scrolls and the
+        // strip pins under the top chrome — see `CollapsingTabPager`; each list
+        // keeps its own scroll underneath.
+        val pager = rememberTabPagerState(
+            pageCount = ChannelTab.entries.size,
+            initialPage = tab.ordinal,
+        )
+        // The pager is the truth about which tab shows; the view model is told so
+        // it can load the playlists the first time that page is reached.
+        LaunchedEffect(pager) {
+            snapshotFlow { pager.currentPage }.collect { onSelectTab(ChannelTab.entries[it]) }
+        }
+
+        CollapsingTabPager(
+            tabs = listOf(strings.videosTab, strings.playlists),
+            state = pager,
+            topInset = detailTopChrome(),
+            header = {
                 Header(ready.channel, ready.videoCount, mediaBaseUrl, onToggleSubscribed)
-            }
-
-            if (ready.sortOptions.isNotEmpty()) {
-                item(key = "sorts") {
-                    SortRow(ready.sortOptions, ready.sortIndex, onSelectSort)
-                }
-            }
-
-            // While a different order is on its way the *list* is a skeleton and
-            // the header is not.
-            //
-            // The page used to dim to 0.45 whole, which says "something is
-            // happening" and not *what* — and it left the old order legible
-            // underneath, so the first thing to change when the answer arrived
-            // was a list somebody was already reading. The header, the avatar
-            // and the sort row are not being reloaded, so they stay solid; the
-            // videos are, and they are drawn as what is coming.
-            if (ready.sorting) {
-                // No top padding of its own: it stands exactly where the first
-                // card stands, so the page does not jump by a gap's height when
-                // the answer lands.
-                item(key = "sorting") { FeedSkeleton(cards = 3) }
-            }
-
-            if (ready.videos.isEmpty() && !ready.sorting) {
-                item(key = "empty") {
-                    EmptyState(strings.nothingHere, strings.noResultsDetail)
-                }
-            }
-
-            // A press that could not be answered says so, above the list it was
-            // made in. Silence here is a dead button: the card stops spinning
-            // and nothing else happens, which reads as the app having lost the
-            // tap rather than as YouTube having refused it.
-            if (openFailed) {
-                item(key = "open-failed") {
-                    Text(
-                        text = strings.youtubeUnreachable,
-                        color = Tokens.text2,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = Space.lg, vertical = Space.sm),
-                    )
-                }
-            }
-
-            items(if (ready.sorting) emptyList() else ready.videos, key = { it.id }) { video ->
-                VideoCard(
-                    video = video,
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) { page ->
+            when (page) {
+                ChannelTab.Videos.ordinal -> ChannelVideosList(
+                    ready = ready,
+                    queue = queue,
                     mediaBaseUrl = mediaBaseUrl,
-                    strings = strings,
-                    onClick = { onOpenVideo(video, queue) },
-                    onSave = { onSaveVideo(video) },
-                    // Fetching its metadata. The card says so over its own
-                    // picture and stops taking presses, because writing the row
-                    // is a round trip to YouTube and a card that looks idle is
-                    // one somebody presses again.
-                    opening = opening == video.id,
+                    opening = opening,
+                    openFailed = openFailed,
+                    onOpenVideo = onOpenVideo,
+                    onSelectSort = onSelectSort,
+                    onLoadMore = onLoadMore,
+                    onSaveVideo = onSaveVideo,
                 )
-            }
-
-            if (ready.loadingMore) {
-                item(key = "more") {
-                    Box(Modifier.fillMaxWidth().padding(Space.lg), Alignment.Center) {
-                        AdaptiveCircularProgressIndicator()
-                    }
-                }
+                else -> ChannelPlaylistsList(
+                    playlistsState = playlistsState,
+                    mediaBaseUrl = mediaBaseUrl,
+                    onOpenPlaylist = onOpenPlaylist,
+                    onLoadMorePlaylists = onLoadMorePlaylists,
+                    onRetryPlaylists = onRetryPlaylists,
+                )
             }
         }
     }
@@ -317,6 +299,202 @@ fun ChannelContent(
     }
 }
 
+/**
+ * The videos page of the channel pager: the sorts, then the uploads.
+ *
+ * The header and the tab strip sit above the pager, so this is only the list —
+ * its own scroll state, so swiping back to it lands where it was left.
+ */
+@Composable
+private fun ChannelVideosList(
+    ready: ChannelState.Ready,
+    queue: List<QueueItem>,
+    mediaBaseUrl: String,
+    opening: String,
+    openFailed: Boolean,
+    onOpenVideo: (Video, List<QueueItem>) -> Unit,
+    onSelectSort: (SortOption) -> Unit,
+    onLoadMore: () -> Unit,
+    onSaveVideo: (Video) -> Unit,
+) {
+    val strings = LocalStrings.current
+    val listState = rememberLazyListState()
+    val atEnd by remember {
+        derivedStateOf {
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            last >= ready.videos.lastIndex - 3
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { atEnd }.collect { if (it) onLoadMore() }
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        // The top inset clears the collapsing header and the tab strip and
+        // shrinks as they collapse, so the feed rises with them; the bottom
+        // clears the miniplayer. See `CollapsingTabPager`.
+        contentPadding = collapsingListPadding(),
+    ) {
+        if (ready.sortOptions.isNotEmpty()) {
+            item(key = "sorts") {
+                SortRow(ready.sortOptions, ready.sortIndex, onSelectSort)
+            }
+        }
+
+        // While a different order is on its way the *list* is a skeleton and
+        // the header is not.
+        //
+        // The page used to dim to 0.45 whole, which says "something is
+        // happening" and not *what* — and it left the old order legible
+        // underneath, so the first thing to change when the answer arrived
+        // was a list somebody was already reading. The header, the avatar
+        // and the sort row are not being reloaded, so they stay solid; the
+        // videos are, and they are drawn as what is coming.
+        if (ready.sorting) {
+            // No top padding of its own: it stands exactly where the first
+            // card stands, so the page does not jump by a gap's height when
+            // the answer lands.
+            item(key = "sorting") { FeedSkeleton(cards = 3) }
+        }
+
+        if (ready.videos.isEmpty() && !ready.sorting) {
+            item(key = "empty") {
+                EmptyState(strings.nothingHere, strings.noResultsDetail)
+            }
+        }
+
+        // A press that could not be answered says so, above the list it was
+        // made in. Silence here is a dead button: the card stops spinning
+        // and nothing else happens, which reads as the app having lost the
+        // tap rather than as YouTube having refused it.
+        if (openFailed) {
+            item(key = "open-failed") {
+                Text(
+                    text = strings.youtubeUnreachable,
+                    color = Tokens.text2,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(horizontal = Space.lg, vertical = Space.sm),
+                )
+            }
+        }
+
+        items(if (ready.sorting) emptyList() else ready.videos, key = { it.id }) { video ->
+            VideoCard(
+                video = video,
+                mediaBaseUrl = mediaBaseUrl,
+                strings = strings,
+                onClick = { onOpenVideo(video, queue) },
+                onSave = { onSaveVideo(video) },
+                // Fetching its metadata. The card says so over its own
+                // picture and stops taking presses, because writing the row
+                // is a round trip to YouTube and a card that looks idle is
+                // one somebody presses again.
+                opening = opening == video.id,
+            )
+        }
+
+        if (ready.loadingMore) {
+            item(key = "more") {
+                Box(Modifier.fillMaxWidth().padding(Space.lg), Alignment.Center) {
+                    AdaptiveCircularProgressIndicator()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The playlists page of the channel pager: the lists the channel published.
+ * Loads lazily on first open; a failure here leaves the videos page untouched
+ * and offers its own retry.
+ */
+@Composable
+private fun ChannelPlaylistsList(
+    playlistsState: PlaylistsState,
+    mediaBaseUrl: String,
+    onOpenPlaylist: (ChannelPlaylist) -> Unit,
+    onLoadMorePlaylists: () -> Unit,
+    onRetryPlaylists: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    val listState = rememberLazyListState()
+    val readyPlaylists = playlistsState as? PlaylistsState.Ready
+    val atEnd by remember {
+        derivedStateOf {
+            val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            last >= listState.layoutInfo.totalItemsCount - 3
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { atEnd }.collect { if (it) onLoadMorePlaylists() }
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        // The collapsing top inset and the miniplayer bottom, as the videos list
+        // above. See `CollapsingTabPager`.
+        contentPadding = collapsingListPadding(),
+    ) {
+        when (playlistsState) {
+            is PlaylistsState.Idle, is PlaylistsState.Loading ->
+                item(key = "loading") { FeedSkeleton(cards = 3) }
+
+            is PlaylistsState.Failed ->
+                item(key = "failed") {
+                    Column(
+                        Modifier.fillMaxWidth().padding(Space.lg),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            strings.couldNotReach,
+                            color = Tokens.text2,
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(Space.md))
+                        Text(
+                            text = strings.tryAgain,
+                            color = Tokens.text,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .pressableGlassControl(RoundedCornerShape(percent = 50)) { onRetryPlaylists() }
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+
+            is PlaylistsState.Ready ->
+                if (playlistsState.playlists.isEmpty()) {
+                    item(key = "empty") {
+                        EmptyState(strings.noPlaylistsHere, strings.noPlaylistsHereDetail)
+                    }
+                } else {
+                    items(playlistsState.playlists, key = { it.id }) { playlist ->
+                        PlaylistRow(
+                            title = playlist.title,
+                            detail = if (playlist.hasCount) strings.playlistCount(playlist.videoCount) else "",
+                            thumbnailPath = playlist.thumbnailUrl,
+                            mediaBaseUrl = mediaBaseUrl,
+                            onClick = { onOpenPlaylist(playlist) },
+                            icon = PlaylistIcon,
+                        )
+                    }
+                }
+        }
+
+        if (readyPlaylists?.loadingMore == true) {
+            item(key = "more") {
+                Box(Modifier.fillMaxWidth().padding(Space.lg), Alignment.Center) {
+                    AdaptiveCircularProgressIndicator()
+                }
+            }
+        }
+    }
+}
 
 /**
  * The channel, centred over its own uploads.
@@ -467,14 +645,38 @@ private fun sampleReady(subscribed: Boolean) = ChannelState.Ready(
     nextPageToken = "",
 )
 
+private val samplePlaylists = PlaylistsState.Ready(
+    playlists = listOf(
+        ChannelPlaylist(
+            id = "PL1",
+            title = "Every Apple Event, in order",
+            thumbnailUrl = "https://i.ytimg.com/vi/3uAIqqg8ZHo/hq720.jpg",
+            videoCount = 42,
+        ),
+        ChannelPlaylist(
+            id = "PL2",
+            title = "Shorts",
+            thumbnailUrl = "",
+            videoCount = 0,
+        ),
+    ),
+    nextPageToken = "",
+)
+
 @Composable
-private fun preview(state: ChannelState) {
+private fun preview(
+    state: ChannelState,
+    tab: ChannelTab = ChannelTab.Videos,
+    playlistsState: PlaylistsState = PlaylistsState.Idle,
+) {
     MytubeTheme {
         ChannelContent(
             state = state,
             mediaBaseUrl = "",
             onBack = {},
             onOpenSettings = {},
+            tab = tab,
+            playlistsState = playlistsState,
             onOpenVideo = { _, _ -> },
             onRetry = {},
             onSelectSort = {},
@@ -487,6 +689,24 @@ private fun preview(state: ChannelState) {
 @Preview
 @Composable
 private fun ChannelPreview() = preview(sampleReady(subscribed = true))
+
+/** The Playlists tab with a few lists. */
+@Preview
+@Composable
+private fun ChannelPlaylistsPreview() =
+    preview(sampleReady(subscribed = true), ChannelTab.Playlists, samplePlaylists)
+
+/** The Playlists tab for a channel that has published none. */
+@Preview
+@Composable
+private fun ChannelPlaylistsEmptyPreview() =
+    preview(sampleReady(subscribed = true), ChannelTab.Playlists, PlaylistsState.Ready(emptyList(), ""))
+
+/** The Playlists tab still loading. */
+@Preview
+@Composable
+private fun ChannelPlaylistsLoadingPreview() =
+    preview(sampleReady(subscribed = true), ChannelTab.Playlists, PlaylistsState.Loading)
 
 /** Not subscribed, which is the loud state of the one button here. */
 @Preview
@@ -503,5 +723,14 @@ private fun ChannelMissingPreview() = preview(ChannelState.Missing)
 private fun ChannelVietnamesePreview() {
     CompositionLocalProvider(LocalStrings provides VietnameseStrings) {
         preview(sampleReady(subscribed = true))
+    }
+}
+
+/** The Playlists tab in Vietnamese, labels and counts and all. */
+@Preview
+@Composable
+private fun ChannelPlaylistsVietnamesePreview() {
+    CompositionLocalProvider(LocalStrings provides VietnameseStrings) {
+        preview(sampleReady(subscribed = true), ChannelTab.Playlists, samplePlaylists)
     }
 }

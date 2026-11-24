@@ -4,6 +4,7 @@ import androidx.compose.runtime.remember
 import com.mytube.app.ui.home.videoMenu
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.fillMaxWidth
 import com.mytube.app.ui.tv.fullWidthItem
 import com.mytube.app.ui.tv.headingItem
@@ -45,6 +46,7 @@ import com.mytube.app.ui.shell.TabRefreshIndicator
 import com.mytube.app.ui.shell.TabScaffold
 import com.mytube.app.ui.shell.DetailBack
 import com.mytube.app.ui.shell.detailContentPadding
+import com.mytube.app.ui.shell.tabContentPadding
 import com.mytube.app.ui.shell.glassSource
 import com.mytube.app.ui.theme.MytubeTheme
 import androidx.compose.runtime.CompositionLocalProvider
@@ -58,29 +60,27 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
  * web app: any difference between two lists of videos is one the viewer has to
  * learn for no reason.
  *
- * ## Why it is a page and not a tab
+ * ## A tab, and a page when it is not
  *
- * It was the third tab. What earns a place on the bottom bar is what you move
- * between while browsing — see [Tab] — and this is a shelf you open to find one
- * video again, which is what Saved is too. It sits beside Saved in Settings and
- * is drawn the way Saved is: the back arrow over every state, because a page
- * reached from a menu with no tab bar under it is otherwise a dead end, and iOS
- * has no system back at all.
- *
- * The scroll position is no longer hoisted. It was, because a tab keeps its
- * place while you visit another one; a page opened from a menu is closed when
- * you are done with it, and Saved has always worked this way.
+ * It is the second tab now — the shelf the household reaches for most after Home
+ * — so it is drawn as a tab: a [ScreenTitle] at the top, the tab chrome's
+ * padding, its scroll hoisted in `App.kt` so it keeps its place while another
+ * tab is visited, and no back arrow. Like [com.mytube.app.ui.playlist.PlaylistsScreen],
+ * it keeps the page shape too: pass a non-null `onBack` and it is a page with
+ * the detail padding and the back arrow, for a caller that opens it from a menu.
  */
 @Composable
 fun HistoryScreen(
     viewModel: HistoryViewModel,
     mediaBaseUrl: String,
-    onBack: () -> Unit,
+    listState: LazyListState,
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
     /** Opens the sheet asking which collections this belongs in. See `App.kt`. */
     onSaveToPlaylist: (Video) -> Unit,
+    /** Non-null makes it a page with a back arrow; null (a tab) draws neither. */
+    onBack: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -89,6 +89,7 @@ fun HistoryScreen(
         onBack = onBack,
         onOpenChannel = onOpenChannel,
         mediaBaseUrl = mediaBaseUrl,
+        listState = listState,
         onOpenSettings = onOpenSettings,
         onOpenVideo = onOpenVideo,
         onRefresh = viewModel::refresh,
@@ -101,10 +102,12 @@ fun HistoryScreen(
 fun HistoryContent(
     state: HistoryState,
     mediaBaseUrl: String,
-    onBack: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onRefresh: () -> Unit,
+    listState: LazyListState = rememberLazyListState(),
+    /** Non-null makes it a page with a back arrow; null (a tab) draws neither. */
+    onBack: (() -> Unit)? = null,
     /**
      * Open the channel behind a row's avatar.
      *
@@ -118,7 +121,6 @@ fun HistoryContent(
     onSaveVideo: (Video) -> Unit = {},
 ) {
     val strings = LocalStrings.current
-    val listState = rememberLazyListState()
 
     // Recorded, so the miniplayer floating over this page is glass here too.
     Box(Modifier.fillMaxSize().glassSource()) {
@@ -169,7 +171,9 @@ fun HistoryContent(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = detailContentPadding(),
+                // The tab chrome when it is a tab, the detail chrome (clearing
+                // the back arrow) when a menu opened it as a page.
+                contentPadding = if (onBack == null) tabContentPadding() else detailContentPadding(),
             ) {
                 item(key = "title") { ScreenTitle(strings.historyTitle) }
 
@@ -197,7 +201,7 @@ fun HistoryContent(
         }
     }
 
-    DetailBack(onBack, strings.back)
+    if (onBack != null) DetailBack(onBack, strings.back)
     }
 }
 

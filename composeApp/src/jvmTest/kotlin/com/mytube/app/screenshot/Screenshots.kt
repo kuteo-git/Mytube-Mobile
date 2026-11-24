@@ -1,9 +1,7 @@
 package com.mytube.app.screenshot
 
 import com.mytube.app.domain.model.Channel
-import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
-import com.mytube.app.ui.home.Chip
 import com.mytube.app.ui.home.HomeContent
 import com.mytube.app.ui.home.HomeState
 import com.mytube.app.ui.i18n.EnglishStrings
@@ -75,25 +73,13 @@ class Screenshots {
         // --- home -----------------------------------------------------------
         renderer.render("home-feed", EnglishStrings) {
             HomeContent(
-                HomeState.Ready(
-                    videos = feed(),
-                    nextPageToken = "t1",
-                    chips = chips(),
-                    continueWatching = feed().take(2)
-                        .map { it.copy(watchedFraction = 0.4) },
-                ),
+                HomeState.Ready(videos = feed(), nextPageToken = "t1"),
                 mediaBase, {}, {}, {}, {},
             )
         }
         renderer.render("home-feed-vi", VietnameseStrings) {
             HomeContent(
-                HomeState.Ready(
-                    videos = feed(),
-                    nextPageToken = "t1",
-                    chips = chips(),
-                    continueWatching = feed().take(2)
-                        .map { it.copy(watchedFraction = 0.4) },
-                ),
+                HomeState.Ready(videos = feed(), nextPageToken = "t1"),
                 mediaBase, {}, {}, {}, {},
             )
         }
@@ -152,14 +138,6 @@ class Screenshots {
      * anybody writing a mock would choose, and the two-line clamp only shows its
      * behaviour against one.
      */
-    private fun chips() = listOf(
-        Chip.All,
-        Chip.Live,
-        Chip.Category(Topic("Gaming", 1166)),
-        Chip.Category(Topic("Music", 787)),
-        Chip.Category(Topic("News & Politics", 637)),
-    )
-
     private fun feed() = listOf(
         video(
             "LkVLxE0B7P8",

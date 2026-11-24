@@ -300,9 +300,8 @@ fun VideoCardMenu(
     onSave: (() -> Unit)?,
     saveLabel: String = "",
     onNotInterested: (() -> Unit)?,
-    onMarkWatched: (() -> Unit)? = null,
 ) {
-    if (onSave == null && onNotInterested == null && onMarkWatched == null) return
+    if (onSave == null && onNotInterested == null) return
 
     // The button is here; the panel is drawn at the root of the app.
     //
@@ -313,12 +312,10 @@ fun VideoCardMenu(
     // so the menu moved instead of settling for paint. See [MenuHost].
     val (anchor, show) = rememberMenuAnchor()
     // Opening a menu is a selection about to be made, and this is the one
-    // control on a card that opens anything. One call site because both cards
-    // that draw a menu draw *this* one — the feed's and the Continue watching
-    // rail's — which is why the composable exists at all.
+    // control on a card that opens anything.
     val tick = rememberSelectionTick()
 
-    val items = videoMenu(strings, onSave, saveLabel, onNotInterested, onMarkWatched)
+    val items = videoMenu(strings, onSave, saveLabel, onNotInterested)
 
     Icon(
         imageVector = MoreVertical,
@@ -342,7 +339,6 @@ internal fun videoMenu(
     onSave: (() -> Unit)?,
     saveLabel: String = "",
     onNotInterested: (() -> Unit)? = null,
-    onMarkWatched: (() -> Unit)? = null,
 ): List<MenuAction> = buildList {
     if (onSave != null) {
         add(
@@ -362,7 +358,6 @@ internal fun videoMenu(
             ),
         )
     }
-    if (onMarkWatched != null) add(MenuAction(strings.markWatched, onMarkWatched))
     if (onNotInterested != null) add(MenuAction(strings.notInterested, onNotInterested))
 }
 
@@ -436,7 +431,22 @@ object Size {
     /** In a card. The watch page uses 40 and a comment 24. */
     val avatar = 36.dp
     val iconButton = 40.dp
-    val topBar = 56.dp
+    // The bottom bar's height, and with it the search button's — both read this
+    // one number so they stay the same size. Shorter than it was (was 56):
+    // Facebook's compact bar, icon-only, rather than Apple Music's taller
+    // labelled one.
+    val topBar = 52.dp
+
+    /**
+     * The miniplayer capsule's height, 85 percent of the bar's.
+     *
+     * It was the bar's own height — the two were one set — until the household
+     * asked for a smaller player, first 90 percent and then a little less again
+     * (*"chiều cao nó còn hơi cao, nhỏ chút nữa"*). The two do not share an edge,
+     * [miniGap] of air sits between them, so a capsule shorter than the bar reads
+     * as a lighter pane resting on it rather than a seam.
+     */
+    val miniBar = topBar * 0.85f
 
     /**
      * The air between the miniplayer's capsule and the bar under it.
@@ -446,8 +456,11 @@ object Size {
      * Here rather than beside the composable, because [miniPlayer] below is
      * built from it and the miniplayer draws it — and the moment those two
      * numbers live apart they can disagree about where the bar ends.
+     *
+     * Tightened from 6 to 4 at the household's word — the player sits a little
+     * closer to the bar now (*"khoảng cách nó với tabbar nhỏ lại chút xíu"*).
      */
-    val miniGap = 6.dp
+    val miniGap = 4.dp
 
     /**
      * The miniplayer bar's height, which lists must leave room for.
@@ -456,10 +469,10 @@ object Size {
      * that has to know is every scrolling screen — and a constant defined next
      * to its only *reader* is one nobody finds when they add the next screen.
      *
-     * The capsule itself is [topBar] tall — the same as the tab bar it rests on
-     * — and this is that plus the air above it.
+     * The capsule itself is [miniBar] tall — nine tenths of the tab bar it rests
+     * on — and this is that plus the air above it.
      */
-    val miniPlayer = topBar + miniGap
+    val miniPlayer = miniBar + miniGap
     val chip = 32.dp
 }
 

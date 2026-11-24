@@ -5,11 +5,14 @@ import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mytube.app.domain.model.Channel
+import com.mytube.app.domain.model.ChannelPlaylist
 import com.mytube.app.domain.model.Video
 import com.mytube.app.domain.repository.SortOption
 import com.mytube.app.domain.repository.ChannelMissing
 import com.mytube.app.domain.repository.VideoRepository
 import com.mytube.app.ui.appendNew
+import com.mytube.app.ui.appendNewBy
+import com.mytube.app.ui.distinctById
 import com.mytube.app.ui.watch.QueueItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,6 +60,30 @@ sealed interface ChannelState {
     ) : ChannelState
 }
 
+/** The two tabs on a channel's page: its uploads, and the lists it published. */
+enum class ChannelTab { Videos, Playlists }
+
+/**
+ * The Playlists tab's own state, separate from [ChannelState].
+ *
+ * Separate because the two tabs load and fail apart: the videos are already on
+ * screen when the playlists are first asked for, and a playlists fetch that
+ * fails must not take the videos down with it. [Idle] is "never opened" — the
+ * tab is lazy, so nothing is fetched until it is first shown.
+ */
+sealed interface PlaylistsState {
+    data object Idle : PlaylistsState
+    data object Loading : PlaylistsState
+    data class Failed(val message: String) : PlaylistsState
+    data class Ready(
+        val playlists: List<ChannelPlaylist>,
+        val nextPageToken: String,
+        val loadingMore: Boolean = false,
+    ) : PlaylistsState {
+        val hasMore: Boolean get() = nextPageToken.isNotEmpty()
+    }
+}
+
 /**
  * One channel's page.
  *
@@ -83,8 +110,64 @@ class ChannelViewModel(
     private val _openFailed = MutableStateFlow(false)
     val openFailed: StateFlow<Boolean> = _openFailed.asStateFlow()
 
+    /** Which tab is showing. Videos first, as YouTube opens a channel. */
+    private val _tab = MutableStateFlow(ChannelTab.Videos)
+    val tab: StateFlow<ChannelTab> = _tab.asStateFlow()
+
+    /** The Playlists tab, lazy: nothing is fetched until it is first opened. */
+    private val _playlists = MutableStateFlow<PlaylistsState>(PlaylistsState.Idle)
+    val playlists: StateFlow<PlaylistsState> = _playlists.asStateFlow()
+
     init {
         load(sortToken = "")
+    }
+
+    fun selectTab(tab: ChannelTab) {
+        if (_tab.value == tab) return
+        _tab.value = tab
+        // Fetched on the first visit and kept after, so switching back and forth
+        // does not re-ask. A failure leaves it fetchable again through retry.
+        if (tab == ChannelTab.Playlists && _playlists.value is PlaylistsState.Idle) {
+            loadPlaylists()
+        }
+    }
+
+    fun retryPlaylists() = loadPlaylists()
+
+    private fun loadPlaylists() {
+        _playlists.value = PlaylistsState.Loading
+        viewModelScope.launch {
+            _playlists.value = runCatching { videos.channelPlaylists(channelId) }.fold(
+                onSuccess = { PlaylistsState.Ready(it.playlists, it.nextPageToken) },
+                onFailure = { error ->
+                    if (error is CancellationException) throw error
+                    PlaylistsState.Failed(error.message.orEmpty())
+                },
+            )
+        }
+    }
+
+    fun loadMorePlaylists() {
+        val current = _playlists.value as? PlaylistsState.Ready ?: return
+        if (current.loadingMore || current.nextPageToken.isEmpty()) return
+
+        _playlists.update { current.copy(loadingMore = true) }
+        viewModelScope.launch {
+            val page = runCatching {
+                videos.channelPlaylists(channelId, current.nextPageToken)
+            }.onFailure { if (it is CancellationException) throw it }.getOrNull()
+            _playlists.update { now ->
+                if (now !is PlaylistsState.Ready) return@update now
+                // A next page that failed leaves what is on screen alone, the
+                // same rule the videos' loadMore follows.
+                if (page == null) now.copy(loadingMore = false)
+                else now.copy(
+                    playlists = now.playlists.appendNewBy(page.playlists) { it.id },
+                    nextPageToken = page.nextPageToken,
+                    loadingMore = false,
+                )
+            }
+        }
     }
 
     fun retry() {
@@ -233,7 +316,7 @@ class ChannelViewModel(
                     ChannelState.Ready(
                         channel = it.channel,
                         videoCount = it.videoCount,
-                        videos = it.videos,
+                        videos = it.videos.distinctById(),
                         sortOptions = it.sortOptions,
                         sortToken = sortToken,
                         sortIndex = index,

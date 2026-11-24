@@ -61,6 +61,21 @@ interface Strings {
     val chipMissed: String
     val chipLive: String
 
+    /** The last chip, which opens the More page rather than a feed. */
+    val chipMore: String
+
+    // --- the More page -----------------------------------------------------
+    /** The More page's title, and the name of its row elsewhere. */
+    val moreTitle: String
+    /** The News row on the More page, and the title of the feed it opens. */
+    val newsTitle: String
+    /** The Live row on the More page, and the title of the feed it opens. */
+    val liveTitle: String
+    /** The Charts row on the More page. */
+    val chartTitle: String
+    /** Said on the Charts page, which is not built yet. */
+    val chartComingSoon: String
+
     // --- television --------------------------------------------------------
     /** The question a shared screen asks before it knows whose evening it is. */
     val whoIsWatching: String
@@ -146,6 +161,8 @@ interface Strings {
     // --- channel & search --------------------------------------------------
     /** "videos", after a count. */
     val videos: String
+    /** The channel page's Videos tab — a title, not the count noun [videos]. */
+    val videosTab: String
     val searchHint: String
     val noResults: String
     val noResultsDetail: String
@@ -170,7 +187,6 @@ interface Strings {
     val fullscreen: String
     val exitFullscreen: String
     val notInterested: String
-    val markWatched: String
     /** The gear on the control bar: what belongs to this video. */
     val settingsInPlayer: String
     val subtitles: String
@@ -229,6 +245,9 @@ interface Strings {
     val deletePlaylistConfirm: String
     val noPlaylists: String
     val noPlaylistsDetail: String
+    /** The channel page's Playlists tab, when the channel published none. */
+    val noPlaylistsHere: String
+    val noPlaylistsHereDetail: String
     val emptyPlaylist: String
     val emptyPlaylistDetail: String
     val playAll: String
@@ -366,6 +385,12 @@ object EnglishStrings : Strings {
     override val chipAll = "All"
     override val chipMissed = "Missed"
     override val chipLive = "Live"
+    override val chipMore = "More"
+    override val moreTitle = "More"
+    override val newsTitle = "News"
+    override val liveTitle = "Live"
+    override val chartTitle = "Charts"
+    override val chartComingSoon = "Charts are on the way."
     override val whoIsWatching = "Who's watching?"
     override val shelfRecommended = "Recommended"
     override val description = "Description"
@@ -410,6 +435,7 @@ object EnglishStrings : Strings {
     override val clear = "Clear"
 
     override val videos = "videos"
+    override val videosTab = "Videos"
     override val searchHint = "Search YouTube"
     override val noResults = "Nothing here matches"
     override val noResultsDetail = "Try fewer words, or the name of the channel."
@@ -429,7 +455,6 @@ object EnglishStrings : Strings {
     override val fullscreen = "Fullscreen"
     override val exitFullscreen = "Exit fullscreen"
     override val notInterested = "Not interested"
-    override val markWatched = "Watched"
     override val settingsInPlayer = "Settings"
     override val subtitles = "Subtitles"
     override val off = "Off"
@@ -473,6 +498,8 @@ object EnglishStrings : Strings {
     override val noPlaylists = "No playlists yet"
     override val noPlaylistsDetail =
         "The menu on any video offers to save it to a playlist, and a new one can be named there."
+    override val noPlaylistsHere = "No playlists"
+    override val noPlaylistsHereDetail = "This channel has not published any playlists."
     override val emptyPlaylist = "Nothing in here yet"
     override val emptyPlaylistDetail =
         "Videos saved to this playlist appear here, in the order they were added."
@@ -581,6 +608,12 @@ object VietnameseStrings : Strings {
     // Kept in English: it is what every player and every television calls a
     // broadcast, and "trực tiếp" is longer than the chip it sits in.
     override val chipLive = "Live"
+    override val chipMore = "Thêm"
+    override val moreTitle = "Thêm"
+    override val newsTitle = "Tin tức"
+    override val liveTitle = "Live"
+    override val chartTitle = "Bảng xếp hạng"
+    override val chartComingSoon = "Bảng xếp hạng sắp ra mắt."
     override val whoIsWatching = "Ai đang xem?"
     override val shelfRecommended = "Đề xuất"
     override val description = "Mô tả"
@@ -622,6 +655,7 @@ object VietnameseStrings : Strings {
     override val clear = "Xoá"
 
     override val videos = "video"
+    override val videosTab = "Video"
     override val searchHint = "Tìm trên YouTube"
     override val noResults = "Không có gì khớp"
     override val noResultsDetail = "Thử ít chữ hơn, hoặc gõ tên kênh."
@@ -639,7 +673,6 @@ object VietnameseStrings : Strings {
     override val fullscreen = "Toàn màn hình"
     override val exitFullscreen = "Thoát toàn màn hình"
     override val notInterested = "Không quan tâm"
-    override val markWatched = "Đã xem"
     override val settingsInPlayer = "Cài đặt"
     override val subtitles = "Phụ đề"
     override val off = "Tắt"
@@ -680,6 +713,8 @@ object VietnameseStrings : Strings {
     override val noPlaylists = "Chưa có playlist nào"
     override val noPlaylistsDetail =
         "Menu trên mỗi video có mục lưu vào playlist, và có thể đặt tên playlist mới ngay ở đó."
+    override val noPlaylistsHere = "Không có playlist"
+    override val noPlaylistsHereDetail = "Kênh này chưa đăng playlist nào."
     override val emptyPlaylist = "Playlist này còn trống"
     override val emptyPlaylistDetail =
         "Video lưu vào playlist này sẽ hiện ở đây, theo thứ tự đã thêm."

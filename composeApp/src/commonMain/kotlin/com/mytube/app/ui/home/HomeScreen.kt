@@ -1,43 +1,31 @@
 package com.mytube.app.ui.home
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.PaddingValues
+import com.mytube.app.ui.shell.DetailBack
+import com.mytube.app.ui.shell.FeedSkeleton
+import com.mytube.app.ui.shell.GlassButton
+import com.mytube.app.ui.shell.ScreenTitle
+import com.mytube.app.ui.shell.TabRefreshIndicator
+import com.mytube.app.ui.shell.detailContentPadding
+import com.mytube.app.ui.shell.glassSource
+import com.mytube.app.ui.shell.tabContentPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import kotlin.math.roundToInt
-import com.mytube.app.ui.shell.BarBackdrop
-import com.mytube.app.ui.shell.GlassButton
-import com.mytube.app.ui.shell.ChipRowSkeleton
-import com.mytube.app.ui.shell.FeedSkeleton
-import com.mytube.app.ui.shell.TabRefreshIndicator
-import com.mytube.app.ui.shell.tabContentPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,25 +34,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import androidx.compose.runtime.CompositionLocalProvider
 import com.mytube.app.domain.model.Channel
-import com.mytube.app.domain.model.Topic
 import com.mytube.app.domain.model.Video
 import com.mytube.app.ui.i18n.LocalStrings
 import com.mytube.app.ui.i18n.Strings
@@ -74,33 +52,42 @@ import com.mytube.app.ui.theme.Tokens
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
 /**
- * The feed.
+ * One chip's feed.
  *
  * A single column of large cards, which is what the web app's phone layout does
  * and what the shape of the content wants: a thumbnail is the only thing anybody
  * reads at a glance, and two per row on a phone makes it too small to be that.
+ *
+ * The chip row that selects between feeds is not here — it is pinned in the bar,
+ * above the pager these pages live in — so each page is just its own feed.
  */
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
     mediaBaseUrl: String,
     /**
-     * Hoisted, so the position survives a visit to another tab.
-     *
-     * `rememberLazyListState()` lives and dies with the composable, and a tab
-     * that is not showing is not composed — so every trip to Subscriptions and
-     * back put Home at the top again. The state belongs to the *tab*, which
-     * outlives the screen, so it is owned where the tabs are.
+     * Hoisted, so the reading position survives a swipe to another chip and
+     * back. A pager page is disposed when it scrolls out of view, so a
+     * page-local `rememberLazyListState()` would reset to the top; the state
+     * belongs to the chip, which outlives the page, so it is owned above.
      */
     listState: LazyListState,
-    onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onOpenChannel: (String) -> Unit,
+    /** The setup screen, from the "set the address" button when no server is set. */
+    onOpenServer: () -> Unit,
+    /**
+     * Non-null when this feed is a standalone page (the Live page off More)
+     * rather than a page of the home pager: it then carries a back arrow and a
+     * title, and sits a top-bar's height down rather than below the chip row.
+     */
+    onBack: (() -> Unit)? = null,
+    title: String = "",
     /**
      * Opens the sheet asking which collections this video belongs in.
      *
      * The screen does not answer it: the sheet is hoisted to `App.kt` because
-     * six screens open the same one, and because it must be drawn last — a
+     * several screens open the same one, and because it must be drawn last — a
      * [com.mytube.app.ui.shell.GlassSheet] is an ordinary child of the root
      * `Box` rather than a popup layer, so where it is written is where it sits.
      */
@@ -112,14 +99,15 @@ fun HomeScreen(
         state = state,
         mediaBaseUrl = mediaBaseUrl,
         listState = listState,
-        onOpenSettings = onOpenSettings,
         onOpenVideo = onOpenVideo,
         onRetry = viewModel::refresh,
         onLoadMore = viewModel::loadMore,
         onSaveVideo = onSaveToPlaylist,
         onNotInterested = viewModel::notInterested,
-        onMarkWatched = viewModel::markWatched,
         onOpenChannel = onOpenChannel,
+        onOpenServer = onOpenServer,
+        onBack = onBack,
+        title = title,
     )
 }
 
@@ -133,41 +121,41 @@ fun HomeScreen(
 fun HomeContent(
     state: HomeState,
     mediaBaseUrl: String,
-    onOpenSettings: () -> Unit,
     onOpenVideo: (String) -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
     onSaveVideo: (Video) -> Unit = {},
     onNotInterested: (Video) -> Unit = {},
-    onMarkWatched: (Video) -> Unit = {},
     onOpenChannel: (String) -> Unit = {},
+    onOpenServer: () -> Unit = {},
+    onBack: (() -> Unit)? = null,
+    title: String = "",
     // Last, and with a default, so the previews below can keep calling this
-    // positionally without caring that a tab's scroll position is hoisted.
+    // positionally without caring that a chip's scroll position is hoisted.
     listState: LazyListState = rememberLazyListState(),
 ) {
     val strings = LocalStrings.current
+    // A pager page sits below the chip row the shell pins; a standalone page has
+    // no chip row, only the top bar, and owns its own backdrop and back arrow.
+    val standalone = onBack != null
+    val contentPadding = if (standalone) detailContentPadding() else tabContentPadding()
+    val root = if (standalone) Modifier.fillMaxSize().glassSource() else Modifier.fillMaxSize()
 
+    Box(root) {
     Surface(color = Tokens.bg, modifier = Modifier.fillMaxSize()) {
         when (val current = state) {
             is HomeState.Loading -> Column(
                 Modifier
                     .fillMaxSize()
-                    .padding(top = tabContentPadding().calculateTopPadding())
+                    .padding(top = contentPadding.calculateTopPadding())
                     // A `Column` that runs out of room does not clip its
-                    // overflow — it measures what is left with a maximum height
-                    // of zero and draws the children at their natural size
-                    // anyway, one on top of the other. `FeedSkeleton`'s three
-                    // cards fit an emulator's taller window and not a real
-                    // phone's, so the last card stacked on the one before it —
-                    // reported as a layer covering the end of the list, the same
-                    // fault `WatchSkeleton` already had to scroll for.
+                    // overflow — it draws the children at their natural size, one
+                    // on top of the other. `FeedSkeleton`'s cards fit an
+                    // emulator's taller window and not a real phone's, so the
+                    // last card stacked on the one before it; the scroll gives it
+                    // the room.
                     .verticalScroll(rememberScrollState()),
             ) {
-                // The chip row is pinned above the feed, so a loading state
-                // without it is a screen whose whole content steps down by a
-                // row the moment the topics arrive.
-                ChipRowSkeleton()
-                Spacer(Modifier.height(Space.md))
                 FeedSkeleton()
             }
 
@@ -175,7 +163,7 @@ fun HomeContent(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(strings.noServerTitle, color = Tokens.text)
                     Spacer(Modifier.height(8.dp))
-                    GlassButton(strings.setTheAddress, onOpenSettings, primary = true)
+                    GlassButton(strings.setTheAddress, onOpenServer, primary = true)
                 }
             }
 
@@ -192,9 +180,12 @@ fun HomeContent(
             is HomeState.Ready -> Feed(
                 current, listState, mediaBaseUrl, strings,
                 onOpenVideo, onRetry, onLoadMore,
-                onSaveVideo, onNotInterested, onMarkWatched, onOpenChannel,
+                onSaveVideo, onNotInterested, onOpenChannel,
+                contentPadding, title,
             )
         }
+    }
+        if (onBack != null) DetailBack(onBack, strings.back)
     }
 }
 
@@ -210,41 +201,17 @@ private fun Feed(
     onLoadMore: () -> Unit,
     onSaveVideo: (Video) -> Unit,
     onNotInterested: (Video) -> Unit,
-    onMarkWatched: (Video) -> Unit,
     onOpenChannel: (String) -> Unit,
+    contentPadding: PaddingValues,
+    title: String,
 ) {
-
     // Asked when the end comes into view, not when the last item is composed.
     //
     // `derivedStateOf` is what keeps this from recomposing the whole screen on
-    // every pixel of scroll: it recomputes on every frame but only *emits* when
-    // the boolean flips.
-    // Everything read here comes from `layoutInfo`, which is snapshot state and
-    // grows with the list. The previous version compared against
-    // `state.videos.lastIndex` captured by a keyless `remember`, so the number
-    // was frozen at the first page's size: `atEnd` went true once, loaded page
-    // two, and then could never go false again — and `snapshotFlow` only emits
-    // on a change, so the third page was never asked for. The feed stopped at
-    // 48 videos, silently, which is what "no infinite scroll" looked like.
-    // One reading position per chip.
-    //
-    // The list state belongs to the Home *tab*, so all the chips share it — and
-    // sharing it means stepping to Live and back left All wherever the short
-    // Live list had ended up. The videos are restored from the ViewModel's own
-    // cache; this restores where in them the viewer was.
-    val offsets = remember { mutableMapOf<String, Pair<Int, Int>>() }
-    var shownChip by remember { mutableStateOf(state.selected.key) }
-    LaunchedEffect(state.selected.key) {
-        val leaving = shownChip
-        if (leaving != state.selected.key) {
-            offsets[leaving] =
-                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
-            val (index, offset) = offsets[state.selected.key] ?: (0 to 0)
-            listState.scrollToItem(index, offset)
-            shownChip = state.selected.key
-        }
-    }
-
+    // every pixel of scroll: it recomputes on every frame but only emits when
+    // the boolean flips. Everything read here comes from `layoutInfo`, which is
+    // snapshot state and grows with the list — comparing against a captured
+    // `lastIndex` froze the end at the first page and the feed stopped at 48.
     val atEnd by remember(listState) {
         derivedStateOf {
             val info = listState.layoutInfo
@@ -256,15 +223,25 @@ private fun Feed(
         snapshotFlow { atEnd }.collect { if (it) onLoadMore() }
     }
 
-    // Material3's own pull-to-refresh rather than the web app's hand-tuned
-    // curve. That curve exists because a browser has no gesture of its own and
-    // the constants were fitted to feel native; here the native one is available
-    // and matching the rest of the phone is the whole point.
+    // A finished pull-to-refresh returns the feed to the top.
     //
-    // The indicator has to clear the top bar, which floats over this list — and
-    // `indicator = {}` does not move it out of the way, it removes it. That is
-    // what this was, and the gesture then refreshed the feed with nothing on
-    // screen ever saying so, which reads as a pull that did nothing.
+    // Reported on the Missed feed: pulling to refresh fetched a changed list but
+    // left the reader wherever they had scrolled to, now stranded mid-list among
+    // new rows. The refresh keeps `Ready` on screen (see `HomeViewModel.load`), so
+    // the list does not reset itself — this does, on the `true → false` edge of
+    // the refreshing flag, which only a deliberate pull raises. The jump is
+    // instant, not animated: a scroll animation back up past the new rows reads
+    // as the list lurching on its own.
+    var wasRefreshing by remember { mutableStateOf(false) }
+    LaunchedEffect(state.refreshing) {
+        if (wasRefreshing && !state.refreshing) listState.scrollToItem(0)
+        wasRefreshing = state.refreshing
+    }
+
+    // Material3's own pull-to-refresh rather than the web app's hand-tuned
+    // curve. The indicator has to clear the top bar, which floats over this
+    // list — `indicator = {}` removes it rather than moving it, which refreshed
+    // the feed with nothing on screen saying so.
     val refreshState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = state.refreshing,
@@ -277,53 +254,21 @@ private fun Feed(
             TabRefreshIndicator(refreshState, state.refreshing)
         },
     ) {
-        // Pinned under the top bar rather than scrolled with the feed.
-        //
-        // It was the first item in the list, which is how a phone usually does
-        // a header — and it is wrong here: the chips are the feed's *filter*,
-        // and a filter that scrolls away means changing your mind costs a
-        // journey back to the top. The web app pins it and so does this.
-        // No chip row here.
-        //
-        // It is drawn by the shell, inside the top bar, through `underTopBar` —
-        // see `AppShell`. It lived here, pinned at a fixed offset below the bar,
-        // and being a separate floating surface made it wrong twice: it stayed
-        // put when the bars slid away on scroll, and it carried its own backdrop
-        // so a frosted bar sat on an opaque strip of the same colour. The list's
-        // top padding below still allows for it, because the bar it now belongs
-        // to is that much taller.
-
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            // The list scrolls *under* both bars — that is what makes them feel
-            // like glass over content rather than walls — but its content must
-            // start below the top bar and end above the tab bar.
-            //
-            // The shared arithmetic, not a copy of it. This copy added the top
-            // bar's 56dp to the chip row's height, which was right while the bar
-            // was a capsule with the chips underneath it. The chips *are* the
-            // bar now, and the sum left an empty 56dp band between them and the
-            // first thing in the feed.
-            contentPadding = tabContentPadding(),
+            // The list scrolls under both bars — that is what makes them feel
+            // like glass over content — but its content must start below the top
+            // bar (which carries the chip row on Home) and end above the tab bar.
+            // The shared arithmetic, not a copy of it; a standalone page passes
+            // the detail padding instead, which leaves no room for a chip row.
+            contentPadding = contentPadding,
         ) {
-            // The rail scrolls away with the feed rather than sticking. It is a
-            // shelf to glance at on the way past, not a fixture.
-            item(key = "continue") {
-                ContinueWatchingRail(
-                    videos = state.continueWatching,
-                    mediaBaseUrl = mediaBaseUrl,
-                    onOpenVideo = onOpenVideo,
-                    onSaveVideo = onSaveVideo,
-                    onMarkWatched = onMarkWatched,
-                )
+            if (title.isNotEmpty()) {
+                item(key = "title") { ScreenTitle(title) }
             }
 
-            if (state.switching) {
-                // The topic's videos are on their way. Only this part of the
-                // screen is unknown — the chips above it have not moved.
-                item(key = "switching") { FeedSkeleton(cards = 2) }
-            } else if (state.videos.isEmpty()) {
+            if (state.videos.isEmpty()) {
                 item(key = "empty") {
                     Box(Modifier.fillMaxWidth().padding(Space.xl), Alignment.Center) {
                         Text(strings.nothingHere, color = Tokens.text2)
@@ -391,47 +336,42 @@ private fun sampleReady() = HomeState.Ready(
         sampleVideo("c", "Something over an hour long, with a title that runs on and has to be cut", 4_231, 4_730_000, 0.3),
     ),
     nextPageToken = "t1",
-    chips = listOf(
-        Chip.All,
-        Chip.Live,
-        Chip.Category(Topic("Gaming", 1166)),
-        Chip.Category(Topic("Music", 787)),
-        Chip.Category(Topic("News & Politics", 637)),
-    ),
-    continueWatching = listOf(
-        sampleVideo("d", "Half way through this one", 900, 12_000, 0.42),
-        sampleVideo("e", "And this one too", 1_800, 3_400, 0.7),
-    ),
 )
 
 @Preview
 @Composable
 private fun HomeReadyPreview() = MytubeTheme {
-    HomeContent(sampleReady(), "", {}, {}, {}, {})
+    HomeContent(sampleReady(), "", {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeVietnamesePreview() = MytubeTheme {
     CompositionLocalProvider(LocalStrings provides VietnameseStrings) {
-        HomeContent(sampleReady(), "", {}, {}, {}, {})
+        HomeContent(sampleReady(), "", {}, {}, {})
     }
 }
 
 @Preview
 @Composable
+private fun HomeEmptyPreview() = MytubeTheme {
+    HomeContent(HomeState.Ready(videos = emptyList(), nextPageToken = ""), "", {}, {}, {})
+}
+
+@Preview
+@Composable
 private fun HomeNeedsServerPreview() = MytubeTheme {
-    HomeContent(HomeState.NeedsServer, "", {}, {}, {}, {})
+    HomeContent(HomeState.NeedsServer, "", {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeFailedPreview() = MytubeTheme {
-    HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {}, {})
+    HomeContent(HomeState.Failed("gateway answered 502"), "", {}, {}, {})
 }
 
 @Preview
 @Composable
 private fun HomeLoadingPreview() = MytubeTheme {
-    HomeContent(HomeState.Loading, "", {}, {}, {}, {})
+    HomeContent(HomeState.Loading, "", {}, {}, {})
 }

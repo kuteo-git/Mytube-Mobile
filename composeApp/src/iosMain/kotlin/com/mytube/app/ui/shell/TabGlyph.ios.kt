@@ -64,8 +64,13 @@ actual fun TabGlyph(tab: Tab, selected: Boolean, tint: Color, modifier: Modifier
 private fun Tab.symbol(selected: Boolean): String = when (this) {
     // A house. `house.fill` is the filled pair iOS itself uses for a tab bar.
     Tab.Home -> if (selected) "house.fill" else "house"
-    // Lines with a play triangle: the queue, not a stack of records.
-    Tab.Playlists -> if (selected) "list.triangle" else "list.triangle"
+    // A clock with a counter-clockwise arrow: iOS's own "recents" mark, which is
+    // what Watch History is. No filled pair in the set, so the colour and the
+    // pill mark the chosen one, as `list.triangle` does.
+    Tab.History -> "clock.arrow.circlepath"
+    // Lines with a music note. No filled pair, so the colour and the pill mark
+    // the chosen one. (Was `list.triangle`; the household picked this.)
+    Tab.Playlists -> "music.note.list"
     // A cog. `gearshape` rather than `gear`, which is the older heavier one.
     Tab.Settings -> if (selected) "gearshape.fill" else "gearshape"
 }

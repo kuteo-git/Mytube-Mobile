@@ -86,7 +86,6 @@ fun SettingsScreen(
     language: Language,
     onOpenServer: () -> Unit,
     onOpenProfile: () -> Unit,
-    onOpenHistory: () -> Unit,
     onOpenSubscriptions: () -> Unit,
     onOpenVoice: () -> Unit,
     onOpenLanguage: () -> Unit,
@@ -134,19 +133,6 @@ fun SettingsScreen(
                     label = strings.settingsProfile,
                     value = profileName.ifEmpty { strings.profileTitle },
                     onClick = onOpenProfile,
-                )
-            }
-
-            // History, which was a tab. See [Tab]: what earns a place on the
-            // bottom bar is what you move between while browsing, and this is a
-            // list you open to find one video again. It sits directly above
-            // Saved because the two are the same kind of thing — a shelf this
-            // device keeps.
-            item(key = "history") {
-                SettingRow(
-                    label = strings.historyTitle,
-                    value = strings.historyDetail,
-                    onClick = onOpenHistory,
                 )
             }
 
@@ -321,7 +307,6 @@ private fun SettingsPreview() {
             language = Language.English,
             onOpenServer = {},
             onOpenProfile = {},
-            onOpenHistory = {},
             onOpenVoice = {},
             onOpenLanguage = {},
             onOpenSubscriptions = {},
@@ -341,7 +326,6 @@ private fun SettingsUnconfiguredPreview() {
             language = Language.English,
             onOpenServer = {},
             onOpenProfile = {},
-            onOpenHistory = {},
             onOpenVoice = {},
             onOpenLanguage = {},
             onOpenSubscriptions = {},
@@ -361,7 +345,6 @@ private fun SettingsVietnamesePreview() {
                 language = Language.Vietnamese,
                 onOpenServer = {},
             onOpenProfile = {},
-            onOpenHistory = {},
                 onOpenVoice = {},
                 onOpenLanguage = {},
                 onOpenSubscriptions = {},
@@ -383,7 +366,6 @@ private fun SettingsEffectsUnavailablePreview() {
             language = Language.English,
             onOpenServer = {},
             onOpenProfile = {},
-            onOpenHistory = {},
             onOpenVoice = {},
             onOpenLanguage = {},
             onOpenSubscriptions = {},

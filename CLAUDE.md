@@ -229,9 +229,50 @@ DELETE /api/videos/{id}/narration            cancel (204 whether or not running)
 
 ## 6. Scope
 
-**Tabs**: Home · Playlists · Settings, with Search beside them. **Routes**: Watch
-(a layer, not a route), Search, Channel, Playlist, Saved, History, Subscriptions,
-Profile, Voice, Language, Setup — and, on a television only, WhoIsWatching.
+**Tabs**: Home · History · Playlists · Settings, with Search beside them —
+Facebook's bottom bar: **icon-only (no labels), 28dp glyphs, a compact
+`Size.topBar` of 52dp** that the search button's size reads too. The miniplayer
+is **85% of the bar at rest** (`Size.miniBar = topBar * 0.85`), a lighter capsule
+resting on it with `Size.miniGap` (4dp) of air between; as the bar collapses it
+grows to the bar's full height so it matches the tab circle and search circle it
+sits between (`lerp(miniBar, topBar, collapse)`). Its two buttons are narrowed
+(`BAR_BUTTON_WIDTH` 36dp) so the glyphs sit close, and the progress line is a 1dp
+red readout on its bottom edge — the played-so-far only, no grey track behind it.
+It closes itself when its video plays to the end with nothing left to autoplay (a
+dead capsule otherwise). A pull-to-refresh on a feed jumps it to the top when it
+finishes, instantly rather than animated — an animated scroll back past the new
+rows reads as the list lurching on its own.
+History is a tab (the shelf reached for most after Home), drawn like Playlists —
+a `ScreenTitle`, tab chrome, hoisted scroll, no back arrow — and keeps the page
+shape too (a non-null `onBack`) for any menu caller. **Routes**: Watch (a layer,
+not a route), Search, Channel, ChannelPlaylist, More, Live, Chart, Playlist,
+Saved, Subscriptions, Profile, Voice, Language, Setup — and, on a television
+only, WhoIsWatching. The Channel page has a Videos/Playlists tab row on the phone
+(not the TV); ChannelPlaylist opens one of a channel's own YouTube playlists, its
+videos keeping each row's own uploader because a playlist mixes channels. The
+phone's channel header (avatar, name, subscribe) collapses as the list scrolls
+and the tab strip pins under the back-arrow row, the way YouTube's does
+(`CollapsingTabPager`, a `NestedScrollConnection`); the pager fills the screen so
+its lists always reach the bottom, and the collapsing top inset
+(`LocalCollapsingTopInset`) is what pulls the content up with the header. The tab
+strip's selected underline is the brand red.
+
+**Home's chip row is a fixed, curated set** (`HomeChips.row`), not the server's
+topics: Missed · All · Gaming · Music · More. The row is also the pager's pages —
+swipe or tap a chip — one `HomeViewModel` per feed page, each keeping its own
+hoisted scroll; it opens on Missed, the household's catch-up feed, and `ChipRow`
+scrolls to centre the selected chip as the pager moves; tapping the chip already
+lit lifts that feed to the top. `More` is the last page, like YouTube's own More tab
+(not a route you leave Home for): its page (`MoreContent`) is a menu of News,
+Live (feeds) and Charts (`ChartScreen`, a placeholder until the feature lands),
+each an outlined icon and a row that opens its own full page. The feed chips
+filter the catalogue by a category the gateway reads from `feed`'s `topic` param;
+News is the "News & Politics" category, moved off the row into More. There is no
+continue-watching rail on the phone's Home (the TV keeps its own catch-up shelf).
+`HomeScreen` serves both a pager page and a standalone page (News, Live):
+`onBack`/`title` switch it to the page chrome, the same duality `PlaylistsScreen`
+uses. **Search fades in and out** (`transitionSpec` special-cases `Route.Search`)
+where every other route slides.
 
 On the TV: a rail instead of the tab bar; Home as shelves; the player always
 full screen with no miniplayer (Back closes it, after taking away whatever is
@@ -396,10 +437,10 @@ Everything on the external volume; `source env.sh` before working.
   elements by label at the moment of the tap, not by remembered coordinates.
 - **When Data2 is not mounted, this project cannot be built.**
 
-## 10. Status (v0.2.2, 2026-11-13)
+## 10. Status (v0.2.3, 2026-11-24)
 
 - **Runs on Android (emulator and phone) and iOS (iPhone 16e simulator and the
-  household's iPhone, release build via AltStore).** 575 tests, eight guards.
+  household's iPhone, release build via AltStore).** 582 tests, eight guards.
 - **Runs on the household's Chromecast with Google TV** (release build over
   `adb`): rail, shelves, the full-screen player with D-pad seeking, search with
   an on-screen keyboard and voice, the profile question. Released in v0.1.12;
@@ -408,8 +449,13 @@ Everything on the external volume; `source env.sh` before working.
   Cast speakers (Nest Audio, Nest Mini, speaker groups), driven by the
   server; the watch screen as the remote, narration on the speaker. Each
   profile casts on its own (v0.1.21).
-- Built: Home with chips (incl. Live and Missed), Search (YouTube only),
-  Channel, Watch (layer with drag-to-miniplayer, controls, subtitles, narration,
+- Built: Home as a fixed chip pager (Missed · All · Gaming · Music · More —
+  swipe or tap, the row centring on the selected chip; More is a pager page of
+  News, Live and a Charts placeholder; no continue-watching rail), Search
+  (YouTube only, opened by a fade),
+  Channel (with a phone-only Videos/Playlists tab row; a playlist opens its
+  videos, keeping each row's own uploader), Watch (layer with
+  drag-to-miniplayer, controls, subtitles, narration,
   storyboard scrub preview, pinch-to-fill, double-tap seek, comments, up next,
   a pull on the page into upright fullscreen,
   autoplay with a queue), Playlists (create/rename/delete, save sheet), Saved,
@@ -489,7 +535,10 @@ the measurement. Search `docs/changelog.md` for it before arguing with the rule.
   keyed by a sitting, never by constructing something in composition.
   [Autoplay stopped at the end of a video with the screen off]
 - **Lazy keys must be unique**: appended pages are merged with `appendNew` /
-  `distinctBy`; a repeated key is a SIGABRT, not a repetition.
+  `distinctBy`; a repeated key is a SIGABRT, not a repetition. The **first** page
+  needs this too — a playlist lists the same video twice — so it goes through
+  `distinctById`, not straight onto the screen. [A repeated playlist row crashed
+  on scroll]
 - **The last question wins, not the last answer**: switching cancels in-flight
   jobs; pages merge into the state as it is *now*; `CancellationException` is
   rethrown, never caught as a failure.
